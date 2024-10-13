@@ -112,10 +112,18 @@ def actionDamageFull(protoUnit: ET.Element, action: ET.Element, isDPS=False, hid
     else:
         components[-1] += "."
 
+    tactics = actionTactics(protoUnit, action)
+
+    trackrating = findAndFetchText(action, "trackrating", None, float)
+    if trackrating is None and tactics is not None:
+        trackrating = findAndFetchText(tactics, "trackrating", None, float)
+    if trackrating is not None and trackrating != 0.0:
+        components.append(f"Track rating: {trackrating:0.3g}.")
+
     if protoUnit.find("./flag[.='AreaDamageConstant']") is not None and actionArea(action) != "":
         components.append("Has no falloff with distance.")
         
-    tactics = actionTactics(protoUnit, action)
+    
     for item in action, tactics:
         if item is None:
             continue
@@ -189,7 +197,9 @@ def actionDamageOverTime(action: ET.Element, isDPS=False):
 
 def actionOnHitNonDoTEffects(proto: ET.Element, action: ET.Element, ignoreActive=False):
     onhiteffects = action.findall("onhiteffect")
-    onhiteffects += actionTactics(proto, action).findall("onhiteffect")
+    tactics = actionTactics(proto, action)
+    if tactics is not None:
+        onhiteffects += tactics.findall("onhiteffect")
     items = []
     forcedTargets = []
     forcedTargetDuration = None
@@ -235,7 +245,9 @@ def actionOnHitNonDoTEffects(proto: ET.Element, action: ET.Element, ignoreActive
             if float(onhiteffect.attrib['rate']) != STANDARD_SNARE['rate'] or float(onhiteffect.attrib['duration']) != STANDARD_SNARE['duration']:
                 thisItem = f"Slows targets' movement by {100.0-100*float(onhiteffect.attrib['rate']):0.3g}% for {float(onhiteffect.attrib['duration']):0.3g} seconds."
         elif onhitType == "Stun":
-            thisItem = f"Stuns targets for {float(onhiteffect.attrib['duration']):0.3g} seconds."
+            if "Stun" not in nodesByType:
+                nodesByType['Stun'] = []
+            nodesByType['Stun'].append(onhiteffect)
         elif onhitType == "Throw":
             if "Throw" not in nodesByType:
                 nodesByType['Throw'] = []
@@ -275,6 +287,18 @@ def actionOnHitNonDoTEffects(proto: ET.Element, action: ET.Element, ignoreActive
             if maxSizeClass is not None:
                 text += f" with a weight class of {maxSizeClass} and below"
             text += "."
+            items.append(text)
+        elif onhitType == "Stun":
+            if len(set([node.attrib.get("duration") for node in nodes])) != 1:
+                raise ValueError(f"Stun for {proto.attrib['name']} has mixed durations")
+            targets = [node.attrib.get("targetunittype") for node in nodes]
+            targets = [target for target in targets if target is not None]
+            if len(targets):
+                targets = targetListToString(targets)
+            else:
+                targets = "targets"
+
+            text = f"Stuns {targets} for {float(nodes[0].attrib['duration']):0.3g} seconds."
             items.append(text)
         elif onhitType == "Pull":
             targets = targetListToString([x.attrib['targetunittype'] for x in nodes])
@@ -581,7 +605,12 @@ def handleEmpowerAction(proto: ET.Element, action: ET.Element, tactics: Union[No
     if dropsiteRate != favorRate:
         raise ValueError(f"No handling for mixed dropsite/monument empowerments for {proto.attrib['name']}")
     
-    text = f"Empowers: {buildRate:0.3g}x build/research/military train rates, Lighthouse/Obelisk LOS, {rof:0.3g}x building attack interval, {dropsiteRate:0.3g}x dropsite income and favor rate."
+    empowerItems = [f"{buildRate:0.3g}x build/research/military train rates and Lighthouse/Obelisk LOS", f"{rof:0.3g}x building attack interval", f"{dropsiteRate:0.3g}x dropsite income and favor rate"]
+    godpowerblockradius = findAndFetchText(tactics, ".//*[@modifytype='GodPowerBlockRadius']", None, float)
+    if godpowerblockradius is not None:
+        empowerItems.append(f"{godpowerblockradius}x god power blocking radius")
+    empowerItems[-1] = "and " + empowerItems[-1]
+    text = f"Empowers: {', '.join(empowerItems)}."
     return text
 
 def handleAoEAttackAction(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
@@ -605,7 +634,7 @@ def handleLikeBonusAction(proto: ET.Element, action: ET.Element, tactics: Union[
         mult = findAndFetchText(action, f"./rate[@type='{modifyprotoid}']", None, float)
         targetunit = common.getObjectDisplayName(protoFromName(modifyprotoid))
     if mult is None:
-        print(f"Warning: LikeBonus for {proto.attrib['name']} seemingly has no modifymultiplier")
+        print(f"Info: LikeBonus for {proto.attrib['name']} seemingly has no modifymultiplier")
         return ""
     mult *= 100
     area = findAndFetchText(action, "maxrange", None, float)
@@ -713,6 +742,18 @@ def handleLinearAreaAttackAction(proto: ET.Element, action: ET.Element, tactics:
 
     items = [actionName, rechargeRate(proto, action, chargeType, tech) +":", "Hits", actionDamageFlagNames(action), targetList, f"in a {width:0.3g}x{distance:0.3g}m area for approximately", actionDamageFull(proto, action, damageMultiplier=attackTime, hideRof=True, hideArea=True, hideRange=True, ignoreActive=tech is not None)]
     return f"{' '.join(items)}"
+
+def handleDistanceModifyAtion(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
+    maxSpeed = findAndFetchText(proto, "maxvelocity", 0.0, float)
+    minSpeed = findAndFetchText(action, "minrate", 0.0, float) * maxSpeed
+    speedDelta = maxSpeed - minSpeed
+    maxRange = findAndFetchText(action, "maxrange", 0.0, float)
+    minRange = findAndFetchText(action, "minrange", 0.0, float)
+    rangeDelta = maxRange-minRange
+
+    speedPerRange = speedDelta/rangeDelta
+
+    return f"Once more than {minRange:0.3g}m from the Town Center it was spawned around, it starts to lose {10*speedPerRange:0.3g} speed per 10m travelled. Once it is more than {maxRange:0.3g}m away, its speed drops to the minimum of {minSpeed:0.3g}."
 
 
 MODIFY_TYPE_DISPLAY = {
@@ -870,6 +911,7 @@ ACTION_TYPE_HANDLERS: Dict[str, Callable[[ET.Element, ET.Element, Union[None, ET
     "Spawn":handleSpawnAction,
     "LinearAreaAttack":handleLinearAreaAttackAction,
     "AutoRangedAttach":handleAutoRangedAttachAction,
+    "DistanceModify":handleDistanceModifyAtion,
     
     
     "JumpAttack":simpleActionHandler("Leaps over obstacles on the way to the target."),
@@ -958,7 +1000,7 @@ def describeAction(proto: ET.Element, action: ET.Element, chargeType: ActionChar
     actionName = ""
     if chargeType != ActionChargeType.NONE:
         if abilityInfo is None:
-            print(f"Warning: No abilities.xml entry found for {proto.attrib['name']} but it has a charge action {actionInternalName}")
+            print(f"Info: No abilities.xml entry found for {proto.attrib['name']} but it has a charge action {actionInternalName}")
         if nameOverride:
             actionName = nameOverride
         else:

@@ -8,6 +8,7 @@ import icon
 import action
 import math
 import os
+import tech
 
 # This also decides the order in which things appear in the list
 NOTABLE_UNIT_CLASSES = ("Hero", "AbstractInfantry", "AbstractArcher", "AbstractCavalry", "AbstractSiegeWeapon", "AbstractVillager", "AbstractArcherShip", "AbstractSiegeShip", 
@@ -32,6 +33,7 @@ BANNED_STRINGS = (
 "STR_UNIT_ANIMAL_OF_SET_LR",
 "STR_ABILITY_EMPOWER_LR",
 "STR_ABILITY_HEAL_LR",
+"STR_ABILITY_GULLINBURSTI_LR",
 )
 
 # Ignore these units, typically because they share rollover text string ids and that makes generating tooltips for them squash something more important
@@ -58,10 +60,10 @@ IGNORE_UNITS = (
 "ChickenEvil",
 "TrojanHorseBuilding",
 "TamariskTreeDead",
-"GullinburstiArchaic",
-"GullinburstiClassical",
-"GullinburstiHeroic",
-"GullinburstiMythic",
+#"GullinburstiArchaic",
+#"GullinburstiClassical",
+#"GullinburstiHeroic",
+#"GullinburstiMythic",
 "PlentyVaultKOTH",
 "KastorWithStaff",
 "WallConnector",
@@ -291,6 +293,8 @@ class UnitDescription:
     nonActionObservationArgs: Dict[str, List[Any]] = dataclasses.field(default_factory=dict)
     # Override NON_ACTION_OBSERVATION text.
     overrideNonActionObservations: Dict[str, str] = dataclasses.field(default_factory=dict)
+    # Hide non action observations
+    hideNonActionObservations: bool = False
 
     # Additional text for the history file.
     historyText: str = ""
@@ -441,6 +445,8 @@ class UnitDescription:
         return descriptions
     
     def generalObservations(self, protoUnit):
+        if self.hideNonActionObservations:
+            return []
         protoName = protoUnit.attrib['name']
         generalObservations = []
         regenerationNode = protoUnit.find("unitregen")
@@ -555,7 +561,7 @@ class UnitDescription:
                 break
         if strid not in globals.dataCollection["string_table.txt"]:
             # These cases are PROBABLY on the devs, but my attempts at parsing the string table might need some help too
-            print(f"Warning: {protoName}'s history file string id {strid} not found")
+            print(f"Warning: {protoName}'s history file string id {strid} not found, couldn't write its entry")
             return
         
         globals.stringMap[strid] = f"\\n".join(items) + "\\n"*3 + "----------\\n" + globals.dataCollection["string_table.txt"][strid]
@@ -613,11 +619,11 @@ def generateUnitDescriptions():
     proto = globals.dataCollection["proto.xml"]
     techtree = globals.dataCollection["techtree.xml"]
 
-    for tech in techtree:
-        if tech.find("[flag='Volatile']") is not None:
-            create = tech.find("effects/effect[@type='CreateUnit']")
+    for techElement in techtree:
+        if techElement.find("[flag='Volatile']") is not None:
+            create = techElement.find("effects/effect[@type='CreateUnit']")
             if create is not None:
-                globals.respawnTechs[create.attrib['unit']] = tech
+                globals.respawnTechs[create.attrib['unit']] = techElement
 
     stringLiteralHelper = lambda s: f"\"{s}\""
     
@@ -630,6 +636,10 @@ def generateUnitDescriptions():
     SunRayRevealerText = f"Grants {icon.iconLos()} {float(protoFromName('SunRayRevealer').find('los').text):0.3g} around units hit by attacks for {float(protoFromName('SunRayRevealer').find('lifespan').text):0.3g} seconds."
 
     HideFlyingAttack = UnitDescription(ignoreActions=["RangedAttackFlying", "FlyingUnitAttack"])
+
+    GullinburstiAges = ("Archaic", "Classical", "Heroic", "Mythic")
+    gullinburstiHistory = "\\n".join([f"<tth>{age}:\\n" + UnitDescription(preActionInfoText={"BirthAttack":"Shockwave when spawned:"}).generate(protoFromName(f"Gullinbursti{age}")) for age in GullinburstiAges])
+    GullinburstiHandler = UnitDescription(hideStats=True, ignoreActions=["HandAttack", "Gore", "DistanceLimiting", "BirthAttack"], historyText=gullinburstiHistory, hideNonActionObservations=True, additionalText="See history for age progression.")
 
     unitDescriptionOverrides = {
         # People new to the game seem to have a not great grasp of what units do what, so maybe I can help a little.
@@ -652,6 +662,7 @@ def generateUnitDescriptions():
         "Centaur":UnitDescription(postActionInfoText={"ChargedRangedAttack":action.actionDamageOverTimeArea('CentaurAreaDamage', 'ProgressiveDamageLight', altDamageText=f"{action.actionDamageOverTimeDamageFromAction(action.findActionByName('CentaurAreaDamage', 'ProgressiveDamageLight'), centaurSpecialDoTNeedsDamageBonuses)} for the first {float(action.actionTactics('CentaurAreaDamage', 'ProgressiveDamageLight').find('modifyduration').text)/1000:0.3g} seconds, followed by {action.actionDamageOverTimeDamageFromAction(action.findActionByName('CentaurAreaDamage', 'ProgressiveDamageHigh'), centaurSpecialDoTNeedsDamageBonuses)} for the next {float(action.actionTactics('CentaurAreaDamage', 'ProgressiveDamageHigh').find('modifyduration').text)/1000:0.3g} seconds")}),
         "Chimera":UnitDescription(postActionInfoText={"ChargedRangedAttack":action.actionDamageOverTimeArea('ChimeraFireArea', parentAction=action.findActionByName('Chimera', "ChargedRangedAttack"))}),
         "Carcinos":UnitDescription(linkActionsToAbilities={"SelfDestructAttack":"AbilityCarcinos"}),
+        "Colossus":UnitDescription(ignoreActions=["BuildingAttack"]),
         "Odysseus":HideFlyingAttack,
         "Chiron":HideFlyingAttack,
         "Hippolyta":HideFlyingAttack,
@@ -683,7 +694,10 @@ def generateUnitDescriptions():
         "RockGiant":UnitDescription(linkActionsToAbilities={"BuildingAttack":"AbilityRockGiantCavernousHunger"}),
         "HealingSpring":UnitDescription(linkActionsToAbilities=({"AreaHeal":"PassiveHealingSpring"})),
         "MountainGiant":UnitDescription(chargeActionNames={"DwarvenPunt":"Punt Dwarf"}),
-        # TODO figure out gullinbursti 
+        "GullinburstiArchaic":GullinburstiHandler,
+        "GullinburstiClassical":GullinburstiHandler,
+        "GullinburstiHeroic":GullinburstiHandler,
+        "GullinburstiMythic":GullinburstiHandler,
         # Atlantean
         "Oracle":UnitDescription(overrideDescription="Scout, line of sight grows when standing still. Cannot attack.", postActionInfoText={"AutoGatherFavor":oracleAutoGatherFavorHelper("Oracle")}, historyText=oracleHistoryText("Oracle")),
         "OracleHero":UnitDescription(preActionInfoText={"HandAttack":"Hero scout, line of sight grows when standing still. Generates favor faster than normal Oracles. Good against myth units."}, postActionInfoText={"AutoGatherFavor":oracleAutoGatherFavorHelper("OracleHero")}, historyText=oracleHistoryText("OracleHero")),
@@ -723,15 +737,23 @@ def generateUnitDescriptions():
         "HillFort":HideFlyingAttack,
         "AsgardianHillFort":HideFlyingAttack,
         "Palace":HideFlyingAttack,
+        "Wonder":UnitDescription(overrideDescription=tech.processTech(techtree.find("tech[@name='WonderAgeGeneral']"))),
         # Campaign
             # Nothing atm
         
     }
 
+    archaicAgeWeakenedUnits: Dict[str, ET.Element] = dict([(effect.find("target").text, effect) for effect in globals.dataCollection['techtree.xml'].find("tech[@name='ArchaicAgeWeakenUnits']/effects")])
+    for unitName, effectElement in archaicAgeWeakenedUnits.items():
+        override = unitDescriptionOverrides.get(unitName, UnitDescription())
+        actionName = effectElement.attrib["action"]
+        existingText = override.postActionInfoText.get(actionName, "")
+        existingText += f" Deals {1.0-float(effectElement.attrib['amount']):0.0%} less damage in the Archaic Age."
+        override.postActionInfoText[actionName] = existingText
+        unitDescriptionOverrides[unitName] = override
+
     # Non action tied passives that we still want to write text for!
     nonActionPassiveAbilities = {}
-
-    # Major god related ones get handled elsewhere, as they also want to go into the major god text
 
     # Greek
     nonActionPassiveAbilities['PassiveSolarFlare'] = SunRayRevealerText
@@ -751,42 +773,40 @@ def generateUnitDescriptions():
     nonActionPassiveAbilities['AbilityStymphalianBird'] = f"Attacks deal an additional {action.actionDamageOverTime(action.findActionByName('StymphalianBird', 'RangedAttack'))}."
     nonActionPassiveAbilities['PassivePetrifiedFrame'] = action.handleIdleStatBonusAction(protoFromName('Cheiroballista'), action.findActionByName('Cheiroballista', 'PetrificationBonus'), None, "")
     
-    # Shared
-
-    # NOT DONE, BUT NOT FOR HERE
 
     # Major god related
 
-        # PassiveDivineShield
+    nonActionPassiveAbilities['PassiveDivineShield'] = tech.processEffect(techtree.find("tech[@name='ArchaicAgeIsis']"), techtree.find("tech[@name='ArchaicAgeIsis']/effects/effect[@subtype='GodPowerBlockRadius']")).toString(skipAffectedObjects=True)
 
-        #monumentEmpowerAura = actionTactics('MonumentToVillagers', None).find("action[name='MonumentEmpowerAura']")
-        #nonActionPassiveAbilities['PassiveMandjet'] = handleAutoRangedModifyAction(protoFromName('MonumentToVillagers'), monumentEmpowerAura, monumentEmpowerAura, "")
+    monumentEmpowerAura = action.actionTactics('MonumentToVillagers', None).find("action[name='MonumentEmpowerAura']")
+    nonActionPassiveAbilities['PassiveMandjet'] = action.handleAutoRangedModifyAction(protoFromName('MonumentToVillagers'), monumentEmpowerAura, monumentEmpowerAura, "")
 
-        #monumentCheapenAura = actionTactics('MonumentToVillagers', None).find("action[name='Devotees']")
-        #nonActionPassiveAbilities['PassiveDevotees'] = handleAutoRangedModifyAction(protoFromName('MonumentToVillagers'), monumentCheapenAura, monumentCheapenAura, "")
+    monumentCheapenAura = action.actionTactics('MonumentToVillagers', None).find("action[name='DevoteesMedium']")
+    nonActionPassiveAbilities['PassiveDevotees'] = action.handleAutoRangedModifyAction(protoFromName('MonumentToVillagers'), monumentCheapenAura, monumentCheapenAura, "")
 
-        #temporalScaffoldingAction = actionTactics('Manor', None).find("action[name='TemporalScaffoldingSmall']")
-        #nonActionPassiveAbilities['PassiveTemporalScaffolding'] = handleAutoRangedModifyAction(protoFromName('Manor'), temporalScaffoldingAction, temporalScaffoldingAction, "")
+    temporalScaffoldingAction = action.actionTactics('Manor', None).find("action[name='TemporalScaffoldingSmall']")
+    nonActionPassiveAbilities['PassiveTemporalScaffolding'] = action.handleAutoRangedModifyAction(protoFromName('Manor'), temporalScaffoldingAction, temporalScaffoldingAction, "")
 
-    # PassiveLush
+    terrainCreep = globals.dataCollection['major_gods.xml'].find("civ[name='Gaia']/terraincreeps/terraincreep")
+    healEffect = globals.dataCollection['terrain_unit_effects.xml'].find("terrainuniteffect[@name='GaiaCreepHealEffect']/effect")
+    nonActionPassiveAbilities['PassiveLush'] = f"Grows up to a {float(terrainCreep.attrib['maxradius']):0.3g}m circle of lush at {float(terrainCreep.attrib['growthrate']):0.3g}m per second. Friendly objects on lush heal {float(healEffect.attrib['amount']):0.3g} per second."
 
     # Tech related
 
-        # PassiveAnastrophe - Anastrophe
+    nonActionPassiveAbilities['PassiveAnastrophe'] = action.describeAction(protoFromName("Pentekonter"), action.findActionByName("Pentekonter", "ChargedHandAttack"), chargeType=action.ActionChargeType.REGULAR, tech=techtree.find("tech[@name='Anastrophe']"))
 
-        # PassiveFuneralBarge - FuneralBarge
-        # PassiveDeathlyDonative - FuneralRites
+    nonActionPassiveAbilities['PassiveFuneralBarge'] = tech.processTech(techtree.find("tech[@name='FuneralBarge']"), skipAffectedObjects=True)
+    nonActionPassiveAbilities['PassiveDeathlyDonative'] = tech.processTech(techtree.find("tech[@name='FuneralRites']"), skipAffectedObjects=True)
 
-        # PassiveHamask - Hamask
-        # PassiveValhallasChosen - ValhallasChosen
-        # PassiveNaturesEyes - EyesInTheForest
-        # PassiveViking - Vikings
-        # PassiveSkadisBreath - ArcticWinds
-        # PassiveSkaldicInspiration - LongSerpent
+    nonActionPassiveAbilities['PassiveHamask'] = tech.processTech(techtree.find("tech[@name='Hamask']"), skipAffectedObjects=True)
+    nonActionPassiveAbilities['PassiveValhallasChosen'] = tech.processEffect(techtree.find("tech[@name='CallOfValhalla']"), techtree.find("tech[@name='CallOfValhalla']/effects/effect[@subtype='ResourceReturn']")).toString(skipAffectedObjects=True)
+    nonActionPassiveAbilities['PassiveNaturesEyes'] = tech.processTech(techtree.find("tech[@name='EyesInTheForest']"), skipAffectedObjects=True)
+    nonActionPassiveAbilities['PassiveViking'] = tech.processTech(techtree.find("tech[@name='Vikings']"), skipAffectedObjects=True)
+    nonActionPassiveAbilities['PassiveSkadisBreath'] = tech.processTech(techtree.find("tech[@name='ArcticWinds']"), skipAffectedObjects=True)
+    nonActionPassiveAbilities['PassiveSkaldicInspiration'] = tech.processTech(techtree.find("tech[@name='LongSerpent']"), skipAffectedObjects=True)
 
-
-        # PassiveSerratedBlades - BiteOfTheShark
-        # PassiveBattleFrenzy - DevoteesOfAtlas
+    nonActionPassiveAbilities['PassiveSerratedBlades'] = tech.processEffect(techtree.find("tech[@name='BiteOfTheShark']"), techtree.find("tech[@name='BiteOfTheShark']/effects/effect[@effecttype='DamageOverTime']")).toString(skipAffectedObjects=True)
+    nonActionPassiveAbilities['PassiveBattleFrenzy'] = tech.processTech(techtree.find("tech[@name='DevoteesOfAtlas']"), skipAffectedObjects=True, lineJoin="\\n")
     
 
     
@@ -821,12 +841,12 @@ def generateUnitDescriptions():
     techsByEnabler = {}
     techInternalToDisplayName = {}
     techsWithMultipleEnablers = set()
-    for tech in techtree:
-        effects = tech.find("effects")
-        displayName = common.getObjectDisplayName(tech)
+    for techElement in techtree:
+        effects = techElement.find("effects")
+        displayName = common.getObjectDisplayName(techElement)
         if displayName.startswith("ArchaicAge"):
             displayName = displayName[10:]
-        techInternalToDisplayName[tech.attrib["name"]] = displayName
+        techInternalToDisplayName[techElement.attrib["name"]] = displayName
         if effects is not None:
             for effect in effects:
                 if effect.attrib.get("type", "") == "TechStatus" and effect.attrib.get("status", "") == "obtainable":

@@ -25,6 +25,7 @@ AUTO_UNWRAP_ABSTRACT_TYPE_SIZE = 2
 ABSTRACT_TYPES_TO_UNWRAP = (
     "SiegeLineUpgraded",    # Engineers target that excludes cheiroballista
     "HeroInfantry",
+    # It is very hard to give these types short meaningful labels that clearly tell you what they contain and aren't confusable with the literal "Town Center"
     "AbstractTownCenter",
     "AbstractSettlement",
 )
@@ -73,15 +74,16 @@ class EffectHandlerResponse:
         else:
             self.combinableTargets += other.combinableTargets
     
-    def toString(self):
+    def toString(self, skipAffectedObjects=False):
         components = []
-        if isinstance(self.affects, list):
-            # Remove duplicates while preserving order
-            self.affects = list(dict.fromkeys(self.affects))
-            components.append(common.commaSeparatedList(self.affects))
-        else:
-            components.append(self.affects)
-        components[-1] += ":"
+        if not skipAffectedObjects:
+            if isinstance(self.affects, list):
+                # Remove duplicates while preserving order
+                self.affects = list(dict.fromkeys(self.affects))
+                components.append(common.commaSeparatedList(self.affects))
+            else:
+                components.append(self.affects)
+            components[-1] += ":"
         combinables = self.combinableTargets
         if isinstance(self.combinableTargets, list):
             combinables = common.commaSeparatedList(self.combinableTargets)
@@ -131,6 +133,13 @@ def shouldSuppressDataEffect(tech: ET.Element, effect: ET.Element):
     if effectType == "data" and subType == "hitpoints" and "LogicalTypeUnitIsConstructed" in targetTexts:
         return True    
     return False
+
+def unwrapAbstractClass(targetName: str) -> List[str]:
+    if targetName in globals.protosByUnitType:
+        targetsList = globals.protosByUnitType[targetName]
+        if targetName in ABSTRACT_TYPES_TO_UNWRAP or len(targetsList) <= AUTO_UNWRAP_ABSTRACT_TYPE_SIZE:
+            return list(map(common.getDisplayNameForProtoOrClass, targetsList))
+    return [common.getDisplayNameForProtoOrClass(targetName)]
     
 
 def getEffectTargets(tech: ET.Element, effect: ET.Element):
@@ -139,14 +148,7 @@ def getEffectTargets(tech: ET.Element, effect: ET.Element):
     for node in nodes:
         nodeType = node.attrib["type"].lower()
         if nodeType == "protounit":
-            if node.text in globals.protosByUnitType:
-                targetsList = globals.protosByUnitType[node.text]
-                if node.text in ABSTRACT_TYPES_TO_UNWRAP or len(targetsList) <= AUTO_UNWRAP_ABSTRACT_TYPE_SIZE:
-                    targets += map(common.getDisplayNameForProtoOrClass, targetsList)
-                else:
-                    targets.append(common.getDisplayNameForProtoOrClass(node.text))
-            else:
-                targets.append(common.getDisplayNameForProtoOrClass(node.text))
+            targets += unwrapAbstractClass(node.text)
         elif nodeType == "tech":
             tech = globals.dataCollection["techtree.xml"].find(f"tech[@name='{node.text}']")
             targets.append(common.getObjectDisplayName(tech))
@@ -263,6 +265,9 @@ def dataSubtypeOnHitEffectRateHandler(tech: ET.Element, effect:ET.Element):
     if effectType == "Lifesteal":
         # I don't really know why the Tyrfing relic uses OnHitEffectRate for this
         return dataSubtypeOnHitEffectHandler(tech, effect)
+    elif effectType == "DamageOverTime":
+        # This may have target type issues down the line
+        return dataSubtypeWithAmountHelper("Damage over Time {actionof}{combinable}: {value}", combinableAttribute="action")(tech, effect)
     else:
         print(f"Warning: {tech.attrib['name']} has OnHitEffectRate with unhandled effecttype {effectType}")
         return None
@@ -292,7 +297,7 @@ def dataSubtypeActionEnableHandler(tech: ET.Element, effect:ET.Element):
         components = ["Enables" if isEnabling else "Disables", action.getActionName(proto, actionNode, nameNonChargeActions=True) + ":", actionDescription]
         text = " ".join(components)
 
-        responses.append(EffectHandlerResponse(affects=common.getDisplayNameForProtoOrClass(targetType), text=text))
+        responses.append(EffectHandlerResponse(affects=unwrapAbstractClass(targetType), text=text))
     
     return responses
 
@@ -359,7 +364,7 @@ def dataSubtypeWorkrateHandler(tech: ET.Element, effect:ET.Element):
         return None
     else:
         preTargetText = f"{action} rate for"
-    return dataSubtypeWithAmountHelper(preTargetText + " {combinable}: {value} " + additionalPostTargetText, combinableAttribute="unittype", combinableAttributeFormat=common.getDisplayNameForProtoOrClass)(tech, effect)
+    return dataSubtypeWithAmountHelper(preTargetText + " {combinable}: {value} " + additionalPostTargetText, combinableAttribute="unittype", combinableAttributeFormat=unwrapAbstractClass)(tech, effect)
 
 def dataSubtypeObstructionSizeHandler(tech: ET.Element, effect:ET.Element):
     # Look for matching nodes of the opposite X/Z type because it would be nice to combine them
@@ -394,7 +399,7 @@ def dataSubtypeBountyResourceEarningRewardHandler(tech: ET.Element, effect:ET.El
     goal /= float(effect.attrib["amount"])
     resourceType = effect.attrib['resourcetype']
     excludeTypes = [common.getDisplayNameForProtoOrClass(element.attrib['type']) for element in loki.findall("bountyresourceearning/bountytargetmultiplier") if resourceType != element.attrib["resourcetype"]]
-    return EffectHandlerResponse(common.getDisplayNameForProtoOrClass(effect.attrib['unittype']), f"Generates 1 {resourceType} per {goal:0.3g} damage inflicted on targets except {common.commaSeparatedList(excludeTypes)}.")
+    return EffectHandlerResponse(unwrapAbstractClass(effect.attrib['unittype']), f"Generates 1 {resourceType} per {goal:0.3g} damage inflicted on targets except {common.commaSeparatedList(excludeTypes)}.")
 
 def dataSubtypeOnHitEffectActiveHandler(tech: ET.Element, effect:ET.Element):
     # Check effects to see if this effect is the first OnHitEffectiveActive in the list
@@ -406,9 +411,9 @@ def dataSubtypeOnHitEffectActiveHandler(tech: ET.Element, effect:ET.Element):
         target = targetElement.text
         proto = common.protoFromName(target)
         actionElement = action.findActionByName(proto, effect.attrib['action'])
-        #responses.append(EffectHandlerResponse(common.getDisplayNameForProtoOrClass(target), "Modifies action {combinable}:" + f" {action.actionOnHitNonDoTEffects(proto, actionElement, True)}"))
+        #responses.append(EffectHandlerResponse(unwrapAbstractClass(target), "Modifies action {combinable}:" + f" {action.actionOnHitNonDoTEffects(proto, actionElement, True)}"))
         actionName = action.getActionName(proto, actionElement, nameNonChargeActions=True)
-        responses.append(dataSubtypeWithAmountHelper(f"Modifies {actionName}" + " against {combinable}:" + f" {action.actionOnHitNonDoTEffects(proto, actionElement, True)}", combinableAttribute="targettype", combinableAttributeFormat=common.getDisplayNameForProtoOrClass)(tech, effect))
+        responses.append(dataSubtypeWithAmountHelper(f"Modifies {actionName}" + " against {combinable}:" + f" {action.actionOnHitNonDoTEffects(proto, actionElement, True)}", combinableAttribute="targettype", combinableAttributeFormat=unwrapAbstractClass)(tech, effect))
     return responses
 
 def dataSubtypeProtoActionAddHandler(tech: ET.Element, effect:ET.Element):
@@ -419,7 +424,7 @@ def dataSubtypeProtoActionAddHandler(tech: ET.Element, effect:ET.Element):
     responses = []
     for targetElement in targetTypes:
         target = targetElement.text
-        responses.append(EffectHandlerResponse(common.getDisplayNameForProtoOrClass(target), f"{action.describeAction(protoElement, actionElement, tech=tech)}"))
+        responses.append(EffectHandlerResponse(unwrapAbstractClass(target), f"{action.describeAction(protoElement, actionElement, tech=tech)}"))
     return responses
 
 def dataSubtypePowerCostHandler(tech: ET.Element, effect:ET.Element):
@@ -506,7 +511,7 @@ def dataSubtypeOnHitEffectDurationHandler(tech: ET.Element, effect:ET.Element):
         proto = common.protoFromName(target)
         actionElement = action.findActionByName(proto, effect.attrib['action'])
         actionName = action.getActionName(proto, actionElement, nameNonChargeActions=True)
-        responses.append(dataSubtypeWithAmountHelper(f"Modifies {actionName} " + "against {combinable}: duration {value}", combinableAttribute="targettype", combinableAttributeFormat=common.getDisplayNameForProtoOrClass, flatSuffix=" seconds")(tech, effect))
+        responses.append(dataSubtypeWithAmountHelper(f"Modifies {actionName} " + "against {combinable}: duration {value}", combinableAttribute="targettype", combinableAttributeFormat=unwrapAbstractClass, flatSuffix=" seconds")(tech, effect))
     return responses
 
 def dataSubtypeEmpowerModifyHandler(tech: ET.Element, effect:ET.Element):
@@ -533,7 +538,7 @@ def dataSubtypeWithAmountHelper(
                       textFormat: str = "{combinable}: {value}",
                       combinableString: Union[str, None]=None, 
                       combinableAttribute: Union[str, None]=None,
-                      combinableAttributeFormat: Union[str, Callable[[str], str]] = "{}",
+                      combinableAttributeFormat: Union[str, Callable[[str], Union[List[str], str]]] = "{}",
                       percentileSuffix="%", 
                       flatSuffix="",
                       valueFormat: Callable[[Any], str] = "{:0.3g}".format,
@@ -580,7 +585,7 @@ def dataSubtypeIgnore(tech: ET.Element, effect:ET.Element):
     return None
 
 DATA_SUBTYPE_HANDLERS: Dict[str, Callable[[ET.Element, ET.Element], Union[EffectHandlerResponse, List[EffectHandlerResponse]]]] = {
-    "damagebonus":dataSubtypeWithAmountHelper(textFormat="Damage bonus against {combinable}: {value}", flatSuffix="x", combinableAttribute="unittype", combinableAttributeFormat=common.getDisplayNameForProtoOrClass),
+    "damagebonus":dataSubtypeWithAmountHelper(textFormat="Damage bonus against {combinable}: {value}", flatSuffix="x", combinableAttribute="unittype", combinableAttributeFormat=unwrapAbstractClass),
     "hitpoints":dataSubtypeWithAmountHelper(combinableString="Hitpoints"),
     "los":dataSubtypeWithAmountHelper(combinableString="LOS"),
     "maximumvelocity":dataSubtypeWithAmountHelper(combinableString="Movement Speed"),
@@ -621,7 +626,7 @@ DATA_SUBTYPE_HANDLERS: Dict[str, Callable[[ET.Element, ET.Element], Union[Effect
     "enable":dataSubtypeEnableHandler,
     "modifyspawn":dataSubtypeModifySpawnHandler,
     "godpower":dataSubtypeIgnore,
-    "timeshiftingcost":dataSubtypeWithAmountHelper(textFormat="{combinable} Time Shift Cost: {value}", combinableAttribute="unittype", combinableAttributeFormat=common.getDisplayNameForProtoOrClass),
+    "timeshiftingcost":dataSubtypeWithAmountHelper(textFormat="{combinable} Time Shift Cost: {value}", combinableAttribute="unittype", combinableAttributeFormat=unwrapAbstractClass),
     "timeshiftingconcurrentshifts":dataSubtypeWithAmountHelper("Number of Simultaneous Time Shifts: {value}", combinableString=""),
     "veterancyenable":dataSubtypeVeterancyEnableHandler,
     "rechargetype":dataSubtypeIgnore, # Handled in other place
@@ -645,6 +650,10 @@ DATA_SUBTYPE_HANDLERS: Dict[str, Callable[[ET.Element, ET.Element], Union[Effect
     "revealallyui":dataSubtypeWithAmountHelper(textFormat="Allow viewing building production queues for {combinable}", combinableString="Allies"),
     "fullcapacitymultiplier":dataSubtypeWithAmountHelper(textFormat="Favor generation multiplier while at maximum LOS expansion: {value}", combinableString=""),
     "modifyratecap":dataSubtypeWithAmountHelper(textFormat="Maximum LOS expansion: {value}", combinableString=""),
+    "godpowerrof":dataSubtypeWithAmountHelper("God Power {combinable}: {value}", combinableString="Recharge"),
+    "godpowercost":dataSubtypeWithAmountHelper("God Power {combinable}: {value}", combinableString="Cost"),
+    "setage":dataSubtypeIgnore,
+    "godpowerblockradius":dataSubtypeWithAmountHelper("God Power Block Radius: {value}", combinableString="", flatSuffix="m")
 }
 
 
@@ -667,7 +676,7 @@ def processEffect(tech: ET.Element, effect: ET.Element) -> Union[None, EffectHan
     elif effectType in ("setname", "textoutput", "techstatus", "setage"):
         pass
     elif effectType == "sharedlos":
-        return EffectHandlerResponse("Player", "Grants line of sight as if you owned all players' units. The cost is per enemy unit.")
+        return EffectHandlerResponse("Player", "Grants line of sight as if you owned all players' units.")
     elif effectType == "transformunit":
         return EffectHandlerResponse(common.getDisplayNameForProtoOrClass(effect.attrib['fromprotoid']), f"Transform into {common.getDisplayNameForProtoOrClass(effect.attrib['toprotoid'])}")
     elif effectType == "createunit":
@@ -677,8 +686,24 @@ def processEffect(tech: ET.Element, effect: ET.Element) -> Union[None, EffectHan
         print(f"Warning: Unknown effect type {effectType} on {techName}")
     return None
 
+@dataclasses.dataclass
+class TechAddition:
+    # One or more lines to put at the top of the effect list
+    startEntry: Union[str, List[str]] = ""
+    # One or more lines to put at the bottom of the effect list
+    endEntry: Union[str, List[str]] = ""
 
-def processTech(tech: ET.Element):
+    # A callable that is called for each line of text in the output. Any for which it returns False to are removed.
+    lineFilter: Callable[[str], bool] = lambda x: True
+
+
+def processTech(tech: ET.Element, skipAffectedObjects: bool=False, lineJoin: str=f"\\n"):
+    # Minor god techs show up over the portraits. That makes me very sad, but I don't want to get into changing UI files as well really
+    # so let's just leave these strings as vanilla
+    if tech.find("flag[.='AgeUpgrade']") is not None:
+        return None
+    additions = techManualAdditions.get(tech.attrib['name'], None)
+
     effects = tech.findall("effects/effect")
     responses: List[Union[None, EffectHandlerResponse]]= []
     for effect in effects:
@@ -690,16 +715,76 @@ def processTech(tech: ET.Element):
                 responses.append(response)
     
     combineHandlerResponses(responses)
-    strings = [response.toString() for response in responses]
-    output = f"\\n {icon.BULLET_POINT} ".join(strings)
+    strings = [response.toString(skipAffectedObjects=skipAffectedObjects) for response in responses]
+
+    if tech.find("flag[.='DynamicCost']") is not None:
+        costs = [x for x in tech.findall("cost")]
+        costString = " ".join([f"{icon.resourceIcon(x.attrib['resourcetype'])} {float(x.text):0.3g}" for x in costs])
+        strings.insert(0, f"Costs {costString} per enemy unit.")
+
+    if additions is not None:
+        if additions.startEntry:
+            if isinstance(additions.startEntry, list):
+                strings = additions.startEntry + strings
+            else:
+                strings.insert(0, additions.startEntry) 
+        if additions.endEntry:
+            if isinstance(additions.endEntry, list):
+                strings += additions.endEntry
+            else:
+                strings.append(additions.endEntry) 
+
+        strings = [string for string in strings if additions.lineFilter(string)]
+
+    output = lineJoin.join(strings)
     if len(output) == 0: # Need to output something or we get <MISSING> if empty
         output = " "
     return output
+
+techManualAdditions = {}
+
 
 
 def generateTechDescriptions():
     proto = globals.dataCollection["proto.xml"]
     techtree = globals.dataCollection["techtree.xml"]
+
+    FreyrTechCostBonus = techtree.find("tech[@name='FreyrTechCostBonus']")
+    FreyrTechCostBonusEffect = FreyrTechCostBonus.find("effects/effect")
+    techManualAdditions["FreyrsGift"] = TechAddition(endEntry=f"Every time another tech is researched, this tech becomes {-1*float(FreyrTechCostBonusEffect.attrib['amount']):0.3g} {FreyrTechCostBonusEffect.attrib['resource']} cheaper.")
+
+    EyesOnForestRevealer = common.protoFromName("EyesOnForestRevealer")
+    EyesOnForestRevealerLOS = common.findAndFetchText(EyesOnForestRevealer, 'los', 0, float)
+    EyesOnForestRevealerAction = EyesOnForestRevealer.find("protoaction[name='DynamicLOS']")
+    EyesOnForestRevealerActionModifyAmount = common.findAndFetchText(EyesOnForestRevealerAction, "modifyamount", 0.0, float)
+    EyesOnForestRevealerModifyRateCap = common.findAndFetchText(EyesOnForestRevealerAction, "modifyratecap", 0.0, float)
+    EyesOnForestRevealerMaxLOS = EyesOnForestRevealerLOS + EyesOnForestRevealerModifyRateCap
+    EyesOnForestRevealerModifyDecay = common.findAndFetchText(EyesOnForestRevealerAction, "modifydecay", 0.0, float)
+    EyesOnForestRevealerLifetime = EyesOnForestRevealerModifyRateCap/EyesOnForestRevealerActionModifyAmount + EyesOnForestRevealerModifyRateCap/EyesOnForestRevealerModifyDecay
+
+    techManualAdditions["EyesInTheForest"] = TechAddition(endEntry=f"These revealers last for {EyesOnForestRevealerLifetime:0.3g} seconds. They have {EyesOnForestRevealerLOS:0.3g} LOS, which increases by {EyesOnForestRevealerActionModifyAmount:0.3g} per second to a maximum of {EyesOnForestRevealerMaxLOS:0.3g}. Then, the LOS starts to decay at {EyesOnForestRevealerModifyDecay:0.3g} per second until the revealer disappears.")
+
+    techManualAdditions["SunRay"] = TechAddition(endEntry=f"These revealers have {float(common.protoFromName('SunRayRevealer').find('los').text):0.3g} LOS and last for {float(common.protoFromName('SunRayRevealer').find('lifespan').text):0.3g} seconds.")
+        
+    techManualAdditions["NewKingdom"]=TechAddition(startEntry="Grants a second Pharaoh.")
+    techManualAdditions["HandsOfThePharaoh"]=TechAddition(startEntry="Allows Priests to pick up Relics.")
+
+    techManualAdditions["HallOfThanes"]=TechAddition(endEntry="As both Infantry and Heroes, Hersir benefit from both effects.")
+    techManualAdditions["FuryOfTheFallen"]=TechAddition(endEntry=f"Damage boosters persist for {float(common.protoFromName('BerserkDamageBoost').find('lifespan').text):0.3g} seconds.")
+
+    techManualAdditions["SonsOfTheSun"]=TechAddition(startEntry="Regular Oracles can no longer be trained: Temples produce Oracle Heroes directly instead.")
+    techManualAdditions["RheiasGift"]=TechAddition(startEntry="Refunds all Favor spent on technologies.")
+    techManualAdditions["Channels"]=TechAddition(startEntry="Lush: Increases Unit Movement Speed by {:0.0%}.".format(float(globals.dataCollection['terrain_unit_effects.xml'].find("terrainuniteffect[@name='GaiaCreepSpeedEffect']/effect[@name='GaiaCreepSpeedAll']").attrib['amount'])-1.0))
+    # Hide the total unit cost modifications, because they are misleading
+    # The promotion cost is what people care about here
+    techManualAdditions["FrontlineHeroics"]=TechAddition(lineFilter=lambda x: "Promotion" in x)
+
+    techManualAdditions["SecretsOfTheTitans"]=TechAddition(startEntry="Allows the placement of a Titan Gate. Once fully excavated, releases a Titan.")
+
+    WonderAgeTitan = techtree.find("tech[@name='WonderAgeTitan']")
+    WonderAgeTitanInterval = float(WonderAgeTitan.find("effects/effect[@subtype='PowerROF']").attrib['amount'])/60
+    techManualAdditions["WonderAgeGeneral"]=TechAddition(endEntry=f"Allows recasting of Titan Gate every {WonderAgeTitanInterval:0.3g} minutes.")
+        
 
     stringIdsByOverwriters = {}
 
@@ -715,3 +800,14 @@ def generateTechDescriptions():
                     stringIdsByOverwriters[strid][tech] = value
 
     common.handleSharedStringIDConflicts(stringIdsByOverwriters)
+
+    # I think I resign myself to hardcoding values here. The normal output will not be anywhere NEAR concise enough
+    classicalAgeGeneral = techtree.find("tech[@name='ClassicalAgeGeneral']")
+    heroicAgeGeneral = techtree.find("tech[@name='HeroicAgeGeneral']")
+    mythicAgeGeneral = techtree.find("tech[@name='MythicAgeGeneral']")
+    ageUpComponents = ["Myth Units of Earlier Ages: Hitpoints, Damage, and Healing: +20% of base."]
+    ageUpTechs = (classicalAgeGeneral, heroicAgeGeneral, mythicAgeGeneral)
+    heroHitpoints = ["{:0.3g}".format(100*(-1+float(age.find("effects/effect[@subtype='Hitpoints']/target[.='HeroShadowUpgraded']/..").attrib['amount']))) for age in ageUpTechs]
+    heroDamage = ["{:0.3g}".format(100*(-1+float(age.find("effects/effect[@subtype='Damage']/target[.='HeroShadowUpgraded']/..").attrib['amount']))) for age in ageUpTechs]
+    ageUpComponents.append(f"Age Upgraded Heroes: Hitpoints +{'/'.join(heroHitpoints)}% of base, Damage +{'/'.join(heroDamage)}% of base (Classical/Heroic/Mythic).")
+    globals.stringMap["STR_FORMAT_MINOR_GOD_LR"] = f"\\n {icon.BULLET_POINT} ".join(ageUpComponents) + f"\\n\\n {icon.BULLET_POINT} " + globals.dataCollection["string_table.txt"]["STR_FORMAT_MINOR_GOD_LR"]

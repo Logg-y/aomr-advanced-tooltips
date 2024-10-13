@@ -22,7 +22,9 @@ OVERRIDE_DISPLAY_NAMES = {
     "HeroOfRagnarokDwarf":"Hero of Ragnarok (Dwarf)",
     "ProjectileSatyrSpearSpecialAttack": "Satyr Piercing Throw Spear",
     "BerserkDamageBoost":"Invisible Berserk Damage Booster",
-    "EyesOnForestRevealer":"Map Revealer",
+    "EyesOnForestRevealer":"Revealer",
+    "SunRayRevealer":"Revealer",
+    "SunRayGroundRevealer":"Revealer",
     "ChimeraFireArea":"Chimera Special Fire Area",
     # TODO hopefully remove this WW hackery once the underlying data is fixed
     "WalkingWoodsCypress":"Most trees",

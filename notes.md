@@ -17,6 +17,7 @@ Try bullet points in this (as Wonder age). I might be able to get:
 * Extra notes
 
 For not-very-useful stuff I can expand into the history.
+That's also where Gullinbursti's gigantic mass of text is going, I guess.
 
 ## Unit abilities
 
@@ -35,65 +36,8 @@ Two options:
 The former is the more complete option. I might half build support for the latter in case turning off advanced tooltips turns out to do something else undesirable...
 I also need to change relic text for that.
 
-Undocumented specific:
-
-* Winged messenger respawn time
-* Anastrophe
-* Temple of healing
-* Argive patronage
-* Enyo's bow of horror
-* Will of kronos no falloff
-* Solar Barque
-* Valley of the kings effect on production speed
-* Eyes in the forest
-* Hall of thanes clarification
-* Safeguard not vs buildings
-* Sun dried mud brick: check wonder/not
-* Thurisaz rune: clarify titan
-* Vikings: what does this thing actually do
-* Arctic winds
-* Long serpent
-* Servants of glory
-* Granite maw
-* Feasts of Renown
-* Grasp of Ran
-* Silent resolve
-* Fury of the fallen
-* <Atlanteans may need more>
-
-
-General:
-
-* Age up effects
-
 
 # TODO
-
-Secrets of the titans
-Colossus buildingattack removal
-New Kingdom
-Hands of the pharaoh enabling relic pickup
-Hall of Thanes clarification
-Eyes in the Forest
-Sun Ray
-Freyr's Gift Cheapen
-Fury of the Fallen
-Sons of the Sun
-Rheia's Gift
-Frontline Heroics - only the transform costs should really show else it's confusing
-Channels
-Omniscience
-
-Gullinbusti. All four share strings but have so many different stats
-Archaic age weakening
-Wonder tooltip
-Track ratings
-
-Tech review and add stuff manually
-
-Tech linked abilities
-
-Age up effects - Using all minor god tech tooltips DOES show up on the age up screen. But these show over the portraits :(
 
 Major god tooltips
 

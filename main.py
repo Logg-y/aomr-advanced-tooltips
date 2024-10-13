@@ -117,9 +117,9 @@ def main():
     
     globals.historyPath = os.path.join(globals.config["paths"]["dataPath"], "game/data/strings", globals.config["paths"]["lang"], "history")
 
-                    
+    generateTechDescriptions()           
     generateUnitDescriptions()
-    generateTechDescriptions()
+    
     
     with open(os.path.join(globals.config["paths"]["outputPath"], "game/data/strings/stringmods.txt"), "w", encoding="utf8") as f:
         for strid, value in globals.stringMap.items():
