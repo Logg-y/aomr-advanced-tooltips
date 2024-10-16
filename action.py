@@ -87,7 +87,7 @@ def actionDamageOnly(action: ET.Element, isDPS=False, hideRof=False, hideNumProj
     if not isDPS:
         if not hideRof:
             damages.append(actionRof(action))
-        if hideNumProjectiles:
+        if not hideNumProjectiles:
             damages.append(actionNumProjectiles(action))
     damages = [x for x in damages if len(x.strip()) > 0]
     final = " ".join(damages)
@@ -123,8 +123,8 @@ def actionDamageFull(protoUnit: ET.Element, action: ET.Element, isDPS=False, hid
     # but it'd be much less confusing to multiply these out for the tooltip
     hideNumProjectiles = False
     numProjectiles = 1
-    hasProjectile = findAndFetchText(action, "projectile", None)
-    if hasProjectile is None:
+    hasProjectile = findAndFetchText(action, "projectile", None) is not None
+    if not hasProjectile:
         numProjectiles = findAndFetchText(action, "displayednumberprojectiles", 1, int)
         damageMultiplier *= numProjectiles
         hideNumProjectiles = True
