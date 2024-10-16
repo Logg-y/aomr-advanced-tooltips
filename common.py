@@ -1,6 +1,7 @@
 import globals
 from xml.etree import ElementTree as ET
 from typing import Union, List, Dict
+import icon
 
 
 
@@ -27,6 +28,8 @@ OVERRIDE_DISPLAY_NAMES = {
     "SunRayGroundRevealer":"Revealer",
     "ChimeraFireArea":"Chimera Special Fire Area",
     "SonOfOsiris":"Son of Osiris", # No (Hero) suffix
+    "Hersir":"Hersir",
+    "Godi":"Godi",
     # TODO hopefully remove this WW hackery once the underlying data is fixed
     "WalkingWoodsCypress":"Most trees",
     "WalkingWoodsHades":"Hades trees",
@@ -214,6 +217,12 @@ ABSTRACT_TYPES_TO_UNWRAP = (
     "NonConvertableHerdable", # is just chicken right now
 )
 
+AGE_LABELS = (f"{icon.generalIcon('resources/shared/static_color/technologies/archaic_age_icon.png')} Archaic",
+              f"{icon.generalIcon('resources/shared/static_color/technologies/classical_age_icon.png')} Classical",
+              f"{icon.generalIcon('resources/shared/static_color/technologies/heroic_age_icon.png')} Heroic",
+              f"{icon.generalIcon('resources/shared/static_color/technologies/mythic_age_icon.png')} Mythic",
+              f"{icon.generalIcon('resources/shared/static_color/technologies/wonder_age_icon.png')} Wonder")
+
 def commaSeparatedList(words: List[str], joiner="and"):
     if len(words) == 0:
         return ""
@@ -237,7 +246,9 @@ def unwrapAbstractClass(targetName: Union[str, List[str]], plural=False) -> List
     if isinstance(targetName, list):
         returns = []
         for item in targetName:
-            returns += unwrapAbstractClass(item, plural=plural)
+            returned = unwrapAbstractClass(item, plural=plural)
+            for item in returned:
+                returns.append(item)
         return list(dict.fromkeys(returns))
     if targetName in globals.protosByUnitType:
         targetsList = globals.protosByUnitType[targetName]

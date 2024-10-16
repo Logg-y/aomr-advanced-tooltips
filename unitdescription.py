@@ -286,7 +286,7 @@ class UnitDescription:
     hideStats: bool = False
 
     # Additional text, added as a bullet point of its own at the end.
-    additionalText: str = ""
+    additionalText: Union[List[str], str] = ""
 
     # A list of action names to hide.
     ignoreActions: List[str] = dataclasses.field(default_factory=list)
@@ -604,8 +604,13 @@ class UnitDescription:
             strId = findAndFetchText(protoUnit, "rollovertextid", None)
             if strId is not None:
                 description = globals.dataCollection["string_table.txt"].get(strId, "")
+
+        components = [unitClassesString.strip(), unitStatsString.strip(), description, *actionDescriptions, *generalObservations]
         
-        components = [unitClassesString.strip(), unitStatsString.strip(), description, *actionDescriptions, *generalObservations, self.additionalText.strip()]
+        if isinstance(self.additionalText, list):
+            components += [item.strip() for item in self.additionalText]
+        else:
+            components.append(self.additionalText.strip())
         components = [component for component in components if len(component) > 0]
         self.writeHistoryString(protoUnit)
         return f"\\n {icon.BULLET_POINT} ".join(components)
@@ -642,16 +647,15 @@ def describeUnit(unit: Union[str, ET.Element]) -> Union[str, None]:
     unit = protoFromName(unit)
     return unitDescriptionOverrides.get(unit.attrib["name"], UnitDescription()).generate(unit)
 
+def compareGatherRates(protoOne: str, protoTwo: str, targetType: str, protoOneMult: float=1.0, protoTwoMult: float=1.0) -> str:
+    protoOneRate = common.findAndFetchText(action.findActionByName(protoOne, "Gather"), f"rate[@type='{targetType}']", None, float) * protoOneMult
+    protoTwoRate = common.findAndFetchText(action.findActionByName(protoTwo, "Gather"), f"rate[@type='{targetType}']", None, float) * protoTwoMult
+    return f"{100*(protoOneRate/protoTwoRate):0.3g}%"
+
 
 def generateUnitDescriptions():
     proto = globals.dataCollection["proto.xml"]
     techtree = globals.dataCollection["techtree.xml"]
-
-    for techElement in techtree:
-        if techElement.find("[flag='Volatile']") is not None:
-            create = techElement.find("effects/effect[@type='CreateUnit']")
-            if create is not None:
-                globals.respawnTechs[create.attrib['unit']] = techElement
 
     stringLiteralHelper = lambda s: f"\"{s}\""
     
@@ -706,6 +710,11 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["PhoenixEgg"] = UnitDescription(linkActionsToAbilities={"PhoenixRebirth":"AbilityPhoenixEgg"})
     unitDescriptionOverrides["Scarab"] = UnitDescription(linkActionsToAbilities={"SelfDestructAttack":"AbilityScarab"})
     # Norse
+    dwarfNotes = ["<tth>Base gather rates compared to Gatherers:"]
+    for res in ("Huntable", "Herdable", "NonConvertableHerdable","WoodResource", "GoldResource", "BerryBush", "AbstractFarm"):
+        dwarfNotes.append(f"{common.commaSeparatedList(common.unwrapAbstractClass(res))}: {compareGatherRates('VillagerDwarf', 'VillagerNorse', res)}")
+    unitDescriptionOverrides["VillagerDwarf"] = UnitDescription(additionalText=dwarfNotes)
+    unitDescriptionOverrides["Raven"] = UnitDescription(additionalText="Only one Raven can be waiting to respawn at a time. If both are dead at the same time, the second must wait for the first to respawn before beginning its timer.")
     unitDescriptionOverrides["Berserk"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist infantry. Can build."}, additionalText="Immune to Bolt while in the Archaic age.")
     unitDescriptionOverrides["ThrowingAxeman"] = UnitDescription(preActionInfoText={"RangedAttack":"Specialist infantry only good against other infantry. Can build."})
     unitDescriptionOverrides["RaidingCavalry"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist cavalry, especially good against archers."})
@@ -732,8 +741,8 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["TurmaHero"] = UnitDescription(preActionInfoText={"RangedAttack":"Specialist mounted ranged soldier hero only good against myth units, other ranged soldiers, and making hit-and-run attacks."})
     unitDescriptionOverrides["Murmillo"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist infantry."})
     unitDescriptionOverrides["MurmilloHero"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist infantry hero. Good against myth units."})
-    unitDescriptionOverrides["Cheiroballista"] = UnitDescription(preActionInfoText={"RangedAttack":"Specialist ranged soldier, very effective against infantry and ships."})
-    unitDescriptionOverrides["CheiroballistaHero"] = UnitDescription(preActionInfoText={"RangedAttack":"Specialist ranged soldier hero, very effective against myth units, infantry, and ships."})
+    unitDescriptionOverrides["Cheiroballista"] = UnitDescription(preActionInfoText={"RangedAttack":"Specialist ranged unit, very effective against infantry and ships."})
+    unitDescriptionOverrides["CheiroballistaHero"] = UnitDescription(preActionInfoText={"RangedAttack":"Specialist ranged unit hero, very effective against myth units, infantry, and ships."})
     unitDescriptionOverrides["Contarius"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist cavalry, especially good against ranged soldiers."})
     unitDescriptionOverrides["ContariusHero"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist cavalry hero, especially good against ranged soldiers and myth units."})
     unitDescriptionOverrides["Arcus"] = UnitDescription(preActionInfoText={"RangedAttack":"Generalist archer, especially good against infantry."})
@@ -750,6 +759,7 @@ def generateUnitDescriptions():
     # Common/Similar
     unitDescriptionOverrides["SentryTower"] = UnitDescription(showActionsIfDisabled=["RangedAttack"])
     unitDescriptionOverrides["VillageCenter"] = UnitDescription(additionalText=f"Produces units {100.0-100*float(protoFromName('VillageCenter').find('trainingrate').text):0.3g}% slower than a Town Center. Research speed is unaffected.")
+    unitDescriptionOverrides["Dock"] = UnitDescription(additionalText="Can be used as a dropsites by Villagers as well.")
     unitDescriptionOverrides["TitanCerberus"] = TitanHandler
     unitDescriptionOverrides["TitanYmir"] = TitanHandler
     unitDescriptionOverrides["TitanAtlantean"] = TitanHandler

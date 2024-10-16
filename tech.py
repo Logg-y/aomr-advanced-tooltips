@@ -7,6 +7,7 @@ import action
 import icon
 import unitdescription
 
+VANILLA_FULL_TOOLTIP_EFFECT_COLOUR = lambda s: "<color=0.65,0.65,0.65>" + s + "</color>"
 
 dataSubtypes = set()
 
@@ -696,6 +697,8 @@ def processTech(tech: ET.Element, skipAffectedObjects: bool=False, lineJoin: str
             else:
                 responses.append(response)
     
+    if additions is not None:
+        responses = [response for response in responses if additions.lineFilter(response.toString())]
     combineHandlerResponses(responses)
     strings = [response.toString(skipAffectedObjects=skipAffectedObjects) for response in responses]
 
@@ -716,7 +719,6 @@ def processTech(tech: ET.Element, skipAffectedObjects: bool=False, lineJoin: str
             else:
                 strings.append(additions.endEntry) 
 
-        strings = [string for string in strings if additions.lineFilter(string)]
 
     output = lineJoin.join(strings)
     if len(output) == 0: # Need to output something or we get <MISSING> if empty
@@ -733,6 +735,12 @@ def generateTechDescriptions():
     proto = globals.dataCollection["proto.xml"]
     techtree = globals.dataCollection["techtree.xml"]
 
+    for techElement in techtree:
+        if techElement.find("[flag='Volatile']") is not None:
+            create = techElement.find("effects/effect[@type='CreateUnit']")
+            if create is not None:
+                globals.respawnTechs[create.attrib['unit']] = techElement
+
     FreyrTechCostBonus = techtree.find("tech[@name='FreyrTechCostBonus']")
     FreyrTechCostBonusEffect = FreyrTechCostBonus.find("effects/effect")
     techManualAdditions["FreyrsGift"] = TechAddition(endEntry=f"Every time another tech is researched, this tech becomes {-1*float(FreyrTechCostBonusEffect.attrib['amount']):0.3g} {FreyrTechCostBonusEffect.attrib['resource']} cheaper.")
@@ -746,6 +754,8 @@ def generateTechDescriptions():
     EyesOnForestRevealerModifyDecay = common.findAndFetchText(EyesOnForestRevealerAction, "modifydecay", 0.0, float)
     EyesOnForestRevealerLifetime = EyesOnForestRevealerModifyRateCap/EyesOnForestRevealerActionModifyAmount + EyesOnForestRevealerModifyRateCap/EyesOnForestRevealerModifyDecay
 
+    techManualAdditions["WingedMessenger"] = TechAddition(startEntry=f"Grants a Pegasus that respawns for free {float(globals.respawnTechs['PegasusWingedMessenger'].find('delay').text):0.3g} seconds after it is killed. This Pegasus does not have a population cost.")
+
     techManualAdditions["EyesInTheForest"] = TechAddition(endEntry=f"These revealers last for {EyesOnForestRevealerLifetime:0.3g} seconds. They have {EyesOnForestRevealerLOS:0.3g} LOS, which increases by {EyesOnForestRevealerActionModifyAmount:0.3g} per second to a maximum of {EyesOnForestRevealerMaxLOS:0.3g}. Then, the LOS starts to decay at {EyesOnForestRevealerModifyDecay:0.3g} per second until the revealer disappears.")
 
     techManualAdditions["SunRay"] = TechAddition(endEntry=f"These revealers have {float(common.protoFromName('SunRayRevealer').find('los').text):0.3g} LOS and last for {float(common.protoFromName('SunRayRevealer').find('lifespan').text):0.3g} seconds.")
@@ -757,7 +767,9 @@ def generateTechDescriptions():
     techManualAdditions["FuryOfTheFallen"]=TechAddition(endEntry=f"Damage boosters persist for {float(common.protoFromName('BerserkDamageBoost').find('lifespan').text):0.3g} seconds.")
 
     techManualAdditions["SonsOfTheSun"]=TechAddition(startEntry="Regular Oracles can no longer be trained: Temples produce Oracle Heroes directly instead.")
-    techManualAdditions["RheiasGift"]=TechAddition(startEntry="Refunds all Favor spent on technologies.")
+    # Hide the hero promotion text.
+    # Nobody really cares that hero promotion is internally a tech, and not doing this makes it look like hero promotion is getting more expensive!
+    techManualAdditions["RheiasGift"]=TechAddition(startEntry="Refunds all Favor spent on technologies.", lineFilter=lambda x: "Promotion" not in x)
     techManualAdditions["Channels"]=TechAddition(startEntry="Lush: Increases Unit Movement Speed by {:0.0%}.".format(float(globals.dataCollection['terrain_unit_effects.xml'].find("terrainuniteffect[@name='GaiaCreepSpeedEffect']/effect[@name='GaiaCreepSpeedAll']").attrib['amount'])-1.0))
     # Hide the total unit cost modifications, because they are misleading
     # The promotion cost is what people care about here
@@ -768,6 +780,10 @@ def generateTechDescriptions():
     WonderAgeTitan = techtree.find("tech[@name='WonderAgeTitan']")
     WonderAgeTitanInterval = float(WonderAgeTitan.find("effects/effect[@subtype='PowerROF']").attrib['amount'])/60
     techManualAdditions["WonderAgeGeneral"]=TechAddition(endEntry=f"Allows recasting of Titan Gate every {WonderAgeTitanInterval:0.3g} minutes.")
+
+    techManualAdditions["RelicBridleOfPegasus"] = TechAddition(startEntry=f"Grants a Pegasus that respawns for free {float(globals.respawnTechs['PegasusBridleOfPegasus'].find('delay').text):0.3g} seconds after it is killed. This Pegasus does not have a population cost.")
+    techManualAdditions["RelicChariotOfCybele"] = TechAddition(startEntry=f"Grants two Golden Lions that respawn for free {float(globals.respawnTechs['RelicGoldenLion'].find('delay').text):0.3g} seconds after both are killed.")
+    techManualAdditions["RelicSkullsOfTheCercopes"] = TechAddition(startEntry=f"Grants six Monkeys that respawn for free {float(globals.respawnTechs['RelicMonkey'].find('delay').text):0.3g} seconds after all are killed.")
         
 
     stringIdsByOverwriters = {}
@@ -776,7 +792,6 @@ def generateTechDescriptions():
         strid = common.findAndFetchText(tech, "rollovertextid", None)
         if strid is not None:
             value = processTech(tech)
-
             if value is not None:
                 if strid not in stringIdsByOverwriters:
                     stringIdsByOverwriters[strid] = {}
@@ -795,3 +810,28 @@ def generateTechDescriptions():
     heroDamage = ["{:0.3g}".format(100*(-1+float(age.find("effects/effect[@subtype='Damage']/target[.='HeroShadowUpgraded']/..").attrib['amount']))) for age in ageUpTechs]
     ageUpComponents.append(f"Age Upgraded Heroes: Hitpoints +{'/'.join(heroHitpoints)}% of base, Damage +{'/'.join(heroDamage)}% of base (Classical/Heroic/Mythic).")
     globals.stringMap["STR_FORMAT_MINOR_GOD_LR"] = f"\\n {icon.BULLET_POINT} ".join(ageUpComponents) + f"\\n\\n {icon.BULLET_POINT} " + globals.dataCollection["string_table.txt"]["STR_FORMAT_MINOR_GOD_LR"]
+
+    ageIndexes = {"ClassicalAge":1, "HeroicAge":2, "MythicAge":3}
+
+    # Advancement messages
+    for tech in techtree:
+        if tech.find("flag[.='AgeUpgrade']") is not None:
+            textOutputStrId = tech.find("effects/effect[@type='TextOutput'][@all='true']").text
+            unitsCreated = [elem.text for elem in tech.findall("effects/effect[@subtype='Enable']/target")]
+            #unitsCreatedString = common.commaSeparatedList(common.unwrapAbstractClass(unitsCreated))
+            unitsCreatedString = " ".join([icon.generalIcon(common.protoFromName(unit).find('icon').text) for unit in unitsCreated])
+            powerGranted = tech.find("effects/effect[@subtype='GodPower']").attrib['power']
+            powerElement = globals.dataCollection['god_powers_combined'].find(f"power[@name='{powerGranted}']")
+            powerGrantedName = icon.generalIcon(powerElement.find('icon').text)
+            #powerGrantedName = common.getObjectDisplayName(powerElement)
+            techDisplayName = common.getObjectDisplayName(tech)
+            for techType in tech.findall("techtype"):
+                if techType.text in ageIndexes:
+                    ageText = common.AGE_LABELS[ageIndexes[techType.text]]
+            newString = f"{{0}} advances to the {ageText} Age through {techDisplayName}: {unitsCreatedString} + {powerGrantedName}"
+            globals.stringMap[textOutputStrId] = newString
+
+    # Make the vanilla detail text darker
+    for key, value in globals.dataCollection['string_table.txt'].items():
+        if key.startswith("STR_EFFECT_") and value.startswith("{0}"):
+            globals.stringMap[key] = VANILLA_FULL_TOOLTIP_EFFECT_COLOUR(value)

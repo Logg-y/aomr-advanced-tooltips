@@ -67,12 +67,12 @@ def actionDamageBonus(action: ET.Element):
         return f"({', '.join(actionDamageBonuses)})"
     return ""
         
-def actionDamageOnly(action: ET.Element, isDPS=False, hideRof=False, damageMultiplier=1.0):
+def actionDamageOnly(action: ET.Element, isDPS=False, hideRof=False, hideNumProjectiles=False, damageMultiplier=1.0):
     damages = []
     mult = damageMultiplier
     if isDPS:
         mult *= actionDPSMultiplier(action)
-        
+
     for damage in action.findall("damage"):
         damageType = damage.attrib["type"]
         damageAmount = float(damage.text)
@@ -87,7 +87,8 @@ def actionDamageOnly(action: ET.Element, isDPS=False, hideRof=False, damageMulti
     if not isDPS:
         if not hideRof:
             damages.append(actionRof(action))
-        damages.append(actionNumProjectiles(action))
+        if hideNumProjectiles:
+            damages.append(actionNumProjectiles(action))
     damages = [x for x in damages if len(x.strip()) > 0]
     final = " ".join(damages)
     
@@ -117,7 +118,17 @@ def actionDPSMultiplier(action: ET.Element):
     
 
 def actionDamageFull(protoUnit: ET.Element, action: ET.Element, isDPS=False, hideArea=False, damageMultiplier=1.0, hideRof=False, hideRange=False, ignoreActive=False, hideDamageBonuses=False):
-    components = [actionDamageOnly(action, isDPS, hideRof=hideRof, damageMultiplier=damageMultiplier)]
+    # Scorpion man special attack has displayed num projectiles but no actual projectiles
+    # I think it makes 3 little attacks and this is how the developers opted to represent that
+    # but it'd be much less confusing to multiply these out for the tooltip
+    hideNumProjectiles = False
+    numProjectiles = 1
+    hasProjectile = findAndFetchText(action, "projectile", None)
+    if hasProjectile is None:
+        numProjectiles = findAndFetchText(action, "displayednumberprojectiles", 1, int)
+        damageMultiplier *= numProjectiles
+        hideNumProjectiles = True
+    components = [actionDamageOnly(action, isDPS, hideRof=hideRof, damageMultiplier=damageMultiplier, hideNumProjectiles=hideNumProjectiles)]
     if not hideArea:
         components.append(actionArea(action, True))
     if not hideDamageBonuses:
@@ -126,9 +137,9 @@ def actionDamageFull(protoUnit: ET.Element, action: ET.Element, isDPS=False, hid
         components.append(actionRange(protoUnit, action, True))
     components = [component for component in components if len(component.strip()) > 0]
     
-    dot = actionDamageOverTime(action)
+    dot = actionDamageOverTime(action, isDPS, nonDPSDamageMultiplier=damageMultiplier)
     if len(dot) > 0:
-        components.append(f"plus an additional {actionDamageOverTime(action, isDPS)}.")
+        components.append(f"plus an additional {actionDamageOverTime(action, isDPS, nonDPSDamageMultiplier=damageMultiplier)}.")
     elif components:
         components[-1] += "."
 
@@ -190,12 +201,12 @@ def rechargeRate(proto: ET.Element, action:ET.Element, chargeType: ActionChargeT
         return "Unknown"
     return f"{icon.iconTime()} {float(recharge.text):0.3g}"
 
-def actionDamageOverTime(action: ET.Element, isDPS=False):
+def actionDamageOverTime(action: ET.Element, isDPS=False, nonDPSDamageMultiplier=1.0):
     dots = action.findall("onhiteffect[@type='DamageOverTime']")
     dur = None
     targetType = None
     damages = ""
-    mult = 1.0
+    mult = nonDPSDamageMultiplier
     if isDPS:
         mult = actionDPSMultiplier(action)
     for dot in dots:
@@ -805,6 +816,7 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
         if range is None:
             return ""
 
+    restrictempowered = findAndFetchText(tactics, "restrictifempowered", None, int)
     restrictempowertype = findAndFetchText(tactics, "restrictempowertype", None, str)
     if restrictempowertype is not None:
         restrictProto = protoFromName(restrictempowertype)
@@ -813,6 +825,9 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
         else:
             empowerer = common.getDisplayNameForProtoOrClass(restrictempowertype) # KeyError if a missing unit class
         components.append(f"If empowered by a {empowerer},") 
+    elif restrictempowered:
+        components.append(f"If empowered, ")
+    
 
     modifyrangeuselos = findAndFetchText(tactics, "modifyrangeuselos", None, int)
     if modifyrangeuselos is not None and modifyrangeuselos > 0:
@@ -863,6 +878,8 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
         playerRelation = "enemy"
     elif findAndFetchText(tactics, "targetnonally", ""):
         playerRelation = "non-allied"
+    elif findAndFetchText(tactics, "includeally", ""):
+        playerRelation = "your and your allies'"
     if findAndFetchText(tactics, "targetunbuilt", ""):
         playerRelation += " unfinished"
 
@@ -1008,7 +1025,11 @@ def getActionName(proto: Union[ET.Element, str], action: Union[ET.Element, str],
     return actionName
 
 
-def describeAction(proto: ET.Element, action: ET.Element, chargeType: ActionChargeType=ActionChargeType.NONE, nameOverride: Union[str, None] = None, forceAbilityLink: Union[str, None] = None, overrideText: Union[str, None]=None, tech: Union[ET.Element, None]=None):
+def describeAction(proto: Union[str, ET.Element], action: Union[str, ET.Element], chargeType: ActionChargeType=ActionChargeType.NONE, nameOverride: Union[str, None] = None, forceAbilityLink: Union[str, None] = None, overrideText: Union[str, None]=None, tech: Union[ET.Element, None]=None):
+    if isinstance(proto, str):
+        proto = common.protoFromName(proto)
+    if isinstance(action, str):
+        action = findActionByName(proto, action)
     # Display names for charge actions only
     actionName = ""
     actionInternalName = findAndFetchText(action, "name", None)

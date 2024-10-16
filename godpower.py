@@ -19,16 +19,14 @@ IGNORE_POWERS = (
     "CeaseFire3Minutes",
     )
 
-AGE_LABELS = (f"{icon.generalIcon('resources/shared/static_color/technologies/archaic_age_icon.png')} Archaic",
-              f"{icon.generalIcon('resources/shared/static_color/technologies/classical_age_icon.png')} Classical",
-              f"{icon.generalIcon('resources/shared/static_color/technologies/heroic_age_icon.png')} Heroic",
-              f"{icon.generalIcon('resources/shared/static_color/technologies/mythic_age_icon.png')} Mythic",
-              f"{icon.generalIcon('resources/shared/static_color/technologies/wonder_age_icon.png')} Wonder")
-
 @dataclasses.dataclass
 class GodPowerParams:
     # Text lines for the power description
     text: Union[str, List[str]] = ""
+    
+    # Overrides for recharge time and cost text
+    overrideRecharge: Union[str, None] = None
+    overrideCost: Union[str, None] = None
 
 
 godPowerProcessingParams: Dict[str, GodPowerParams] = {}
@@ -61,103 +59,111 @@ def processGodPower(godpower: ET.Element) -> Union[None, str]:
     if powerName in IGNORE_POWERS:
         return None
     params = godPowerProcessingParams.get(powerName, None)
-    topLineItems = ["Recast:"]
-    if powerName in globals.godPowerRecharges:
-        topLineItems.append(f"{icon.iconTime()} {globals.godPowerRecharges[powerName]:0.3g}")
-    topLineItems.append(f"{icon.resourceIcon('favor')} {common.findAndFetchText(godpower, 'cost', 0.0, float):0.3g} + {common.findAndFetchText(godpower, 'repeatcost', 0.0, float):0.3g} each recast")
-    items = [" ".join(topLineItems)]
     if params is None:
         print(f"Warning: No godpower params for {powerName}, returning vanilla text")
         return None
+    topLineItems = ["Recast:"]
+    rechargeString = params.overrideRecharge
+    if rechargeString is None and powerName in globals.godPowerRecharges:
+        rechargeString = f"{globals.godPowerRecharges[powerName]:0.3g}"
+    if rechargeString is not None and len(rechargeString):
+        topLineItems.append(f"{icon.iconTime()} {rechargeString}")
+    costString = params.overrideCost
+    if costString is None:
+        costString = f"{common.findAndFetchText(godpower, 'cost', 0.0, float):0.3g} + {common.findAndFetchText(godpower, 'repeatcost', 0.0, float):0.3g} each recast"
+    if costString:
+        topLineItems.append(f"{icon.resourceIcon('favor')} {costString}")
+    if len(topLineItems) > 1:
+        items = [" ".join(topLineItems)]
+
+    replacements = {}
+    radiusValue = common.findAndFetchText(godpower, "radius", 0.0, float)
+    rangeIndicator = godpower.find("rangeindicator")
+    rangeIndicatorSize = 0.0 if rangeIndicator is None else float(rangeIndicator.attrib.get('range', 0.0))
+    radiusParts = []
+    radiusPartsLate = []
+    if rangeIndicatorSize > 0.0 and radiusValue > 0.0 and abs(rangeIndicatorSize - radiusValue) > 1.0:
+        radiusPartsLate.append(f"Targeting cursor has a radius of {rangeIndicatorSize}m.")
+    radiusParts.append(f"Radius: {radiusValue:0.3g}m")
+    revealLos = godpower.find("reveallos")
+    if revealLos is not None and 'radius' in revealLos.attrib:
+        revealedRadius = float(revealLos.attrib['radius'])
+        replacements['los'] = f"Grants {revealedRadius:0.3g}m line of sight."
+        if radiusValue == revealedRadius:
+            radiusParts.append("grants line of sight")
+        else:
+            radiusPartsLate.append(replacements['los'])
+        
+
+    powerBlocker = godpower.find("powerblocker")
+    if powerBlocker is not None:
+        powerBlockerRadius = float(powerBlocker.text)
+        replacements['powerblocker'] = f"Blocks other god powers within {powerBlockerRadius:0.3g}m."
+        if powerBlockerRadius == radiusValue:
+            radiusParts.append("blocks other god powers")
+        else:
+            radiusPartsLate.append(replacements['powerblocker'])
+    
+    replacements["radius"] = f"{', '.join(radiusParts)}."
+    if len(radiusPartsLate):
+        replacements["radius"] += " " + " ".join(radiusPartsLate)
+
+    replacements["duration"] = f"Lasts {common.findAndFetchText(godpower, 'activetime', 0.0, float) + common.findAndFetchText(godpower, 'builduptime', 0.0, float):0.3g} seconds."
+
+    playerRelation = godpower.find("powerplayerrelation")
+    if playerRelation is None:
+        playerRelation = ""
+        playerRelationPossessive = ""
+    elif playerRelation.text in ("Enemy", "EnemyNotMotherNature"):
+        playerRelationPossessive = "enemy "
+        playerRelation = "enemies"
+    elif playerRelation.text in ("Player"):
+        playerRelationPossessive = "your "
+        playerRelation = "you"
+    elif playerRelation.text in ("All", "Any"):
+        playerRelationPossessive = "all players' "
+        playerRelation = "all players"
+    elif playerRelation.text in ("Ally"):
+        playerRelationPossessive = "your or your allies' "
+        playerRelation = "you and your allies"
     else:
-        replacements = {}
-        radiusValue = common.findAndFetchText(godpower, "radius", 0.0, float)
-        rangeIndicator = godpower.find("rangeindicator")
-        rangeIndicatorSize = 0.0 if rangeIndicator is None else float(rangeIndicator.attrib.get('range', 0.0))
-        radiusParts = []
-        radiusPartsLate = []
-        if rangeIndicatorSize > 0.0 and radiusValue > 0.0 and abs(rangeIndicatorSize - radiusValue) > 1.0:
-            radiusPartsLate.append(f"Targeting cursor has a radius of {rangeIndicatorSize}m.")
-        radiusParts.append(f"Radius: {radiusValue:0.3g}m")
-        revealLos = godpower.find("reveallos")
-        if revealLos is not None and 'radius' in revealLos.attrib:
-            revealedRadius = float(revealLos.attrib['radius'])
-            replacements['los'] = f"Grants {revealedRadius:0.3g}m line of sight."
-            if radiusValue == revealedRadius:
-                radiusParts.append("grants line of sight")
-            else:
-                radiusPartsLate.append(replacements['los'])
-           
-
-        powerBlocker = godpower.find("powerblocker")
-        if powerBlocker is not None:
-            powerBlockerRadius = float(powerBlocker.text)
-            replacements['powerblocker'] = f"Blocks other god powers within {powerBlockerRadius:0.3g}m."
-            if powerBlockerRadius == radiusValue:
-                radiusParts.append("blocks other god powers")
-            else:
-                radiusPartsLate.append(replacements['powerblocker'])
-        
-        replacements["radius"] = f"{', '.join(radiusParts)}."
-        if len(radiusPartsLate):
-            replacements["radius"] += " " + " ".join(radiusPartsLate)
-
-        replacements["duration"] = f"Lasts {common.findAndFetchText(godpower, 'activetime', 0.0, float) + common.findAndFetchText(godpower, 'builduptime', 0.0, float):0.3g} seconds."
-
-        playerRelation = godpower.find("powerplayerrelation")
-        if playerRelation is None:
-            playerRelation = ""
-            playerRelationPossessive = ""
-        elif playerRelation.text in ("Enemy", "EnemyNotMotherNature"):
-            playerRelationPossessive = "enemy "
-            playerRelation = "enemies"
-        elif playerRelation.text in ("Player"):
-            playerRelationPossessive = "your "
-            playerRelation = "you"
-        elif playerRelation.text in ("All", "Any"):
-            playerRelationPossessive = "all players' "
-            playerRelation = "all players"
-        elif playerRelation.text in ("Ally"):
-            playerRelationPossessive = "your or your allies' "
-            playerRelation = "you and your allies"
+        print(f"Warning: {powerName} has unhandled powerplayerrelation {playerRelation}")
+        playerRelation = ""
+    replacements['playerrelation'] = playerRelation.strip()
+    replacements['playerrelationpos'] = playerRelationPossessive.strip()
+    
+    # Some powers exclude things pointlessly that were never in the targeted unit types to begin with
+    # eg farms already lack the "affected by earthquake" flag, don't need to exclude them again
+    attackTargets = [elem.text for elem in godpower.findall("abstractattacktargettype")]
+    attackTargetsExpandedTypes = []
+    for target in attackTargets:
+        if target not in globals.protosByUnitType:
+            attackTargetsExpandedTypes.append(target)
         else:
-            print(f"Warning: {powerName} has unhandled powerplayerrelation {playerRelation}")
-            playerRelation = ""
-        replacements['playerrelation'] = playerRelation.strip()
-        replacements['playerrelationpos'] = playerRelationPossessive.strip()
-        
-        # Some powers exclude things pointlessly that were never in the targeted unit types to begin with
-        # eg farms already lack the "affected by earthquake" flag, don't need to exclude them again
-        attackTargets = [elem.text for elem in godpower.findall("abstractattacktargettype")]
-        attackTargetsExpandedTypes = []
-        for target in attackTargets:
-            if target not in globals.protosByUnitType:
-                attackTargetsExpandedTypes.append(target)
-            else:
-                attackTargetsExpandedTypes += globals.protosByUnitType[target]
-        replacements["attacktargets"] = common.commaSeparatedList(common.unwrapAbstractClass(attackTargets, plural=True))
-        restrictedTargets = [elem.text for elem in godpower.findall("explicitlyrestrictedattacktargettype")]
-        restrictedTargetsRevised = []
-        for target in restrictedTargets:
-            targetWouldBeHit = False
-            if target in attackTargetsExpandedTypes:
-                targetWouldBeHit = True
-            elif target in globals.protosByUnitType:
-                # Exclude if no members of this unit type are in the list of valid targets
-                for abstractTypeMember in globals.protosByUnitType[target]:
-                    if abstractTypeMember in attackTargetsExpandedTypes:
-                        targetWouldBeHit = True
-                        break
-            if targetWouldBeHit:
-                restrictedTargetsRevised.append(target)
-                
-        if restrictedTargetsRevised:
-            replacements["attacktargets"] += f", except {common.commaSeparatedList(common.unwrapAbstractClass(restrictedTargetsRevised, plural=True))}"
+            attackTargetsExpandedTypes += globals.protosByUnitType[target]
+    replacements["attacktargets"] = common.commaSeparatedList(common.unwrapAbstractClass(attackTargets, plural=True))
+    restrictedTargets = [elem.text for elem in godpower.findall("explicitlyrestrictedattacktargettype")]
+    restrictedTargetsRevised = []
+    for target in restrictedTargets:
+        targetWouldBeHit = False
+        if target in attackTargetsExpandedTypes:
+            targetWouldBeHit = True
+        elif target in globals.protosByUnitType:
+            # Exclude if no members of this unit type are in the list of valid targets
+            for abstractTypeMember in globals.protosByUnitType[target]:
+                if abstractTypeMember in attackTargetsExpandedTypes:
+                    targetWouldBeHit = True
+                    break
+        if targetWouldBeHit:
+            restrictedTargetsRevised.append(target)
+            
+    if restrictedTargetsRevised:
+        replacements["attacktargets"] += f", except {common.commaSeparatedList(common.unwrapAbstractClass(restrictedTargetsRevised, plural=True))}"
 
-        if isinstance(params.text, list):
-            items += [line.format(**replacements) for line in params.text]
-        else:
-            items.append(params.text.format(**replacements))
+    if isinstance(params.text, list):
+        items += [line.format(**replacements) for line in params.text]
+    else:
+        items.append(params.text.format(**replacements))
 
     if godpower.find("exclusive") is not None:
         items.append(f"Only one instance of {common.getObjectDisplayName(godpower)} can be active at a time.")
@@ -176,7 +182,8 @@ def findGodPowerRecharges():
         grantPowers = techElem.findall("effects/effect[@subtype='GodPower']")
         for granted in grantPowers:
             if "cooldown" in granted.attrib:
-                globals.godPowerRecharges[granted.attrib['power']] = float(granted.attrib['cooldown'])
+                powerName = granted.attrib['power']
+                globals.godPowerRecharges[powerName] = float(granted.attrib['cooldown'])
 
 def findGodPowerByName(powerName: Union[str, ET.Element]) -> ET.Element:
     if isinstance(powerName, str):
@@ -200,10 +207,10 @@ def generateGodPowerDescriptions():
     godPowerProcessingParams["Sentinel"] = GodPowerParams(sentinelItems)
 
     lure = findGodPowerByName("Lure")
-    lureAttractedTargets = common.commaSeparatedList(common.unwrapAbstractClass([elem.text for elem in lure.findall("attracttype")], plural=True), "or")
+    lureAttractedTargets = common.commaSeparatedList(common.unwrapAbstractClass([elem.text for elem in lure.findall("attracttype")], plural=False), "or")
     lureSpawns = common.getDisplayNameForProtoOrClass(lure.find('spawnproto').text) + "s"
     lureItems = [f"Creates a Lure, functioning as a Food dropsite, and several {lureSpawns}. Every {common.findAndFetchText(lure, 'attractrate', 0.0, float):0.3g} seconds, tries to attract one {lureAttractedTargets} between {common.findAndFetchText(lure, 'minrange', 0.0, float):0.3g} and {common.findAndFetchText(lure, 'maxrange', 0.0, float):0.3g}m away. Once its food limit has been reached, the Lure remains as a Food dropsite."]
-    lureItems += [f" {icon.BULLET_POINT} {AGE_LABELS[index]}: Attracts {icon.resourceIcon('food')} {ageinfo.attrib['maxfood']}, {ageinfo.attrib['numspawns']} {lureSpawns}" for index, ageinfo in enumerate(lure.findall("ageinfo"))]
+    lureItems += [f" {icon.BULLET_POINT} {common.AGE_LABELS[index]}: Attracts {icon.resourceIcon('food')} {ageinfo.attrib['maxfood']}, {ageinfo.attrib['numspawns']} {lureSpawns}" for index, ageinfo in enumerate(lure.findall("ageinfo"))]
     godPowerProcessingParams["Lure"] = GodPowerParams(lureItems)
 
     restoration = findGodPowerByName("Restoration")
@@ -338,7 +345,7 @@ def generateGodPowerDescriptions():
 
     meteor = findGodPowerByName("Meteor")
     meteorCount = common.findAndFetchText(meteor, "numberofstrikes", 0, int)
-    meteorItems = [f"Summons a shower of {meteorCount} meteors. Each inflicts {protoGodPowerDamage('Meteor', 'HandAttack')} The first meteor always hits the centre of the targeted area. Meteors are drawn towards both clumps of valid targets and the centre point."]
+    meteorItems = [f"Summons a shower of {meteorCount} meteors. Each inflicts {protoGodPowerDamage('Meteor', 'HandAttack')} The first meteor always hits the centre of the targeted area. Meteors are drawn towards both clumps of valid targets and the centre point.", "Friendly targets take only 10% damage.", "{radius}"]
     godPowerProcessingParams["Meteor"] = GodPowerParams(meteorItems)
 
     tornado = findGodPowerByName("Tornado")
@@ -349,14 +356,9 @@ def generateGodPowerDescriptions():
     tornadoItems = ["Creates a Tornado that damages {playerrelationpos} objects. It always moves in an anticlockwise spiral. Every second, it inflicts " + f"{protoGodPowerDamage('Tornado', 'HandAttack', tornadoMultiplier)} Targets within 5m of the centre of the vortex take full damage, those between 5 and 15m are damaged with normal linear distance falloff.", "{powerblocker}", "{duration}"]
     godPowerProcessingParams["Tornado"] = GodPowerParams(tornadoItems)
 
-    meteor = findGodPowerByName("Meteor")
-    meteorCount = common.findAndFetchText(meteor, "numberofstrikes", 0, int)
-    meteorItems = [f"Summons a shower of {meteorCount} meteors. Each inflicts {protoGodPowerDamage('Meteor', 'HandAttack')} The first meteor always hits the centre of the targeted area. Meteors are drawn towards both clumps of valid targets and the centre point."]
-    godPowerProcessingParams["Meteor"] = GodPowerParams(meteorItems)
-
     dwarvenmine = findGodPowerByName("DwarvenMine")
     dwarvenmineItems = [f"Creates a gold mine. The amount of Gold in the mine increases in later Ages. It is also intended to be gathered faster in later Ages, but this is currently bugged and does not function. It only affects the displayed gather rate on the UI while gathering."]
-    dwarvenmineItems += [f" {icon.BULLET_POINT} {AGE_LABELS[index]}: {icon.resourceIcon('gold')} {round(float(ageinfo.attrib['goldamount']))}, intended gather rate +{float(ageinfo.attrib['gatherratemultiplier'])-1:0.0%}" for index, ageinfo in enumerate(dwarvenmine.findall("ageadjustment"))]
+    dwarvenmineItems += [f" {icon.BULLET_POINT} {common.AGE_LABELS[index]}: {icon.resourceIcon('gold')} {round(float(ageinfo.attrib['goldamount']))}, intended gather rate +{float(ageinfo.attrib['gatherratemultiplier'])-1:0.0%}" for index, ageinfo in enumerate(dwarvenmine.findall("ageadjustment"))]
     godPowerProcessingParams["DwarvenMine"] = GodPowerParams(dwarvenmineItems)
 
     spy = findGodPowerByName("Spy")
@@ -365,7 +367,7 @@ def generateGodPowerDescriptions():
 
     greathunt = findGodPowerByName("GreatHunt")
     greathuntItems = [f"If there are no huntable animals in the area targeted, spawns Elk with half the maximum new Food value for the current age.", "Otherwise, produces new huntable animals containing up to 2x the amount of Food contained within all the animals affected. Wastage and rounding issues are avoided by creating slightly larger versions of animals which may contain up to double the normal amount of Food.", "Maximum new Food by age:"]
-    greathuntItems += [f" {icon.BULLET_POINT} {AGE_LABELS[index]}: {icon.resourceIcon('food')} {round(float(ageinfo.text))}" for index, ageinfo in enumerate(greathunt.findall("maxfood"))]
+    greathuntItems += [f" {icon.BULLET_POINT} {common.AGE_LABELS[index]}: {icon.resourceIcon('food')} {round(float(ageinfo.text))}" for index, ageinfo in enumerate(greathunt.findall("maxfood"))]
     godPowerProcessingParams["GreatHunt"] = GodPowerParams(greathuntItems)
 
     gullinbursti = findGodPowerByName("Gullinbursti")
@@ -531,12 +533,14 @@ def generateGodPowerDescriptions():
     implodeItems = [f"Creates a floating sphere that begins to suck in all players' {{attacktargets}} within {float(implode.find('pullradius').text):0.3g}m. The sphere soon begins to suck up about {implodeUnitSuckRate:0.3g} units per second.  Units designated to be pulled are connected to the sphere with a blue ray: if the units are able to get {float(implode.find('unitescaperadius').text):0.3g}m from the sphere before being pulled in, they escape unharmed. Preferentially pulls units closest to the southeast edge of the map first."]
     implodeItems += [f"Units that are sucked up by the sphere take {protoGodPowerDamage('ImplodeSphere', 'HandAttack')} when they reach the sphere, and again every {float(implode.find('damageintervalseconds').text):0.3g} second until the sphere explodes."]
     implodeItems += [f"The sphere explosion inflicts {protoGodPowerDamage('ImplodeShockwave', 'HandAttack')} This damage strikes all objects within {float(implode.find('exploderadius').text):0.3g}m and has no damage falloff. Units sucked into the sphere are not hit by this. The explosion damage is increased by {100*float(implode.find('poweraccumulationincrement').text):0.3g}% per unit sucked into the sphere, to a maximum damage bonus of {100*float(implode.find('maximumaccumulatedpower').text):0.3g}%."]
-    implodeItems += [f"Inflicts 0.1x damage to your or your allies' units.", "{powerblocker}", "{los}"]
+    implodeItems += [f"Friendly objects take only 10% damage from both sources.", "{powerblocker}", "{los}"]
     godPowerProcessingParams["Implode"] = GodPowerParams(implodeItems)
 
     titangate = findGodPowerByName("TitanGate")
-    titangateItems = [f"Places a Titan Gate at 50% hitpoints. When fully built, unleashes a Titan."]
-    godPowerProcessingParams["TitanGate"] = GodPowerParams(titangateItems)
+    titangateRecharge = "{:0.3g}".format(float(techtree.find("tech[@name='WonderAgeTitan']/effects/effect[@subtype='PowerROF']").attrib['amount']))
+    titangateCost= "{:0.3g}".format(float(techtree.find("tech[@name='WonderAgeTitan']/effects/effect[@subtype='PowerCost']").attrib['amount']))
+    titangateItems = [f"Places a Titan Gate at 50% hitpoints. When fully built, unleashes a Titan.", "Can only be recast if you have a Wonder."]
+    godPowerProcessingParams["TitanGate"] = GodPowerParams(titangateItems, overrideRecharge=titangateRecharge, overrideCost=titangateCost)
 
     godpowers = globals.dataCollection["god_powers_combined"]
 

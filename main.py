@@ -5,6 +5,7 @@ from typing import Dict
 from unitdescription import generateUnitDescriptions
 from tech import generateTechDescriptions
 from godpower import generateGodPowerDescriptions
+from majorgodtooltip import generateMajorGodDescriptions
 import re
 import globals
 
@@ -121,6 +122,7 @@ def main():
     generateTechDescriptions()           
     generateUnitDescriptions()
     generateGodPowerDescriptions()
+    generateMajorGodDescriptions()
     
     
     with open(os.path.join(globals.config["paths"]["outputPath"], "game/data/strings/stringmods.txt"), "w", encoding="utf8") as f:

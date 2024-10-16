@@ -1,8 +1,11 @@
 ICON_SIZE = 20
 BULLET_POINT = "•"
+BULLET_POINT_ALT = "◦"
 
 def generalIcon(path: str) -> str:
-    return f"<icon=\\\"({ICON_SIZE})({path})\\\">"
+    # Some icons aren't displaying properly
+    # Backslashes to front slashes?
+    return f"<icon=\\\"({ICON_SIZE})({path.replace(chr(92), '/')})\\\">"
 
 def damageTypeIcon(damageType: str):
     return f"<icon=\\\"({ICON_SIZE})(resources/in_game/stat_{damageType.lower()}_dmg.png)\\\">"

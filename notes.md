@@ -33,24 +33,10 @@ Two options:
 * Destroy everything vanilla, rely on people turning off the game's advanced tooltips and make my own descriptions for every tech in the game
 * Keep the vanilla tooltip generation, except add in the stuff it missed and comment every time it says something misleading
 
-The former is the more complete option. I might half build support for the latter in case turning off advanced tooltips turns out to do something else undesirable...
-I also need to change relic text for that.
+The former is the more complete option. I think doing the latter will get a bit confusing, you'd have "hey Thurisaz rune doesn't give titans regen" and then contradictory stuff below it.
+
+Unfortunately playing with the advanced tooltips game setting off hides the costs of things on the techtree view. I don't think I can help that.
 
 
 # TODO
 
-Major god tooltips
-
-Winged messenger respawning time
-
-Meteor friendly fire multiplier?
-
-Age up text output (myth unit/godpower)
-
-Relics with missing text (eg chariot of cybele)
-
-Scorpion man spec should probably merge projectile count
-
-Time shift text
-
-Grey colourise all the vanilla tooltip effect strings so they look clearly different in case people want to keep them on
