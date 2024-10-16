@@ -835,3 +835,9 @@ def generateTechDescriptions():
     for key, value in globals.dataCollection['string_table.txt'].items():
         if key.startswith("STR_EFFECT_") and value.startswith("{0}"):
             globals.stringMap[key] = VANILLA_FULL_TOOLTIP_EFFECT_COLOUR(value)
+
+    # Do the same to any defined advancedrollovertextoverrideid-s
+    for tech in techtree:
+        overrideVanillaElement = tech.find("advancedrollovertextoverrideid")
+        if overrideVanillaElement is not None:
+            globals.stringMap[overrideVanillaElement.text] = VANILLA_FULL_TOOLTIP_EFFECT_COLOUR(globals.dataCollection['string_table.txt'][overrideVanillaElement.text])
