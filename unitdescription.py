@@ -26,6 +26,7 @@ UNIT_CLASS_SUPPRESSION = {
 "LogicalTypeClassicalMythUnit":["MythUnit"],
 "LogicalTypeHeroicMythUnit":["MythUnit"],
 "LogicalTypeMythicMythUnit":["MythUnit"],
+"HeroShadowUpgraded":["Hero"],
 }
 
 # These all get unworkably long.
@@ -134,14 +135,14 @@ def directionalarmorText(proto: Union[str, ET.Element]):
     return ""
 
 
-def veterancyDamagePoints(proto: Union[str, ET.Element]):
+def veterancyDamagePoints(proto: Union[str, ET.Element]) -> List[str]:
     if isinstance(proto, str):
         proto = protoFromName(proto)
     ranks = proto.find("veterancyranks")
     if ranks is None:
-        return ""
+        return []
     dmgs = [totaldamageNode.text for totaldamageNode in ranks.findall(".//*totaldamage")]
-    return "/".join(dmgs)
+    return dmgs
 
 def veterancyDamageTargets(proto: Union[str, ET.Element]):
     if isinstance(proto, str):
@@ -169,16 +170,20 @@ VETERANCY_MODIFY_RELATIVITY = {
     "VisualScale": "increase"
 }
 
-def veterancyEffects(proto: Union[str, ET.Element]):
+def veterancyEffects(proto: Union[str, ET.Element], multiline=False) -> Union[str, List[str]]:
     if isinstance(proto, str):
         proto = protoFromName(proto)
     bonus = proto.find("veterancybonus")
     if bonus is None:
-        return ""
+        return []
     ranks = bonus.findall("rank")
     if len(ranks) == 0:
-        return ""
+        return []
     modifyTargets = {modifyNode.attrib['modifytype'] for modifyNode in bonus.findall("./*veterancymodify")}
+    # Multiline:
+    # [Increases damage by A, Increases damage by B...]
+    # Single line:
+    # Increases damage by A/B/C/D/E
     textByTarget = []
     for target in modifyTargets:
         valuesByRank = []
@@ -192,22 +197,39 @@ def veterancyEffects(proto: Union[str, ET.Element]):
                     valuesByRank.append(valuesByRank[-1])
             else:
                 valuesByRank.append(f"{float(targetNode.text):0.3g}")
-        textByTarget.append(f"{relativity} {VETERANCY_MODIFY_NAMES.get(target, target)} by {'/'.join(valuesByRank)}")
-    if len(textByTarget) == 0:
-        return ""
-    if len(textByTarget) == 1:
-        return textByTarget[0]
-    separated = ", ".join(textByTarget[:-1])
-    separated += " and " + textByTarget[-1]
-    return separated
+        if not multiline:
+            textByTarget.append(f"{relativity} {VETERANCY_MODIFY_NAMES.get(target, target)} by {'/'.join(valuesByRank)}")
+        else:
+            for index, value in enumerate(valuesByRank):
+                newItem = [f"{relativity} {VETERANCY_MODIFY_NAMES.get(target, target)} by {value}"]
+                if index >= len(textByTarget):
+                    textByTarget.append(newItem)
+                else:
+                    textByTarget[index] += newItem
 
-def veterancyText(proto: Union[str, ET.Element], rankName="rank", ignoreExperienceUnitFlag=False):
+    if not multiline:
+        return common.commaSeparatedList(textByTarget)
+    else:
+        return [common.commaSeparatedList(rankItems) for rankItems in textByTarget]
+
+
+
+def veterancyText(proto: Union[str, ET.Element], rankName="rank", ignoreExperienceUnitFlag=False, multiline=True) -> Union[str, List[str]]:
     proto = protoFromName(proto)
     if not ignoreExperienceUnitFlag and proto.find("./flag[.='ExperienceUnit']") is None:
         return ""
-    damagePoints = veterancyDamagePoints(proto)
-    if damagePoints != "":
-        return f"Gains additional {rankName}s after dealing a total of {damagePoints} damage to {veterancyDamageTargets(proto)}. Additional {rankName}s {veterancyEffects(proto)}."
+    if not multiline:
+        damagePoints = "/".join(veterancyDamagePoints(proto))
+        if damagePoints != "":
+            return f"Gains additional {rankName}s after dealing a total of {damagePoints} damage to {veterancyDamageTargets(proto)}. Additional {rankName}s {'/'.join(veterancyEffects(proto, multiline=multiline))}."
+    else:
+        damageThresholds = [f"After inflicting {damage} damage:" for damage in veterancyDamagePoints(proto)]
+        effects = veterancyEffects(proto, multiline=multiline)
+        zipped = zip(damageThresholds, effects)
+        rankTexts = [" ".join(pair) for pair in zipped]
+        items = [f"Gains additional {rankName}s after dealing damage to {veterancyDamageTargets(proto)}:", *rankTexts]
+        return items
+
     return ""
 
 
@@ -614,7 +636,13 @@ def oracleHistoryText(protoName):
         numberOfPlaces += 1
     return f"Favor income rate per second: {rate} + {quadraticTermString}x(current idle LOS bonus)²\\nFlat LOS boosts (eg Pelt of Argus) do NOT affect this: this is entirely dependent on the amount of idle bonus."
 
-        
+unitDescriptionOverrides = {}
+
+def describeUnit(unit: Union[str, ET.Element]) -> Union[str, None]:
+    unit = protoFromName(unit)
+    return unitDescriptionOverrides.get(unit.attrib["name"], UnitDescription()).generate(unit)
+
+
 def generateUnitDescriptions():
     proto = globals.dataCollection["proto.xml"]
     techtree = globals.dataCollection["techtree.xml"]
@@ -639,109 +667,102 @@ def generateUnitDescriptions():
 
     GullinburstiAges = ("Archaic", "Classical", "Heroic", "Mythic")
     gullinburstiHistory = "\\n".join([f"<tth>{age}:\\n" + UnitDescription(preActionInfoText={"BirthAttack":"Shockwave when spawned:"}).generate(protoFromName(f"Gullinbursti{age}")) for age in GullinburstiAges])
-    GullinburstiHandler = UnitDescription(hideStats=True, ignoreActions=["HandAttack", "Gore", "DistanceLimiting", "BirthAttack"], historyText=gullinburstiHistory, hideNonActionObservations=True, additionalText="See history for age progression.")
+    GullinburstiHandler = UnitDescription(hideStats=True, ignoreActions=["HandAttack", "Gore", "DistanceLimiting", "BirthAttack"], historyText=gullinburstiHistory, hideNonActionObservations=True, additionalText="See Learn > Compendium > Units > Gullinbursti for detailed age stat progression.")
 
-    unitDescriptionOverrides = {
-        # People new to the game seem to have a not great grasp of what units do what, so maybe I can help a little.
-        # Greek
-        "Hoplite":UnitDescription(preActionInfoText={"HandAttack":"Generalist infantry, especially good against cavalry."}),
-        "Hypaspist":UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry only good against other infantry."}),
-        "Toxotes":UnitDescription(preActionInfoText={"RangedAttack":"Generalist archer, especially good against infantry."}),
-        "Peltast":UnitDescription(preActionInfoText={"RangedAttack":"Specialist ranged unit only good against other ranged soldiers."}),
-        "Hippeus":UnitDescription(preActionInfoText={"HandAttack":"Generalist cavalry, especially good against ranged soldiers."}),
-        "Prodromos":UnitDescription(preActionInfoText={"HandAttack":"Specialist cavalry only good against other cavalry."}),
-        "Militia":UnitDescription(preActionInfoText={"HandAttack":"Generalist infantry spawned from destroyed buildings of Poseidon. Good against cavalry."}),
-        "Myrmidon":UnitDescription(preActionInfoText={"HandAttack":f"Generalist infantry that inflicts armor ignoring {icon.damageTypeIcon('divine')} Divine damage with attacks."}),
-        "Hetairos":UnitDescription(preActionInfoText={"HandAttack":f"Generalist cavalry that inflict area damage."}),
-        "Gastraphetoros":UnitDescription(preActionInfoText={"RangedAttack":f"Generalist archer with considerable bonus against buildings."}),
-        "Pegasus":UnitDescription(additionalText=f"Pegasus from the Bridle of Pegasus respawn in {float(techtree.find('tech[@name=' + stringLiteralHelper('BridleOfPegasusRespawn') +']/delay').text):0.3g}s. Pegasus from Winged Messenger respawn in {float(techtree.find('tech[@name=' + stringLiteralHelper('WingedMessengerRespawn') +']/delay').text):0.3g}s."),
-        "Hydra":UnitDescription(passiveAbilityLink={"veterancy":"AbilityHydra"}, nonActionObservationArgs={"veterancy":["head"]}),
-        "Scylla":UnitDescription(passiveAbilityLink={"veterancy":"AbilityScylla"}, nonActionObservationArgs={"veterancy":["head"]}),
-        "HadesShade":UnitDescription(additionalText=f"Has a {float(globals.dataCollection['major_gods.xml'].find('./civ[name=' + stringLiteralHelper('Hades') + ']/shades/chance').text)*100.0:0.3g}% to appear at the Temple from the deaths of human soldiers."),
-        "PlentyVault":UnitDescription(overrideDescription="<tth>Regular Plenty Vault:", additionalText="<tth>King of the Hill:\\n" + icon.BULLET_POINT + " " + UnitDescription(overrideClasses=True, additionalClasses=[], includeVanillaDescription=False, hideStats=True).generate(protoFromName("PlentyVaultKOTH"))),
-        "Centaur":UnitDescription(postActionInfoText={"ChargedRangedAttack":action.actionDamageOverTimeArea('CentaurAreaDamage', 'ProgressiveDamageLight', altDamageText=f"{action.actionDamageOverTimeDamageFromAction(action.findActionByName('CentaurAreaDamage', 'ProgressiveDamageLight'), centaurSpecialDoTNeedsDamageBonuses)} for the first {float(action.actionTactics('CentaurAreaDamage', 'ProgressiveDamageLight').find('modifyduration').text)/1000:0.3g} seconds, followed by {action.actionDamageOverTimeDamageFromAction(action.findActionByName('CentaurAreaDamage', 'ProgressiveDamageHigh'), centaurSpecialDoTNeedsDamageBonuses)} for the next {float(action.actionTactics('CentaurAreaDamage', 'ProgressiveDamageHigh').find('modifyduration').text)/1000:0.3g} seconds")}),
-        "Chimera":UnitDescription(postActionInfoText={"ChargedRangedAttack":action.actionDamageOverTimeArea('ChimeraFireArea', parentAction=action.findActionByName('Chimera', "ChargedRangedAttack"))}),
-        "Carcinos":UnitDescription(linkActionsToAbilities={"SelfDestructAttack":"AbilityCarcinos"}),
-        "Colossus":UnitDescription(ignoreActions=["BuildingAttack"]),
-        "Odysseus":HideFlyingAttack,
-        "Chiron":HideFlyingAttack,
-        "Hippolyta":HideFlyingAttack,
-        # Egyptian
-        "Spearman":UnitDescription(preActionInfoText={"HandAttack":"Fast semi-specialised infantry, mostly only good against cavalry."}),
-        "Axeman":UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry only good against other infantry."}),
-        "Slinger":UnitDescription(preActionInfoText={"RangedAttack":"Specialist ranged unit only good against other ranged units."}),
-        "ChariotArcher":UnitDescription(preActionInfoText={"RangedAttack":"Generalist ranged unit, especially good against infantry."}),
-        "CamelRider":UnitDescription(preActionInfoText={"HandAttack":"Generalist cavalry unit, especially good against other cavalry."}),
-        "WarElephant":UnitDescription(preActionInfoText={"HandAttack":"Very slow cavalry, good against whatever units or buildings it can reach."}),
-        "Priest":UnitDescription(overrideDescription="Hero with a ranged attack that is good against myth units, but weak against other targets."),
-        "Pharaoh":UnitDescription(preActionInfoText={"RangedAttack":"Hero with a ranged attack that is especially good against myth units."}),
-        "PharaohNewKingdom":UnitDescription(preActionInfoText={"RangedAttack":"Hero with a ranged attack that is especially good against myth units."}),
-        "Petsuchos":UnitDescription(passiveAbilityLink={"other":"AbilityPetsuchos"}, nonActionObservationArgs={"other":[SunRayRevealerText]}),
-        "Phoenix":UnitDescription(ignoreActions=["FlyingUnitAttack"], overrideNonActionObservations={"spawns":f"Leaves an egg on death. After {float(action.actionTactics('PhoenixEgg', 'PhoenixRebirth').find('maintaintrainpoints').text):0.3g} seconds, it hatches back into a Phoenix."}, passiveAbilityLink={"spawns":"AbilityPhoenix"}),
-        "PhoenixEgg":UnitDescription(linkActionsToAbilities={"PhoenixRebirth":"AbilityPhoenixEgg"}),
-        "Scarab":UnitDescription(linkActionsToAbilities={"SelfDestructAttack":"AbilityScarab"}),
-        # Norse
-        "Berserk":UnitDescription(preActionInfoText={"HandAttack":"Generalist infantry. Can build."}, additionalText="Immune to Bolt while in the Archaic age."),
-        "ThrowingAxeman":UnitDescription(preActionInfoText={"RangedAttack":"Specialist infantry only good against other infantry. Can build."}),
-        "RaidingCavalry":UnitDescription(preActionInfoText={"HandAttack":"Generalist cavalry, especially good against archers."}),
-        "Hirdman":UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry only good against cavalry. Can build."}),
-        "Huskarl":UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry only good against ranged soldiers. Can build."}),
-        "Jarl":UnitDescription(preActionInfoText={"HandAttack":"A slower, more expensive cavalry unit than the Raiding Cavalry that has considerably more hitpoints."}),
-        "Hersir":UnitDescription(preActionInfoText={"HandAttack":"Hero infantry. Primarily good against myth units, but reasonably effective against other targets. Can build."}),
-        "Godi":UnitDescription(preActionInfoText={"RangedAttack":"Hero ranged soldier. Primarily good against myth units, but moderately effective against other targets. Can build."}),
-        "Nidhogg":UnitDescription(ignoreActions=["FlyingUnitAttack"], postActionInfoText={"RangedAttack":action.actionDamageOverTimeArea('VFXNidhoggScorchArea', parentAction=action.findActionByName("Nidhogg", "RangedAttack"))}),
-        "Fafnir":UnitDescription(passiveAbilityLink={"killreward":"AbilityFafnirAndvarisCurse"}, linkActionsToAbilities={"BillowingSmog":"AbilityFafnirBillowingSmog"}),
-        "RockGiant":UnitDescription(linkActionsToAbilities={"BuildingAttack":"AbilityRockGiantCavernousHunger"}),
-        "HealingSpring":UnitDescription(linkActionsToAbilities=({"AreaHeal":"PassiveHealingSpring"})),
-        "MountainGiant":UnitDescription(chargeActionNames={"DwarvenPunt":"Punt Dwarf"}),
-        "GullinburstiArchaic":GullinburstiHandler,
-        "GullinburstiClassical":GullinburstiHandler,
-        "GullinburstiHeroic":GullinburstiHandler,
-        "GullinburstiMythic":GullinburstiHandler,
-        # Atlantean
-        "Oracle":UnitDescription(overrideDescription="Scout, line of sight grows when standing still. Cannot attack.", postActionInfoText={"AutoGatherFavor":oracleAutoGatherFavorHelper("Oracle")}, historyText=oracleHistoryText("Oracle")),
-        "OracleHero":UnitDescription(preActionInfoText={"HandAttack":"Hero scout, line of sight grows when standing still. Generates favor faster than normal Oracles. Good against myth units."}, postActionInfoText={"AutoGatherFavor":oracleAutoGatherFavorHelper("OracleHero")}, historyText=oracleHistoryText("OracleHero")),
-        "Katapeltes":UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry only good against cavalry."}),
-        "KatapeltesHero":UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry hero only good against cavalry and myth units."}),
-        "Turma":UnitDescription(preActionInfoText={"RangedAttack":"Specialist mounted ranged soldier only good against other ranged soldiers, or making hit-and-run attacks."}),
-        "TurmaHero":UnitDescription(preActionInfoText={"RangedAttack":"Specialist mounted ranged soldier hero only good against myth units, other ranged soldiers, and making hit-and-run attacks."}),
-        "Murmillo":UnitDescription(preActionInfoText={"HandAttack":"Generalist infantry."}),
-        "MurmilloHero":UnitDescription(preActionInfoText={"HandAttack":"Generalist infantry hero. Good against myth units."}),
-        "Cheiroballista":UnitDescription(preActionInfoText={"RangedAttack":"Specialist ranged soldier, very effective against infantry and ships."}),
-        "CheiroballistaHero":UnitDescription(preActionInfoText={"RangedAttack":"Specialist ranged soldier hero, very effective against myth units, infantry, and ships."}),
-        "Contarius":UnitDescription(preActionInfoText={"HandAttack":"Generalist cavalry, especially good against ranged soldiers."}),
-        "ContariusHero":UnitDescription(preActionInfoText={"HandAttack":"Generalist cavalry hero, especially good against ranged soldiers and myth units."}),
-        "Arcus":UnitDescription(preActionInfoText={"RangedAttack":"Generalist archer, especially good against infantry."}),
-        "ArcusHero":UnitDescription(preActionInfoText={"RangedAttack":"Generalist archer hero, especially good against myth units and infantry."}),
-        "Destroyer":UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry, good against buildings and for being extremely resistant to pierce attacks."}),
-        "DestroyerHero":UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry hero, good against myth units and buildings, and for being extremely resistant to pierce attacks."}),
-        "Fanatic":UnitDescription(preActionInfoText={"HandAttack":"Semi-specialist infantry, good against cavalry and other infantry."}),
-        "FanaticHero":UnitDescription(preActionInfoText={"HandAttack":"Semi-specialist infantry hero, good against myth units, cavalry and other infantry."}),
-        "Argus":UnitDescription(postActionInfoText={"ChargedRangedAttack":action.actionDamageOverTimeArea('ArgusAcidBlobDamage', parentAction=action.findActionByName("Argus", "ChargedRangedAttack"), lateText=f"Explodes at the end of the duration, dealing {action.selfDestructActionDamage('ArgusAcidBlobDamage')}.")}),
-        "Lampades":UnitDescription(linkActionsToAbilities={"SelfDestructAttack":"AbilityLampadesCausticity"}),
-        "SiegeBireme":UnitDescription(linkActionsToAbilities={"FlameAttack":"PassiveSolarFlame"}),
-        "Promethean":UnitDescription(passiveAbilityLink={"spawns":"AbilityPromethean"}),
-        "Behemoth":UnitDescription(passiveAbilityLink={"directionalarmor":"AbilityBehemoth"}),
-        # Common/Similar
-        "SentryTower":UnitDescription(showActionsIfDisabled=["RangedAttack"]),
-        "VillageCenter":UnitDescription(additionalText=f"Produces units {100.0-100*float(protoFromName('VillageCenter').find('trainingrate').text):0.3g}% slower than a Town Center. Research speed is unaffected."),
-        "TitanCerberus":TitanHandler,
-        "TitanYmir":TitanHandler,
-        "TitanAtlantean":TitanHandler,
-        "TitanBird":TitanHandler,
-        "WallLong":WallHandler,
-        "WallMedium":WallHandler,
-        "WallShort":WallHandler,
-        "Fortress":HideFlyingAttack,
-        "MigdolStronghold":HideFlyingAttack,
-        "HillFort":HideFlyingAttack,
-        "AsgardianHillFort":HideFlyingAttack,
-        "Palace":HideFlyingAttack,
-        "Wonder":UnitDescription(overrideDescription=tech.processTech(techtree.find("tech[@name='WonderAgeGeneral']"))),
-        # Campaign
-            # Nothing atm
-        
-    }
+    unitDescriptionOverrides["Hoplite"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist infantry, especially good against cavalry."})
+    unitDescriptionOverrides["Hypaspist"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry only good against other infantry."})
+    unitDescriptionOverrides["Toxotes"] = UnitDescription(preActionInfoText={"RangedAttack":"Generalist archer, especially good against infantry."})
+    unitDescriptionOverrides["Peltast"] = UnitDescription(preActionInfoText={"RangedAttack":"Specialist ranged unit only good against other ranged soldiers."})
+    unitDescriptionOverrides["Hippeus"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist cavalry, especially good against ranged soldiers."})
+    unitDescriptionOverrides["Prodromos"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist cavalry only good against other cavalry."})
+    unitDescriptionOverrides["Militia"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist infantry spawned from destroyed buildings of Poseidon. Good against cavalry."})
+    unitDescriptionOverrides["Myrmidon"] = UnitDescription(preActionInfoText={"HandAttack":f"Generalist infantry that inflicts armor ignoring {icon.damageTypeIcon('divine')} Divine damage with attacks."})
+    unitDescriptionOverrides["Hetairos"] = UnitDescription(preActionInfoText={"HandAttack":f"Generalist cavalry that inflict area damage."})
+    unitDescriptionOverrides["Gastraphetoros"] = UnitDescription(preActionInfoText={"RangedAttack":f"Generalist archer with considerable bonus against buildings."})
+    unitDescriptionOverrides["Pegasus"] = UnitDescription(additionalText=f"Pegasus from the Bridle of Pegasus respawn in {float(techtree.find('tech[@name=' + stringLiteralHelper('BridleOfPegasusRespawn') +']/delay').text):0.3g}s. Pegasus from Winged Messenger respawn in {float(techtree.find('tech[@name=' + stringLiteralHelper('WingedMessengerRespawn') +']/delay').text):0.3g}s.")
+    unitDescriptionOverrides["Hydra"] = UnitDescription(passiveAbilityLink={"veterancy":"AbilityHydra"}, nonActionObservationArgs={"veterancy":["head"]})
+    unitDescriptionOverrides["Scylla"] = UnitDescription(passiveAbilityLink={"veterancy":"AbilityScylla"}, nonActionObservationArgs={"veterancy":["head"]})
+    unitDescriptionOverrides["HadesShade"] = UnitDescription(additionalText=f"Has a {float(globals.dataCollection['major_gods.xml'].find('./civ[name=' + stringLiteralHelper('Hades') + ']/shades/chance').text)*100.0:0.3g}% to appear at the Temple from the deaths of human soldiers.")
+    unitDescriptionOverrides["PlentyVault"] = UnitDescription(overrideDescription="<tth>Regular Plenty Vault:", additionalText="<tth>King of the Hill:\\n" + icon.BULLET_POINT + " " + UnitDescription(overrideClasses=True, additionalClasses=[], includeVanillaDescription=False, hideStats=True).generate(protoFromName("PlentyVaultKOTH")))
+    unitDescriptionOverrides["Centaur"] = UnitDescription(postActionInfoText={"ChargedRangedAttack":action.actionDamageOverTimeArea('CentaurAreaDamage', 'ProgressiveDamageLight', altDamageText=f"{action.actionDamageOverTimeDamageFromAction(action.findActionByName('CentaurAreaDamage', 'ProgressiveDamageLight'), centaurSpecialDoTNeedsDamageBonuses)} for the first {float(action.actionTactics('CentaurAreaDamage', 'ProgressiveDamageLight').find('modifyduration').text)/1000:0.3g} seconds, followed by {action.actionDamageOverTimeDamageFromAction(action.findActionByName('CentaurAreaDamage', 'ProgressiveDamageHigh'), centaurSpecialDoTNeedsDamageBonuses)} for the next {float(action.actionTactics('CentaurAreaDamage', 'ProgressiveDamageHigh').find('modifyduration').text)/1000:0.3g} seconds")})
+    unitDescriptionOverrides["Chimera"] = UnitDescription(postActionInfoText={"ChargedRangedAttack":action.actionDamageOverTimeArea('ChimeraFireArea', parentAction=action.findActionByName('Chimera', "ChargedRangedAttack"))})
+    unitDescriptionOverrides["Carcinos"] = UnitDescription(linkActionsToAbilities={"SelfDestructAttack":"AbilityCarcinos"})
+    unitDescriptionOverrides["Colossus"] = UnitDescription(ignoreActions=["BuildingAttack"])
+    unitDescriptionOverrides["Odysseus"] = HideFlyingAttack
+    unitDescriptionOverrides["Chiron"] = HideFlyingAttack
+    unitDescriptionOverrides["Hippolyta"] = HideFlyingAttack
+    # Egyptian
+    unitDescriptionOverrides["Spearman"] = UnitDescription(preActionInfoText={"HandAttack":"Fast semi-specialised infantry, mostly only good against cavalry."})
+    unitDescriptionOverrides["Axeman"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry only good against other infantry."})
+    unitDescriptionOverrides["Slinger"] = UnitDescription(preActionInfoText={"RangedAttack":"Specialist ranged unit only good against other ranged units."})
+    unitDescriptionOverrides["ChariotArcher"] = UnitDescription(preActionInfoText={"RangedAttack":"Generalist ranged unit, especially good against infantry."})
+    unitDescriptionOverrides["CamelRider"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist cavalry unit, especially good against other cavalry."})
+    unitDescriptionOverrides["WarElephant"] = UnitDescription(preActionInfoText={"HandAttack":"Very slow cavalry, good against whatever units or buildings it can reach."})
+    unitDescriptionOverrides["Priest"] = UnitDescription(overrideDescription="Hero with a ranged attack that is good against myth units, but weak against other targets.")
+    unitDescriptionOverrides["Pharaoh"] = UnitDescription(preActionInfoText={"RangedAttack":"Hero with a ranged attack that is especially good against myth units."})
+    unitDescriptionOverrides["PharaohNewKingdom"] = UnitDescription(preActionInfoText={"RangedAttack":"Hero with a ranged attack that is especially good against myth units."})
+    unitDescriptionOverrides["Petsuchos"] = UnitDescription(passiveAbilityLink={"other":"AbilityPetsuchos"}, nonActionObservationArgs={"other":[SunRayRevealerText]})
+    unitDescriptionOverrides["Phoenix"] = UnitDescription(ignoreActions=["FlyingUnitAttack"], overrideNonActionObservations={"spawns":f"Leaves an egg on death. After {float(action.actionTactics('PhoenixEgg', 'PhoenixRebirth').find('maintaintrainpoints').text):0.3g} seconds, it hatches back into a Phoenix."}, passiveAbilityLink={"spawns":"AbilityPhoenix"})
+    unitDescriptionOverrides["PhoenixEgg"] = UnitDescription(linkActionsToAbilities={"PhoenixRebirth":"AbilityPhoenixEgg"})
+    unitDescriptionOverrides["Scarab"] = UnitDescription(linkActionsToAbilities={"SelfDestructAttack":"AbilityScarab"})
+    # Norse
+    unitDescriptionOverrides["Berserk"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist infantry. Can build."}, additionalText="Immune to Bolt while in the Archaic age.")
+    unitDescriptionOverrides["ThrowingAxeman"] = UnitDescription(preActionInfoText={"RangedAttack":"Specialist infantry only good against other infantry. Can build."})
+    unitDescriptionOverrides["RaidingCavalry"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist cavalry, especially good against archers."})
+    unitDescriptionOverrides["Hirdman"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry only good against cavalry. Can build."})
+    unitDescriptionOverrides["Huskarl"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry only good against ranged soldiers. Can build."})
+    unitDescriptionOverrides["Jarl"] = UnitDescription(preActionInfoText={"HandAttack":"A slower, more expensive cavalry unit than the Raiding Cavalry that has considerably more hitpoints."})
+    unitDescriptionOverrides["Hersir"] = UnitDescription(preActionInfoText={"HandAttack":"Hero infantry. Primarily good against myth units, but reasonably effective against other targets. Can build."})
+    unitDescriptionOverrides["Godi"] = UnitDescription(preActionInfoText={"RangedAttack":"Hero ranged soldier. Primarily good against myth units, but moderately effective against other targets. Can build."})
+    unitDescriptionOverrides["Nidhogg"] = UnitDescription(ignoreActions=["FlyingUnitAttack"], postActionInfoText={"RangedAttack":action.actionDamageOverTimeArea('VFXNidhoggScorchArea', parentAction=action.findActionByName("Nidhogg", "RangedAttack"))})
+    unitDescriptionOverrides["Fafnir"] = UnitDescription(passiveAbilityLink={"killreward":"AbilityFafnirAndvarisCurse"}, linkActionsToAbilities={"BillowingSmog":"AbilityFafnirBillowingSmog"})
+    unitDescriptionOverrides["RockGiant"] = UnitDescription(linkActionsToAbilities={"BuildingAttack":"AbilityRockGiantCavernousHunger"})
+    unitDescriptionOverrides["HealingSpring"] = UnitDescription(linkActionsToAbilities=({"AreaHeal":"PassiveHealingSpring"}))
+    unitDescriptionOverrides["MountainGiant"] = UnitDescription(chargeActionNames={"DwarvenPunt":"Punt Dwarf"})
+    unitDescriptionOverrides["GullinburstiArchaic"] = GullinburstiHandler
+    unitDescriptionOverrides["GullinburstiClassical"] = GullinburstiHandler
+    unitDescriptionOverrides["GullinburstiHeroic"] = GullinburstiHandler
+    unitDescriptionOverrides["GullinburstiMythic"] = GullinburstiHandler
+    # Atlantean
+    unitDescriptionOverrides["Oracle"] = UnitDescription(overrideDescription="Scout, line of sight grows when standing still. Cannot attack.", postActionInfoText={"AutoGatherFavor":oracleAutoGatherFavorHelper("Oracle")}, historyText=oracleHistoryText("Oracle"))
+    unitDescriptionOverrides["OracleHero"] = UnitDescription(preActionInfoText={"HandAttack":"Hero scout, line of sight grows when standing still. Generates favor faster than normal Oracles. Good against myth units."}, postActionInfoText={"AutoGatherFavor":oracleAutoGatherFavorHelper("OracleHero")}, historyText=oracleHistoryText("OracleHero"))
+    unitDescriptionOverrides["Katapeltes"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry only good against cavalry."})
+    unitDescriptionOverrides["KatapeltesHero"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry hero only good against cavalry and myth units."})
+    unitDescriptionOverrides["Turma"] = UnitDescription(preActionInfoText={"RangedAttack":"Specialist mounted ranged soldier only good against other ranged soldiers, or making hit-and-run attacks."})
+    unitDescriptionOverrides["TurmaHero"] = UnitDescription(preActionInfoText={"RangedAttack":"Specialist mounted ranged soldier hero only good against myth units, other ranged soldiers, and making hit-and-run attacks."})
+    unitDescriptionOverrides["Murmillo"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist infantry."})
+    unitDescriptionOverrides["MurmilloHero"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist infantry hero. Good against myth units."})
+    unitDescriptionOverrides["Cheiroballista"] = UnitDescription(preActionInfoText={"RangedAttack":"Specialist ranged soldier, very effective against infantry and ships."})
+    unitDescriptionOverrides["CheiroballistaHero"] = UnitDescription(preActionInfoText={"RangedAttack":"Specialist ranged soldier hero, very effective against myth units, infantry, and ships."})
+    unitDescriptionOverrides["Contarius"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist cavalry, especially good against ranged soldiers."})
+    unitDescriptionOverrides["ContariusHero"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist cavalry hero, especially good against ranged soldiers and myth units."})
+    unitDescriptionOverrides["Arcus"] = UnitDescription(preActionInfoText={"RangedAttack":"Generalist archer, especially good against infantry."})
+    unitDescriptionOverrides["ArcusHero"] = UnitDescription(preActionInfoText={"RangedAttack":"Generalist archer hero, especially good against myth units and infantry."})
+    unitDescriptionOverrides["Destroyer"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry, good against buildings and for being extremely resistant to pierce attacks."})
+    unitDescriptionOverrides["DestroyerHero"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry hero, good against myth units and buildings, and for being extremely resistant to pierce attacks."})
+    unitDescriptionOverrides["Fanatic"] = UnitDescription(preActionInfoText={"HandAttack":"Semi-specialist infantry, good against cavalry and other infantry."})
+    unitDescriptionOverrides["FanaticHero"] = UnitDescription(preActionInfoText={"HandAttack":"Semi-specialist infantry hero, good against myth units, cavalry and other infantry."})
+    unitDescriptionOverrides["Argus"] = UnitDescription(postActionInfoText={"ChargedRangedAttack":action.actionDamageOverTimeArea('ArgusAcidBlobDamage', parentAction=action.findActionByName("Argus", "ChargedRangedAttack"), lateText=f"Explodes at the end of the duration, dealing {action.selfDestructActionDamage('ArgusAcidBlobDamage')}.")})
+    unitDescriptionOverrides["Lampades"] = UnitDescription(linkActionsToAbilities={"SelfDestructAttack":"AbilityLampadesCausticity"})
+    unitDescriptionOverrides["SiegeBireme"] = UnitDescription(linkActionsToAbilities={"FlameAttack":"PassiveSolarFlame"})
+    unitDescriptionOverrides["Promethean"] = UnitDescription(passiveAbilityLink={"spawns":"AbilityPromethean"})
+    unitDescriptionOverrides["Behemoth"] = UnitDescription(passiveAbilityLink={"directionalarmor":"AbilityBehemoth"})
+    # Common/Similar
+    unitDescriptionOverrides["SentryTower"] = UnitDescription(showActionsIfDisabled=["RangedAttack"])
+    unitDescriptionOverrides["VillageCenter"] = UnitDescription(additionalText=f"Produces units {100.0-100*float(protoFromName('VillageCenter').find('trainingrate').text):0.3g}% slower than a Town Center. Research speed is unaffected.")
+    unitDescriptionOverrides["TitanCerberus"] = TitanHandler
+    unitDescriptionOverrides["TitanYmir"] = TitanHandler
+    unitDescriptionOverrides["TitanAtlantean"] = TitanHandler
+    unitDescriptionOverrides["TitanBird"] = TitanHandler
+    unitDescriptionOverrides["WallLong"] = WallHandler
+    unitDescriptionOverrides["WallMedium"] = WallHandler
+    unitDescriptionOverrides["WallShort"] = WallHandler
+    unitDescriptionOverrides["Fortress"] = HideFlyingAttack
+    unitDescriptionOverrides["MigdolStronghold"] = HideFlyingAttack
+    unitDescriptionOverrides["HillFort"] = HideFlyingAttack
+    unitDescriptionOverrides["AsgardianHillFort"] = HideFlyingAttack
+    unitDescriptionOverrides["Palace"] = HideFlyingAttack
+    unitDescriptionOverrides["Wonder"] = UnitDescription(overrideDescription=tech.processTech(techtree.find("tech[@name='WonderAgeGeneral']")))
 
     archaicAgeWeakenedUnits: Dict[str, ET.Element] = dict([(effect.find("target").text, effect) for effect in globals.dataCollection['techtree.xml'].find("tech[@name='ArchaicAgeWeakenUnits']/effects")])
     for unitName, effectElement in archaicAgeWeakenedUnits.items():
@@ -827,7 +848,7 @@ def generateUnitDescriptions():
         if strid is None:
             continue
         strid = strid.text
-        value = unitDescriptionOverrides.get(unit.attrib["name"], UnitDescription()).generate(unit)
+        value = describeUnit(unit)
         if value is not None:
             if strid not in stringIdsByOverwriters:
                 stringIdsByOverwriters[strid] = {}

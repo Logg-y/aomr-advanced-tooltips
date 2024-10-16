@@ -22,3 +22,5 @@ unitTypeData: Dict[str, ET.Element] = {}
 abstractTypes: Set[str] = set()
 
 protosByUnitType: Dict[str, List[str]] = {}
+
+godPowerRecharges: Dict[str, float] = {}

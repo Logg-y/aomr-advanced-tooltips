@@ -47,10 +47,25 @@ def actionDamageBonus(action: ET.Element):
     actionDamageBonuses = []
     for damageBonus in damageBonuses:
         targetType = damageBonus.attrib["type"]
+        hasIcon = False
         iconNameMatch = globals.unitTypeData.get(targetType)
-        if iconNameMatch is not None:
-            actionDamageBonuses.append(f"{icon.generalIcon(iconNameMatch.find('icon').text)} x{float(damageBonus.text):0.3g}")
-    return ", ".join(actionDamageBonuses)
+        multSize = float(damageBonus.text)
+        # I'm just going to hardcode this.
+        # Fenrir has x999 vs a bunch of silly things and I don't want it showing up
+        if multSize < 900:
+            if iconNameMatch is not None:
+                iconName = findAndFetchText(iconNameMatch, "icon", None)
+                if iconName is not None:
+                    actionDamageBonuses.append(f"{icon.generalIcon(iconName)} x{multSize:0.3g}")
+                    hasIcon = True
+            if not hasIcon:
+                actionDamageBonuses.append(f"x{multSize:0.3g} vs {common.getDisplayNameForProtoOrClass(targetType, plural=True)}")
+    allydamagemultiplier = action.find("allydamagemultiplier")
+    if allydamagemultiplier is not None:
+        actionDamageBonuses.append(f"x{float(allydamagemultiplier.text):0.3g} to friendly targets")
+    if actionDamageBonuses:
+        return f"({', '.join(actionDamageBonuses)})"
+    return ""
         
 def actionDamageOnly(action: ET.Element, isDPS=False, hideRof=False, damageMultiplier=1.0):
     damages = []
@@ -62,16 +77,19 @@ def actionDamageOnly(action: ET.Element, isDPS=False, hideRof=False, damageMulti
         damageType = damage.attrib["type"]
         damageAmount = float(damage.text)
         damageAmount *= mult
-        damages.append(f"{icon.damageTypeIcon(damageType)} {damageAmount:0.3g}")
+        # This function has to support some very large numbers (eg bolt's 10000 divine) but also needs to handle
+        # smaller noninteger values without giving pointless levels of precision
+        intlength = len(str(round(damageAmount)))
+        if intlength >= 3:
+            damages.append(f"{icon.damageTypeIcon(damageType)} {round(damageAmount)}")
+        else:
+            damages.append(f"{icon.damageTypeIcon(damageType)} {damageAmount:0.3g}")
     if not isDPS:
         if not hideRof:
             damages.append(actionRof(action))
         damages.append(actionNumProjectiles(action))
     damages = [x for x in damages if len(x.strip()) > 0]
     final = " ".join(damages)
-    allydamagemultiplier = action.find("allydamagemultiplier")
-    if allydamagemultiplier is not None:
-        final += f", x{float(allydamagemultiplier.text):0.3g} to friendly targets."
     
     return final
 
@@ -98,18 +116,20 @@ def actionDPSMultiplier(action: ET.Element):
     return 1.0/rof
     
 
-def actionDamageFull(protoUnit: ET.Element, action: ET.Element, isDPS=False, hideArea=False, damageMultiplier=1.0, hideRof=False, hideRange=False, ignoreActive=False):
+def actionDamageFull(protoUnit: ET.Element, action: ET.Element, isDPS=False, hideArea=False, damageMultiplier=1.0, hideRof=False, hideRange=False, ignoreActive=False, hideDamageBonuses=False):
     components = [actionDamageOnly(action, isDPS, hideRof=hideRof, damageMultiplier=damageMultiplier)]
     if not hideArea:
         components.append(actionArea(action, True))
-    components.append(actionDamageBonus(action))
+    if not hideDamageBonuses:
+        components.append(actionDamageBonus(action))
     if not hideRange:
         components.append(actionRange(protoUnit, action, True))
+    components = [component for component in components if len(component.strip()) > 0]
     
     dot = actionDamageOverTime(action)
     if len(dot) > 0:
         components.append(f"plus an additional {actionDamageOverTime(action, isDPS)}.")
-    else:
+    elif components:
         components[-1] += "."
 
     tactics = actionTactics(protoUnit, action)
@@ -209,7 +229,7 @@ def actionOnHitNonDoTEffects(proto: ET.Element, action: ET.Element, ignoreActive
             continue
         onhitType = onhiteffect.attrib["type"]
         thisItem = ""
-        if onhitType in ("Attach", "ShadingFade", "ProgShading", "TreeFlatten", "DamageOverTime", "AnimOverride"):
+        if onhitType in ("Attach", "ShadingFade", "ProgShading", "TreeFlatten", "DamageOverTime", "AnimOverride", "Shading"):
             continue
         elif onhitType == "Freeze":
             damage = float(onhiteffect.attrib.get("damage", 0.0))
@@ -530,7 +550,7 @@ def simpleActionHandler(additionalText=""):
     return inner
 
 def targetListToString(targetList: List[str], joiner="and"):
-    unitClassNames = [common.UNIT_CLASS_LABELS_PLURAL[x] for x in targetList] # This intentionally throws KeyError if UNIT_CLASS_LABELS_PLURAL is missing a key targeted by something in the data
+    unitClassNames = common.unwrapAbstractClass(targetList, plural=True)
     return common.commaSeparatedList(unitClassNames, joiner)
 
 def handleHealAction(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
@@ -547,7 +567,7 @@ def handleHealAction(proto: ET.Element, action: ET.Element, tactics: Union[None,
     return f"{' '.join(items)}."
 
 def handleAutoConvertAction(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
-    s = f"If no nearby units of the same player are near, may be converted by other players' units within {actionRange(proto, action)}."
+    s = f"If no nearby units of its owner are near, may be converted by other players' units within {actionRange(proto, action)}."
     if action.find("cannotbeconvertedbyallies") is not None:
         s += " Cannot be converted by allies."
     return s
@@ -699,9 +719,13 @@ def handleIdleStatBonusAction(proto: ET.Element, action: ET.Element, tactics: Un
             modifydecay *= -1.0
             modifyTypeName = findAndFetchText(action, "modifydamagetype", None) + " vulnerability"
         if modifyamount > 0.0:
-            components.append(f"increases {modifyTypeName} by {percentileMult*(modifyamount):0.3g}{suffix} per second, to a maximum increase of {percentileMult*(modifyratecap-modifybase):0.4g}{suffix} after {timeToMax} seconds of idleness. When not idle and not moving, the bonus does not change. When moving, this effect decays at {percentileMult*(modifydecay):0.3g}{suffix} per second.")
+            components.append(f"increases {modifyTypeName} by {percentileMult*(modifyamount):0.3g}{suffix} per second, to a maximum increase of {percentileMult*(modifyratecap-modifybase):0.4g}{suffix} after {timeToMax} seconds of idleness.")
+            if modifydecay is not None:
+                components.append(f"When not idle and not moving, the bonus does not change. When moving, this effect decays at {percentileMult*(modifydecay):0.3g}{suffix} per second.")
         elif modifyamount < 0.0:
-            components.append(f"reduces {modifyTypeName} by {-percentileMult*(modifyamount):0.3g}{suffix} per second, to a maximum reduction of {-percentileMult*(modifyratecap-modifybase):0.4g}{suffix} after {timeToMax} seconds of idleness. When not idle and not moving, the bonus does not change. When moving, this effect decays at {-percentileMult*(modifydecay):0.3g}{suffix} per second.")
+            components.append(f"reduces {modifyTypeName} by {-percentileMult*(modifyamount):0.3g}{suffix} per second, to a maximum reduction of {-percentileMult*(modifyratecap-modifybase):0.4g}{suffix} after {timeToMax} seconds of idleness.")
+            if modifydecay is not None:
+                components.append(f"When not idle and not moving, the bonus does not change. When moving, this effect decays at {-percentileMult*(modifydecay):0.3g}{suffix} per second.")
     else:
         print(f"Warning: Unknown IdleStatBonus modify type {modifyType} for {proto.attrib['name']}")
         return ""
@@ -938,7 +962,7 @@ def actionDamageFlagNames(action: ET.Element):
 def selfDestructActionDamage(proto: Union[str, ET.Element]):
     action = findActionByName(proto, "SelfDestructAttack")
     if action is not None:
-        return f"{actionDamageOnly(action, hideRof=True)} ({actionDamageBonus(action)}) to {actionDamageFlagNames(action)} objects within {actionArea(action)}"
+        return f"{actionDamageOnly(action, hideRof=True)} {actionDamageBonus(action)} to {actionDamageFlagNames(action)} objects within {actionArea(action)}"
     return ""
 
 def getCivAbilitiesNode(proto: Union[ET.Element, str], action: Union[ET.Element, str], forceAbilityLink: Union[str, None]=None):

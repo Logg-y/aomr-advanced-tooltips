@@ -18,18 +18,6 @@ dataSubtypes = set()
 # "X and Y: increases damage by..."
 # "X and Y: reduces food and gold cost by..."
 
-# Unwrap abstract types with this many members or fewer into a list of actual object names
-AUTO_UNWRAP_ABSTRACT_TYPE_SIZE = 2
-
-# Always unwrap these
-ABSTRACT_TYPES_TO_UNWRAP = (
-    "SiegeLineUpgraded",    # Engineers target that excludes cheiroballista
-    "HeroInfantry",
-    # It is very hard to give these types short meaningful labels that clearly tell you what they contain and aren't confusable with the literal "Town Center"
-    "AbstractTownCenter",
-    "AbstractSettlement",
-)
-
 @dataclasses.dataclass
 class EffectHandlerResponse:
     # For when a tech effect doesn't affect some object types (eg Thurisaz rune regen on titans), we can list what isn't affected
@@ -86,8 +74,9 @@ class EffectHandlerResponse:
             components[-1] += ":"
         combinables = self.combinableTargets
         if isinstance(self.combinableTargets, list):
+            self.combinableTargets = list(dict.fromkeys(self.combinableTargets))
             combinables = common.commaSeparatedList(self.combinableTargets)
-        components.append(self.text.format(combinable=combinables))
+        components.append(self.text.format(combinable=combinables).replace(" :", ":"))
         components = [component.strip() for component in components if len(component.strip()) > 0]
         text = f"{' '.join(components)}"
         if text[-1] != ".":
@@ -133,13 +122,6 @@ def shouldSuppressDataEffect(tech: ET.Element, effect: ET.Element):
     if effectType == "data" and subType == "hitpoints" and "LogicalTypeUnitIsConstructed" in targetTexts:
         return True    
     return False
-
-def unwrapAbstractClass(targetName: str) -> List[str]:
-    if targetName in globals.protosByUnitType:
-        targetsList = globals.protosByUnitType[targetName]
-        if targetName in ABSTRACT_TYPES_TO_UNWRAP or len(targetsList) <= AUTO_UNWRAP_ABSTRACT_TYPE_SIZE:
-            return list(map(common.getDisplayNameForProtoOrClass, targetsList))
-    return [common.getDisplayNameForProtoOrClass(targetName)]
     
 
 def getEffectTargets(tech: ET.Element, effect: ET.Element):
@@ -148,7 +130,7 @@ def getEffectTargets(tech: ET.Element, effect: ET.Element):
     for node in nodes:
         nodeType = node.attrib["type"].lower()
         if nodeType == "protounit":
-            targets += unwrapAbstractClass(node.text)
+            targets += common.unwrapAbstractClass(node.text)
         elif nodeType == "tech":
             tech = globals.dataCollection["techtree.xml"].find(f"tech[@name='{node.text}']")
             targets.append(common.getObjectDisplayName(tech))
@@ -297,7 +279,7 @@ def dataSubtypeActionEnableHandler(tech: ET.Element, effect:ET.Element):
         components = ["Enables" if isEnabling else "Disables", action.getActionName(proto, actionNode, nameNonChargeActions=True) + ":", actionDescription]
         text = " ".join(components)
 
-        responses.append(EffectHandlerResponse(affects=unwrapAbstractClass(targetType), text=text))
+        responses.append(EffectHandlerResponse(affects=common.unwrapAbstractClass(targetType), text=text))
     
     return responses
 
@@ -364,7 +346,7 @@ def dataSubtypeWorkrateHandler(tech: ET.Element, effect:ET.Element):
         return None
     else:
         preTargetText = f"{action} rate for"
-    return dataSubtypeWithAmountHelper(preTargetText + " {combinable}: {value} " + additionalPostTargetText, combinableAttribute="unittype", combinableAttributeFormat=unwrapAbstractClass)(tech, effect)
+    return dataSubtypeWithAmountHelper(preTargetText + " {combinable}: {value} " + additionalPostTargetText, combinableAttribute="unittype", combinableAttributeFormat=common.unwrapAbstractClassPlural)(tech, effect)
 
 def dataSubtypeObstructionSizeHandler(tech: ET.Element, effect:ET.Element):
     # Look for matching nodes of the opposite X/Z type because it would be nice to combine them
@@ -389,7 +371,7 @@ def dataSubtypeEnableHandler(tech: ET.Element, effect:ET.Element):
     return EffectHandlerResponse(getEffectTargets(tech, effect), "Enabled if Age locked")
 
 def dataSubtypeVeterancyEnableHandler(tech: ET.Element, effect:ET.Element):
-    return [EffectHandlerResponse(getEffectTargets(tech, effect), unitdescription.veterancyText(targetNode.text, ignoreExperienceUnitFlag=True)) for targetNode in effect.findall("target[@type='ProtoUnit']")]
+    return [EffectHandlerResponse(getEffectTargets(tech, effect), '\\n'.join(unitdescription.veterancyText(targetNode.text, ignoreExperienceUnitFlag=True, multiline=True))) for targetNode in effect.findall("target[@type='ProtoUnit']")]
 
 def dataSubtypeBountyResourceEarningRewardHandler(tech: ET.Element, effect:ET.Element):
     # It's just like favor, except it doesn't fall off with amount gained
@@ -398,8 +380,8 @@ def dataSubtypeBountyResourceEarningRewardHandler(tech: ET.Element, effect:ET.El
     goal = float(loki.find("bountyresourceearning/bountydamagegoal").text)
     goal /= float(effect.attrib["amount"])
     resourceType = effect.attrib['resourcetype']
-    excludeTypes = [common.getDisplayNameForProtoOrClass(element.attrib['type']) for element in loki.findall("bountyresourceearning/bountytargetmultiplier") if resourceType != element.attrib["resourcetype"]]
-    return EffectHandlerResponse(unwrapAbstractClass(effect.attrib['unittype']), f"Generates 1 {resourceType} per {goal:0.3g} damage inflicted on targets except {common.commaSeparatedList(excludeTypes)}.")
+    excludeTypes = common.unwrapAbstractClass([element.attrib['type'] for element in loki.findall("bountyresourceearning/bountytargetmultiplier") if resourceType != element.attrib["resourcetype"]], plural=True) 
+    return EffectHandlerResponse(common.unwrapAbstractClass(effect.attrib['unittype']), f"Generates 1 {resourceType} per {goal:0.3g} damage inflicted on targets except {common.commaSeparatedList(excludeTypes)}.")
 
 def dataSubtypeOnHitEffectActiveHandler(tech: ET.Element, effect:ET.Element):
     # Check effects to see if this effect is the first OnHitEffectiveActive in the list
@@ -413,7 +395,7 @@ def dataSubtypeOnHitEffectActiveHandler(tech: ET.Element, effect:ET.Element):
         actionElement = action.findActionByName(proto, effect.attrib['action'])
         #responses.append(EffectHandlerResponse(unwrapAbstractClass(target), "Modifies action {combinable}:" + f" {action.actionOnHitNonDoTEffects(proto, actionElement, True)}"))
         actionName = action.getActionName(proto, actionElement, nameNonChargeActions=True)
-        responses.append(dataSubtypeWithAmountHelper(f"Modifies {actionName}" + " against {combinable}:" + f" {action.actionOnHitNonDoTEffects(proto, actionElement, True)}", combinableAttribute="targettype", combinableAttributeFormat=unwrapAbstractClass)(tech, effect))
+        responses.append(dataSubtypeWithAmountHelper(f"Modifies {actionName}" + " against {combinable}:" + f" {action.actionOnHitNonDoTEffects(proto, actionElement, True)}", combinableAttribute="targettype", combinableAttributeFormat=common.unwrapAbstractClassPlural)(tech, effect))
     return responses
 
 def dataSubtypeProtoActionAddHandler(tech: ET.Element, effect:ET.Element):
@@ -424,7 +406,7 @@ def dataSubtypeProtoActionAddHandler(tech: ET.Element, effect:ET.Element):
     responses = []
     for targetElement in targetTypes:
         target = targetElement.text
-        responses.append(EffectHandlerResponse(unwrapAbstractClass(target), f"{action.describeAction(protoElement, actionElement, tech=tech)}"))
+        responses.append(EffectHandlerResponse(common.unwrapAbstractClass(target), f"{action.describeAction(protoElement, actionElement, tech=tech)}"))
     return responses
 
 def dataSubtypePowerCostHandler(tech: ET.Element, effect:ET.Element):
@@ -511,7 +493,7 @@ def dataSubtypeOnHitEffectDurationHandler(tech: ET.Element, effect:ET.Element):
         proto = common.protoFromName(target)
         actionElement = action.findActionByName(proto, effect.attrib['action'])
         actionName = action.getActionName(proto, actionElement, nameNonChargeActions=True)
-        responses.append(dataSubtypeWithAmountHelper(f"Modifies {actionName} " + "against {combinable}: duration {value}", combinableAttribute="targettype", combinableAttributeFormat=unwrapAbstractClass, flatSuffix=" seconds")(tech, effect))
+        responses.append(dataSubtypeWithAmountHelper(f"Modifies {actionName} " + "against {combinable}: duration {value}", combinableAttribute="targettype", combinableAttributeFormat=common.unwrapAbstractClassPlural, flatSuffix=" seconds")(tech, effect))
     return responses
 
 def dataSubtypeEmpowerModifyHandler(tech: ET.Element, effect:ET.Element):
@@ -552,7 +534,7 @@ def dataSubtypeWithAmountHelper(
             combinableTarget = combinableString
         elif combinableAttribute is not None:
             if combinableAttribute == "action":
-                if effect.attrib.get("allactions") is not None:
+                if effect.attrib.get("allactions") is not None or "action" not in effect.attrib:
                     combinableTarget = ""
                 else:
                     actionofReplacement = "of "
@@ -585,7 +567,7 @@ def dataSubtypeIgnore(tech: ET.Element, effect:ET.Element):
     return None
 
 DATA_SUBTYPE_HANDLERS: Dict[str, Callable[[ET.Element, ET.Element], Union[EffectHandlerResponse, List[EffectHandlerResponse]]]] = {
-    "damagebonus":dataSubtypeWithAmountHelper(textFormat="Damage bonus against {combinable}: {value}", flatSuffix="x", combinableAttribute="unittype", combinableAttributeFormat=unwrapAbstractClass),
+    "damagebonus":dataSubtypeWithAmountHelper(textFormat="Damage bonus against {combinable}: {value}", flatSuffix="x", combinableAttribute="unittype", combinableAttributeFormat=common.unwrapAbstractClassPlural),
     "hitpoints":dataSubtypeWithAmountHelper(combinableString="Hitpoints"),
     "los":dataSubtypeWithAmountHelper(combinableString="LOS"),
     "maximumvelocity":dataSubtypeWithAmountHelper(combinableString="Movement Speed"),
@@ -626,7 +608,7 @@ DATA_SUBTYPE_HANDLERS: Dict[str, Callable[[ET.Element, ET.Element], Union[Effect
     "enable":dataSubtypeEnableHandler,
     "modifyspawn":dataSubtypeModifySpawnHandler,
     "godpower":dataSubtypeIgnore,
-    "timeshiftingcost":dataSubtypeWithAmountHelper(textFormat="{combinable} Time Shift Cost: {value}", combinableAttribute="unittype", combinableAttributeFormat=unwrapAbstractClass),
+    "timeshiftingcost":dataSubtypeWithAmountHelper(textFormat="{combinable} Time Shift Cost: {value}", combinableAttribute="unittype", combinableAttributeFormat=common.unwrapAbstractClassPlural),
     "timeshiftingconcurrentshifts":dataSubtypeWithAmountHelper("Number of Simultaneous Time Shifts: {value}", combinableString=""),
     "veterancyenable":dataSubtypeVeterancyEnableHandler,
     "rechargetype":dataSubtypeIgnore, # Handled in other place
@@ -738,7 +720,9 @@ def processTech(tech: ET.Element, skipAffectedObjects: bool=False, lineJoin: str
 
     output = lineJoin.join(strings)
     if len(output) == 0: # Need to output something or we get <MISSING> if empty
-        output = " "
+        if len(effects):
+            print(f"Warning: tech {tech.attrib['name']} with {len(effects)} effects had no text output, reverting to vanilla text")
+        return None
     return output
 
 techManualAdditions = {}

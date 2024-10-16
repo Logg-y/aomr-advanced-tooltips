@@ -41,6 +41,16 @@ I also need to change relic text for that.
 
 Major god tooltips
 
-GP tooltips
+Winged messenger respawning time
+
+Meteor friendly fire multiplier?
 
 Age up text output (myth unit/godpower)
+
+Relics with missing text (eg chariot of cybele)
+
+Scorpion man spec should probably merge projectile count
+
+Time shift text
+
+Grey colourise all the vanilla tooltip effect strings so they look clearly different in case people want to keep them on

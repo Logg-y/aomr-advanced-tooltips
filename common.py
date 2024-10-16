@@ -26,6 +26,7 @@ OVERRIDE_DISPLAY_NAMES = {
     "SunRayRevealer":"Revealer",
     "SunRayGroundRevealer":"Revealer",
     "ChimeraFireArea":"Chimera Special Fire Area",
+    "SonOfOsiris":"Son of Osiris", # No (Hero) suffix
     # TODO hopefully remove this WW hackery once the underlying data is fixed
     "WalkingWoodsCypress":"Most trees",
     "WalkingWoodsHades":"Hades trees",
@@ -42,9 +43,9 @@ UNIT_CLASS_LABELS = {
     "AbstractArcherShip":"Archer Ship",
     "AbstractCloseCombatShip":"Close Combat Ship",
     "AbstractSiegeShip":"Siege Ship",
-    "CavalryLineUpgraded": "Cavalry Line Upgrades",
-    "InfantryLineUpgraded": "Infantry Line Upgrades",
-    "ArcherLineUpgraded": "Ranged Line Upgrades",
+    "CavalryLineUpgraded": "Cavalry Line Upgraded",
+    "InfantryLineUpgraded": "Infantry Line Upgraded",
+    "ArcherLineUpgraded": "Ranged Line Upgraded",
     "Building":"Building",
     "MythUnit":"Myth Unit",
     "HumanSoldier":"Human Soldier",
@@ -53,7 +54,7 @@ UNIT_CLASS_LABELS = {
     "FoodDropsite": "Food Dropsite",
     "WoodDropsite": "Wood Dropsite",
     "GoldDropsite": "Gold Dropsite",
-    "HeroShadowUpgraded":"Upgrades with Age",
+    "HeroShadowUpgraded":"Hero, Upgrades with Age",
     "LogicalTypeBuildingEmpoweredForLOS": "Empowerment Boosts LOS",
     "LogicalTypeArchaicMythUnit":"Archaic Myth Unit",
     "LogicalTypeClassicalMythUnit":"Classical Myth Unit",
@@ -69,27 +70,47 @@ UNIT_CLASS_LABELS = {
     "AbstractWarshipHero":"Warship Hero",
     "AbstractTitan":"Titan",
     "MilitaryUnit":"Military Unit",
-    "LogicalTypeBuildingsNotWalls":"Buildings (except Walls)",
-    "LogicalTypeMythUnitNotTitan":"Myth Units (except Titans)",
-    "LogicalTypeShipNotHero":"Ships (except Heroes)",
-    "LogicalTypeVillagerNotHero":"Villagers (except Heroes)",
+    "LogicalTypeBuildingsNotWalls":"Building (except Walls)",
+    "LogicalTypeMythUnitNotTitan":"Myth Unit (except Titans)",
+    "LogicalTypeShipNotHero":"Ship (except Heroes)",
+    "LogicalTypeVillagerNotHero":"Villager (except Heroes)",
     "Favor":"Favor",
-    "AbstractMonument":"Monuments",
+    "AbstractMonument":"Monument",
     "WoodResource":"Wood",
     "GoldResource":"Gold",
     "FishResource":"Fish",
     "Food":"Food",
-    "AbstractFarm":"Farms",
-    "Herdable":"Herdables",
+    "AbstractFarm":"Farm",
+    "Herdable":"Herdable",
     "NonConvertableHerdable":"Chicken-like",
-    "LogicalTypeHealed":"Healable Units",
+    "LogicalTypeHealed":"Healable Unit",
     "AbstractHealer":"Healer",
-    "AbstractTownCenter":"Town Centers",
-    "AbstractFortress":"Fortress Buildings",
-    "LogicalTypeBuildingNotWonderOrTitan":"Buildings (except Wonder and Titan Gate)",
-    "LogicalTypeRangedMythUnit":"Ranged Myth Units",
-    "LogicalTypeBuildingsThatShoot":"Buildings that Shoot",
+    "AbstractTownCenter":"Town Center",
+    "AbstractFortress":"Fortress Building",
+    "LogicalTypeBuildingNotWonderOrTitan":"Building (except Wonder and Titan Gate)",
+    "LogicalTypeRangedMythUnit":"Ranged Myth Unit",
+    "LogicalTypeBuildingsThatShoot":"Building that Shoots",
     "AbstractEmpowerer":"Empowerer",
+    "LogicalTypeAffectedByRestoration":"Affected by Restoration",
+    "LogicalTypeValidBoltTarget":"Affected by Bolt",
+    "LogicalTypeMilitaryProductionBuilding":"Military Production Building",
+    "AbstractTower":"Tower",
+    "LogicalTypeLandMilitary":"Land Military Unit",
+    "NavalUnit":"Naval Units",
+    "AbstractFlyingUnit":"Flying Unit",
+    "LogicalTypeEarthquakeAttack":"object vulnerable to Earthquake",
+    "LogicalTypeValidTornadoAttack":"object vulnerable to Tornado",
+    "LogicalTypeValidShiftingSandsTarget":"object affected by Shifting Sands",
+    "LogicalTypeValidMeteorTarget":"object targeted by Meteor",
+    "LogicalTypeHandUnitsAttack":"object attackable in Melee",
+    "LogicalTypeValidTraitorTarget":"object affected by Traitor",
+    "LogicalTypeValidFrostTarget":"freezable Unit",
+    "EconomicUnit":"Economic Unit",
+    "WildCrops":"Berry Bush",
+    "Herdable":"Herdable",
+    "LogicalTypeValidShockwaveTarget":"object affected by Shockwave",
+    "Resource":"Resource",
+    
 
     # Partial Lies
     "EconomicUpgraded":"Villager",
@@ -98,6 +119,7 @@ UNIT_CLASS_LABELS = {
     "AbstractSettlement":"Town Center",
     "LogicalTypeSunRayProjectile":"Projectile",
     "AbstractTemple":"Temple",
+
 }
 
 UNIT_CLASS_LABELS_PLURAL = {
@@ -132,6 +154,31 @@ UNIT_CLASS_LABELS_PLURAL = {
     "LogicalTypeSeidrTarget":"Hersir, Godi, and Valkyrie",
     "LogicalTypeMilitaryProductionBuilding":"Military Production Buildings",
     "AbstractTemple":"Temples",
+    "Herdable":"Herdables",
+    "AbstractFarm":"Farms",
+    "AbstractFortress":"Fortress-like Buildings",
+    "LogicalTypeValidFrostTarget":"Freezable Units",
+    "LogicalTypeEarthquakeAttack":"objects vulnerable to Earthquake",
+    "LogicalTypeValidTornadoAttack":"objects vulnerable to Tornado",
+    "LogicalTypeValidShiftingSandsTarget":"objects affected by Shifting Sands",
+    "LogicalTypeValidMeteorTarget":"objects targeted by Meteor",
+    "LogicalTypeHandUnitsAttack":"objects attackable in Melee",
+    "LogicalTypeValidTraitorTarget":"objects affected by Traitor",
+    "LogicalTypeValidShockwaveTarget":"objects affected by Shockwave",
+    "LogicalTypeLandMilitary":"Land Military Units",
+    "AbstractTower":"Towers",
+    "LogicalTypeAffectedByRestoration":"Affected by Restoration",
+    "LogicalTypeValidBoltTarget":"Affected by Bolt",
+    "NonConvertableHerdable":"Chicken-like",
+    "Tree":"Trees",
+    "Favor":"Favor",
+    "WoodResource":"Wood",
+    "GoldResource":"Gold",
+    "FishResource":"Fish",
+    "Food":"Food",
+    "AbstractInfantry":"Infantry",
+    "AbstractArcher":"Ranged Soldiers",
+    "LogicalTypeBuildingsThatShoot":"Buildings that Shoot",
 
     # Specific protos
     "Serpent":"Serpents",
@@ -150,7 +197,22 @@ UNIT_CLASS_LABELS_PLURAL = {
     "LogicalTypeFreezableMythUnit":"nearly all land Myth Units",
     "LogicalTypeBuildingSmall":"Buildings (except Wonder and Titan Gate)",
     "LogicalTypeBuildingLarge":"Buildings (except Wonder and Titan Gate)",
+    
 }
+
+
+# Unwrap abstract types with this many members or fewer into a list of actual object names
+AUTO_UNWRAP_ABSTRACT_TYPE_SIZE = 2
+
+# Always unwrap these
+ABSTRACT_TYPES_TO_UNWRAP = (
+    "SiegeLineUpgraded",    # Engineers target that excludes cheiroballista
+    "HeroInfantry",
+    # It is very hard to give these types short meaningful labels that clearly tell you what they contain and aren't confusable with the literal "Town Center"
+    "AbstractTownCenter",
+    "AbstractSettlement",
+    "NonConvertableHerdable", # is just chicken right now
+)
 
 def commaSeparatedList(words: List[str], joiner="and"):
     if len(words) == 0:
@@ -161,13 +223,29 @@ def commaSeparatedList(words: List[str], joiner="and"):
     separated += f" {joiner} " + words[-1]
     return separated
 
-def getDisplayNameForProtoOrClass(object: Union[str, ET.Element]) -> str:
+def getDisplayNameForProtoOrClass(object: Union[str, ET.Element], plural=False) -> str:
     if not isinstance(object, str):
         return getObjectDisplayName(object)
     proto = protoFromName(object)
     if proto is not None:
         return getObjectDisplayName(proto)
+    if plural:
+        return UNIT_CLASS_LABELS_PLURAL[object] # KeyError means a label needs adding to the dictionary manually
     return UNIT_CLASS_LABELS[object] # KeyError means a label needs adding to the dictionary manually
+
+def unwrapAbstractClass(targetName: Union[str, List[str]], plural=False) -> List[str]:
+    if isinstance(targetName, list):
+        returns = []
+        for item in targetName:
+            returns += unwrapAbstractClass(item, plural=plural)
+        return list(dict.fromkeys(returns))
+    if targetName in globals.protosByUnitType:
+        targetsList = globals.protosByUnitType[targetName]
+        if targetName in ABSTRACT_TYPES_TO_UNWRAP or len(targetsList) <= AUTO_UNWRAP_ABSTRACT_TYPE_SIZE:
+            return list(dict.fromkeys(map(lambda x: getDisplayNameForProtoOrClass(x, plural=plural), targetsList)))
+    return [getDisplayNameForProtoOrClass(targetName, plural=plural)]
+
+unwrapAbstractClassPlural = lambda targetName: unwrapAbstractClass(targetName, True)
 
 def getObjectDisplayName(object: ET.Element) -> str:
     override = OVERRIDE_DISPLAY_NAMES.get(object.attrib.get("name", None), None)
