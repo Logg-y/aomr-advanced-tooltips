@@ -30,6 +30,9 @@ OVERRIDE_DISPLAY_NAMES = {
     "SonOfOsiris":"Son of Osiris", # No (Hero) suffix
     "Hersir":"Hersir",
     "Godi":"Godi",
+    "Priest":"Priest",
+    "Pharaoh":"Pharaoh",
+    "PharaohNewKingdom":"Pharaoh (New Kingdom)",
     # TODO hopefully remove this WW hackery once the underlying data is fixed
     "WalkingWoodsCypress":"Most trees",
     "WalkingWoodsHades":"Hades trees",
