@@ -242,6 +242,12 @@ def dataSubtypeOnHitEffectHandler(tech: ET.Element, effect:ET.Element):
     else:
         print(f"Warning: {tech.attrib['name']}: unknown OnHitEffect {effectType}")
 
+def dataSubtypeDamageHandler(tech: ET.Element, effect:ET.Element):
+    damageType = effect.attrib.get("damagetype", None)
+    if damageType is None:
+        return dataSubtypeWithAmountHelper("Damage {actionof}{combinable}: {value}", combinableAttribute="action")(tech, effect)
+    return dataSubtypeWithAmountHelper(damageType + " Damage {actionof}{combinable}: {value}", combinableAttribute="action")(tech, effect)
+
 
 def dataSubtypeOnHitEffectRateHandler(tech: ET.Element, effect:ET.Element):
     effectType = effect.attrib.get("effecttype", "")
@@ -575,7 +581,7 @@ DATA_SUBTYPE_HANDLERS: Dict[str, Callable[[ET.Element, ET.Element], Union[Effect
     "trackrating":dataSubtypeWithAmountHelper("Track Rating {actionof}{combinable}: {value}", combinableAttribute="action"),
     "maximumrange":dataSubtypeWithAmountHelper("Max Range {actionof}{combinable}: {value}", combinableAttribute="action"),
     "armorvulnerability":dataSubtypeWithAmountHelper(textFormat="Damage Vulnerability to {combinable}: {value}", combinableAttribute="armortype", relativityModifier=relativityModifierArmor),
-    "damage": dataSubtypeWithAmountHelper("Damage {actionof}{combinable}: {value}", combinableAttribute="action"),
+    "damage": dataSubtypeDamageHandler,
     "workrate":dataSubtypeWorkrateHandler,
     "godpowercostfactor":dataSubtypeWithAmountHelper(combinableString="God Power recast cost"),
     "godpowerroffactor":dataSubtypeWithAmountHelper(combinableString="God Power recharge time"),
