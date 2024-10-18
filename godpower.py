@@ -203,7 +203,7 @@ def generateGodPowerDescriptions():
 
     sentinel = findGodPowerByName("Sentinel")
     sentinelCreateUnit = sentinel.find("createunit")
-    sentinelItems = [f"Creates {sentinelCreateUnit.attrib['quantity']} Sentinels in a {sentinelCreateUnit.attrib['minradius']}-{sentinelCreateUnit.attrib['maxradius']}m circle around a friendly Town Center, Citadel Center, or Fortress.", unitdescription.describeUnit("Sentinel")]
+    sentinelItems = [f"Creates {sentinelCreateUnit.attrib['quantity']} Sentinels in a {sentinelCreateUnit.attrib['minradius']}-{sentinelCreateUnit.attrib['maxradius']}m circle around a friendly Town Center, Citadel Center, or Fortress. Can be rotated (mouse wheel) before placing.", unitdescription.describeUnit("Sentinel")]
     godPowerProcessingParams["Sentinel"] = GodPowerParams(sentinelItems)
 
     lure = findGodPowerByName("Lure")
