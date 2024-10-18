@@ -237,6 +237,9 @@ def dataSubtypeOnHitEffectHandler(tech: ET.Element, effect:ET.Element):
             preTargetText += " with"
         preTargetText += " {combinable} "
         totalDamage = float(effect.attrib['amount'])*duration
+        targetString = effect.attrib.get("targettype", "All")
+        if targetString != "All":
+            preTargetText += f"against {common.commaSeparatedList(common.unwrapAbstractClass(targetString, True))} "
         preTargetText += f"inflict {icon.damageTypeIcon(damageType)} {totalDamage:0.3g} over {duration:0.3g} seconds"
         return dataSubtypeWithAmountHelper(preTargetText, combinableAttribute="action")(tech, effect)
     else:
