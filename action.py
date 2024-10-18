@@ -413,7 +413,16 @@ def actionPreDamageInfoText(action: ET.Element):
         notes.append(f"Beam attack strikes up to {int(bounces.text)-1} additional targets.")
     passthrough = findAndFetchText(action, "passthrough", None) is not None or findAndFetchText(action, "passthroughbuildings", None) is not None
     if passthrough:
-        notes.append("Pierces, hitting all targets in a line.")
+        projectile = findAndFetchText(action, "projectile", None)
+        if projectile is not None:
+            obstruction = findAndFetchText(protoFromName(projectile), "obstructionradiusx", None, float)
+            if obstruction is None:
+                projectile = None
+            else:
+                notes.append(f"Pierces, hitting all targets in a {obstruction:0.3g}m wide line.")
+        if projectile is None:
+            notes.append("Pierces, hitting all targets in a line.")
+            
     if findAndFetchText(action, "perfectaccuracy", None) is not None:
         notes.append("Has perfect accuracy.")
     if findAndFetchText(action, "homingballistics", None) is not None:
