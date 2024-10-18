@@ -171,6 +171,10 @@ UNIT_CLASS_LABELS_PLURAL = {
     "LogicalTypeHandUnitsAttack":"objects attackable in Melee",
     "LogicalTypeValidTraitorTarget":"objects affected by Traitor",
     "LogicalTypeValidShockwaveTarget":"objects affected by Shockwave",
+    "LogicalTypeValidSpyTarget":"valid Spy targets",
+    "LogicalTypeAffectedByValor":"valid Valor targets",
+    "LogicalTypeValidSentinelTarget":"valid Sentinel targets",
+    "LogicalTypeTartarianGateValidOverlapPlacement":"Buildings overlappable by Tartarian Gate",
     "LogicalTypeLandMilitary":"Land Military Units",
     "AbstractTower":"Towers",
     "LogicalTypeAffectedByRestoration":"Affected by Restoration",
@@ -185,6 +189,7 @@ UNIT_CLASS_LABELS_PLURAL = {
     "AbstractInfantry":"Infantry",
     "AbstractArcher":"Ranged Soldiers",
     "LogicalTypeBuildingsThatShoot":"Buildings that Shoot",
+    "AbstractPharaoh":"Pharaohs",
 
     # Specific protos
     "Serpent":"Serpents",
@@ -218,6 +223,7 @@ ABSTRACT_TYPES_TO_UNWRAP = (
     "AbstractTownCenter",
     "AbstractSettlement",
     "NonConvertableHerdable", # is just chicken right now
+    "LogicalTypeValidSentinelTarget",
 )
 
 AGE_LABELS = (f"{icon.generalIcon('resources/shared/static_color/technologies/archaic_age_icon.png')} Archaic",

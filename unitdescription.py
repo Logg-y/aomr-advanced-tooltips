@@ -375,7 +375,7 @@ class UnitDescription:
             if checkProtoFlag(protoUnit, "flag", "NotRepairable") and not checkProtoFlag(protoUnit, "flag", "Invulnerable"):
                 orderedTypes.append("Unrepairable")
             if checkProtoFlag(protoUnit, "unittype", "Building") and not checkProtoFlag(protoUnit, "unittype", "LogicalTypeTartarianGateValidOverlapPlacement"):
-                immuneTo.append("Deconstruction")
+                orderedTypes.append("Tartarian Gate cannot overlap")
             if checkProtoFlag(protoUnit, "unittype", "Building") and not checkProtoFlag(protoUnit, "unittype", "LogicalTypeBuildingThatCanBeEmpowered") and not checkProtoFlag(protoUnit, "unittype", "LogicalTypeBuildingEmpoweredForLOS"):
                 orderedTypes.append("Unempowerable")
             

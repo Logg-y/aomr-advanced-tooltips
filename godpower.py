@@ -134,7 +134,11 @@ def processGodPower(godpower: ET.Element) -> Union[None, str]:
     
     # Some powers exclude things pointlessly that were never in the targeted unit types to begin with
     # eg farms already lack the "affected by earthquake" flag, don't need to exclude them again
+    usePlacementTargetType = False
     attackTargets = [elem.text for elem in godpower.findall("abstractattacktargettype")]
+    if len(attackTargets) == 0:
+        usePlacementTargetType = True
+        attackTargets = [elem.text for elem in godpower.findall("abstractplacementtargettype")]
     attackTargetsExpandedTypes = []
     for target in attackTargets:
         if target not in globals.protosByUnitType:
@@ -142,7 +146,10 @@ def processGodPower(godpower: ET.Element) -> Union[None, str]:
         else:
             attackTargetsExpandedTypes += globals.protosByUnitType[target]
     replacements["attacktargets"] = common.commaSeparatedList(common.unwrapAbstractClass(attackTargets, plural=True))
-    restrictedTargets = [elem.text for elem in godpower.findall("explicitlyrestrictedattacktargettype")]
+    if usePlacementTargetType:
+        restrictedTargets = [elem.text for elem in godpower.findall("explicitlyrestrictedplacementtargettype")]
+    else:
+        restrictedTargets = [elem.text for elem in godpower.findall("explicitlyrestrictedattacktargettype")]
     restrictedTargetsRevised = []
     for target in restrictedTargets:
         targetWouldBeHit = False
@@ -203,7 +210,7 @@ def generateGodPowerDescriptions():
 
     sentinel = findGodPowerByName("Sentinel")
     sentinelCreateUnit = sentinel.find("createunit")
-    sentinelItems = [f"Creates {sentinelCreateUnit.attrib['quantity']} Sentinels in a {sentinelCreateUnit.attrib['minradius']}-{sentinelCreateUnit.attrib['maxradius']}m circle around a friendly Town Center, Citadel Center, or Fortress. Can be rotated (mouse wheel) before placing.", unitdescription.describeUnit("Sentinel")]
+    sentinelItems = [f"Creates {sentinelCreateUnit.attrib['quantity']} Sentinels in a {sentinelCreateUnit.attrib['minradius']}-{sentinelCreateUnit.attrib['maxradius']}m circle around {{playerrelationpos}} Town Center, Citadel Center, or Fortress-like building. Can be rotated (mouse wheel) before placing.", unitdescription.describeUnit("Sentinel")]
     godPowerProcessingParams["Sentinel"] = GodPowerParams(sentinelItems)
 
     lure = findGodPowerByName("Lure")
@@ -252,7 +259,7 @@ def generateGodPowerDescriptions():
     godPowerProcessingParams["PlentyVault"] = GodPowerParams(plentyItems)
 
     lightningstorm = findGodPowerByName("LightningStorm")
-    lightningstormItems = [f"Summon a Lightning Storm. Lightning strikes inflict {protoGodPowerDamage(lightningstorm.find('strikeproto').text, 'HandAttack')}", "Affects {attacktargets}, but will always prefer targeting units if there are any in the area.", "Takes about 7-8 seconds for lightning strike rate to increase. Average number of strikes: about 45.", "Preferentially targets objects closest to the southeast edge of the map.", "{radius}", "{duration}"]
+    lightningstormItems = [f"Summon a Lightning Storm. Lightning strikes inflict {protoGodPowerDamage(lightningstorm.find('strikeproto').text, 'HandAttack')}", "Affects {playerrelationpos} {attacktargets}, but will always prefer targeting units if there are any in the area.", "Takes about 7-8 seconds for lightning strike rate to increase. Average number of strikes: about 45.", "Preferentially targets objects closest to the southeast edge of the map.", "{radius}", "{duration}"]
     godPowerProcessingParams["LightningStorm"] = GodPowerParams(lightningstormItems)
 
     earthquake = findGodPowerByName("Earthquake")
@@ -457,7 +464,7 @@ def generateGodPowerDescriptions():
 
     deconstruction = findGodPowerByName("Deconstruction")
     deconstructionRate = 1/float(deconstruction.find("timefactor").text)
-    deconstructionItems = [f"Target an enemy building to start it unbuilding. The resource cost of the building is refunded immediately. Buildings are unbuilt at {deconstructionRate} Build Points a second (Greek/Norse build at 1BP/second). Dropsites can still be used to deposit resources while they are being deconstructed."]
+    deconstructionItems = [f"Reverses the construction of {{playerrelationpos}} {{attacktargets}}. The resource cost of the building is refunded immediately. Buildings are unbuilt at {deconstructionRate} Build Points a second (Greek/Norse build at 1BP/second). Dropsites can still be used to deposit resources while they are being deconstructed."]
     godPowerProcessingParams["Deconstruction"] = GodPowerParams(deconstructionItems)
 
     shockwave = findGodPowerByName("Shockwave")
@@ -512,7 +519,7 @@ def generateGodPowerDescriptions():
 
     tartariangate = findGodPowerByName("TartarianGate")
     tartariangateSpawns = float(tartariangate.find("maxnumspawns").text)
-    tartariangateItems = [f"Allows you to place a Tartarian Gate. It can be placed overlapping any Deconstructable buildings, and will instantly destroy them. Produces {tartariangateSpawns:0.3g} Tartarian Spawn that are hostile to all, and are rapidly replaced by the gate if killed. The gate itself remains under your control until destroyed. It benefits from building hitpoint upgrades, and can be manually deleted. While active, all players have {float(common.protoFromName('RevealerToAll').find('los').text):0.3g} LOS around the gate."]
+    tartariangateItems = [f"Allows you to place a Tartarian Gate. It can be placed overlapping most building types, and will instantly destroy them. Produces {tartariangateSpawns:0.3g} Tartarian Spawn that are hostile to all, and are rapidly replaced by the gate if killed. The gate itself remains under your control until destroyed. It benefits from building hitpoint upgrades, and can be manually deleted. While active, all players have {float(common.protoFromName('RevealerToAll').find('los').text):0.3g} LOS around the gate."]
     #tartariangateItems += ["<tth>Tartarian Spawn:", unitdescription.describeUnit("TartarianSpawn")]
     godPowerProcessingParams["TartarianGate"] = GodPowerParams(tartariangateItems)
 
