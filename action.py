@@ -4,7 +4,7 @@ from common import findAndFetchText, protoFromName
 import icon
 import globals
 from xml.etree import ElementTree as ET
-from typing import Union, Dict, List, Callable, Any
+from typing import Union, Dict, List, Callable, Any, Type
 import math
 
 class ActionChargeType(enum.Enum):
@@ -13,6 +13,7 @@ class ActionChargeType(enum.Enum):
     AUX = 2
 
 STANDARD_SNARE = {"rate":0.85, "duration":2.0}
+STANDARD_ACCURACY = 0.8
 
 
 SUPPRESS_TARGET_TYPES = (
@@ -40,6 +41,14 @@ ACTION_TYPE_NAMES = {
     "RangedAttackMyth":"Anti-Myth Attack",
     "BeamAttack":"Beam Attack",
 }
+
+def findFromActionOrTactics(action: ET.Element, tactics: ET.Element, query: str, default: Any=None, conversion: Union[None, Type] = None):
+    val = findAndFetchText(action, query, None, conversion)
+    if val is None and tactics is not None:
+        val = findAndFetchText(tactics, query, None, conversion)
+    if val is None:
+        return default
+    return val
 
 
 def actionDamageBonus(action: ET.Element):
@@ -145,11 +154,13 @@ def actionDamageFull(protoUnit: ET.Element, action: ET.Element, isDPS=False, hid
 
     tactics = actionTactics(protoUnit, action)
 
-    trackrating = findAndFetchText(action, "trackrating", None, float)
-    if trackrating is None and tactics is not None:
-        trackrating = findAndFetchText(tactics, "trackrating", None, float)
+    trackrating = findFromActionOrTactics(action, tactics, "trackrating", None, float)
     if trackrating is not None and trackrating != 0.0:
         components.append(f"Track rating: {trackrating:0.3g}.")
+    accuracy = findFromActionOrTactics(action, tactics, "accuracy", None, float)
+    if accuracy is not None and accuracy != STANDARD_ACCURACY:
+        if findFromActionOrTactics(action, tactics, "perfectaccuracy") is None:
+            components.append(f"Accuracy: {100*accuracy:0.3g}%.")
 
     if protoUnit.find("./flag[.='AreaDamageConstant']") is not None and actionArea(action) != "":
         components.append("Has no falloff with distance.")
@@ -810,11 +821,9 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
     if len(actionName):
         components += f"{actionName}:"
 
-    range = findAndFetchText(tactics, "maxrange", None, float)
+    range = findFromActionOrTactics(action, tactics, "maxrange", None, float)
     if range is None:
-        range = findAndFetchText(action, "maxrange", None, float)
-        if range is None:
-            return ""
+        return ""
 
     restrictempowered = findAndFetchText(tactics, "restrictifempowered", None, int)
     restrictempowertype = findAndFetchText(tactics, "restrictempowertype", None, str)
@@ -842,9 +851,7 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
 
     if modifyType == "HealRate":
         damageType = findAndFetchText(action, "modifydamagetype", "Divine")
-        damageAmount = findAndFetchText(tactics, "modifyamount", None, float)
-        if damageAmount is None:
-            damageAmount = findAndFetchText(action, "modifyamount", None, float)
+        damageAmount = findFromActionOrTactics(action, tactics, "modifyamount", None, float)
         if damageAmount < 0.0:
             components.append(f"deals {icon.damageTypeIcon(damageType)} {damageAmount*-1:0.3g}")
             components.append(actionDamageBonus(action))
