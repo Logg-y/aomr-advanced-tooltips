@@ -232,6 +232,13 @@ def veterancyText(proto: Union[str, ET.Element], rankName="rank", ignoreExperien
 
     return ""
 
+def recoverableDeathHeal(proto: Union[str, ET.Element]) -> Union[str, List[str]]:
+    proto = protoFromName(proto)
+    if checkProtoFlag(proto, "flag", "RecoverableDeathHeal"):
+        return "On death, its corpse persists for 90 seconds. Being healed at all resets this timer. Returns to life if fully healed before disappearing."
+
+    return ""
+
 
 
 NON_ACTION_OBSERVATIONS = {
@@ -240,6 +247,7 @@ NON_ACTION_OBSERVATIONS = {
     "dependentunits":dependentUnitsTextList,
     "directionalarmor":directionalarmorText,
     "veterancy":veterancyText,
+    "healableDeath":recoverableDeathHeal,
     "other":lambda dummy, x="": x,
 }
 
