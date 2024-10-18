@@ -773,6 +773,7 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["AsgardianHillFort"] = HideFlyingAttack
     unitDescriptionOverrides["Palace"] = HideFlyingAttack
     unitDescriptionOverrides["Wonder"] = UnitDescription(overrideDescription=tech.processTech(techtree.find("tech[@name='WonderAgeGeneral']")))
+    unitDescriptionOverrides["Regent"] = UnitDescription(overrideDescription="If your Regent dies, you lose the game.")
 
     archaicAgeWeakenedUnits: Dict[str, ET.Element] = dict([(effect.find("target").text, effect) for effect in globals.dataCollection['techtree.xml'].find("tech[@name='ArchaicAgeWeakenUnits']/effects")])
     for unitName, effectElement in archaicAgeWeakenedUnits.items():
