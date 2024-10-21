@@ -882,7 +882,7 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
         elif multiplier < 1.0:
             components.append(f"decreases {modifyTypeName} by {-100*(multiplier-1.0):0.3g}% for")
     elif modifyType == "RevealUI":
-        components.append("allows you to check the actions of")
+        components.append("allows you to check the actions/garrison of")
     elif modifyType == "AuraEmpower":
         components.append(f"{handleEmpowerAction(proto, action, tactics, '', chargeType)} Affects")
     else:
