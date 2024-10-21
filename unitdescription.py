@@ -688,7 +688,7 @@ def generateUnitDescriptions():
     prayerEfficiencyV = globals.dataCollection["game.cfg"]["PrayerEfficiencyEarlyIncomeReductionV"]
     adjustedZForRate = float(action.findActionByName("VillagerGreek", "Gather").find("rate[@type='Temple']").text) * prayerEfficiencyZ
     villagerGreekHistory = f"Total base Favor income per second for N villagers praying: {'' if adjustedZForRate == 1.0 else '{:0.3g} x '.format(adjustedZForRate)}N x (1/(N+{prayerEfficiencyV}) + {prayerEfficiencyG})"
-    greekFavorIncome = lambda n: n * (1/(n+prayerEfficiencyV) + prayerEfficiencyG)
+    greekFavorIncome = lambda n: adjustedZForRate * n * (1/(n+prayerEfficiencyV) + prayerEfficiencyG)
 
     villagerGreekFavorLines = ["Favor per second per villager decreases with more villagers praying - some values: (full formula in history)"]
     n = 1
