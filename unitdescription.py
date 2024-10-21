@@ -679,8 +679,28 @@ def generateUnitDescriptions():
 
     GullinburstiAges = ("Archaic", "Classical", "Heroic", "Mythic")
     gullinburstiHistory = "\\n".join([f"<tth>{age}:\\n" + UnitDescription(preActionInfoText={"BirthAttack":"Shockwave when spawned:"}).generate(protoFromName(f"Gullinbursti{age}")) for age in GullinburstiAges])
-    GullinburstiHandler = UnitDescription(hideStats=True, ignoreActions=["HandAttack", "Gore", "DistanceLimiting", "BirthAttack"], historyText=gullinburstiHistory, hideNonActionObservations=True, additionalText="See Learn > Compendium > Units > Gullinbursti for detailed age stat progression.")
+    GullinburstiHandler = UnitDescription(hideStats=True, ignoreActions=["HandAttack", "Gore", "DistanceLimiting", "BirthAttack"], historyText=gullinburstiHistory, hideNonActionObservations=True, additionalText="See in-game detail screen or Learn > Compendium > Units > Gullinbursti for detailed age stat progression.")
 
+
+    
+    prayerEfficiencyZ = globals.dataCollection["game.cfg"]["PrayerEfficiencyModifierZ"]
+    prayerEfficiencyG = globals.dataCollection["game.cfg"]["PrayerEfficiencyLaterGrowthG"]
+    prayerEfficiencyV = globals.dataCollection["game.cfg"]["PrayerEfficiencyEarlyIncomeReductionV"]
+    adjustedZForRate = float(action.findActionByName("VillagerGreek", "Gather").find("rate[@type='Temple']").text) * prayerEfficiencyZ
+    villagerGreekHistory = f"Total base Favor income per second for N villagers praying: {'' if adjustedZForRate == 1.0 else '{:0.3g} x '.format(adjustedZForRate)}N x (1/(N+{prayerEfficiencyV}) + {prayerEfficiencyG})"
+    greekFavorIncome = lambda n: n * (1/(n+prayerEfficiencyV) + prayerEfficiencyG)
+
+    villagerGreekFavorLines = ["Favor per second per villager decreases with more villagers praying - some values: (full formula in history)"]
+    n = 1
+    targetValues = [greekFavorIncome(1), greekFavorIncome(1)*0.75, greekFavorIncome(1)*0.5, greekFavorIncome(1)*0.25]
+    while len(targetValues):
+        thisIncome = greekFavorIncome(n)/n
+        if thisIncome <= targetValues[0]:
+            villagerGreekFavorLines.append(f"{n}: {icon.resourceIcon('Favor')} {thisIncome:0.2g}")
+            targetValues.pop(0)
+        n += 1
+
+    unitDescriptionOverrides["VillagerGreek"] = UnitDescription(additionalText=villagerGreekFavorLines, historyText=villagerGreekHistory)
     unitDescriptionOverrides["Hoplite"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist infantry, especially good against cavalry."})
     unitDescriptionOverrides["Hypaspist"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry only good against other infantry."})
     unitDescriptionOverrides["Toxotes"] = UnitDescription(preActionInfoText={"RangedAttack":"Generalist archer, especially good against infantry."})
