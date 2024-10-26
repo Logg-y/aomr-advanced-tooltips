@@ -101,9 +101,8 @@ def parseUnitTypeData():
                 globals.protosByUnitType[unittype.text] = []
             globals.protosByUnitType[unittype.text].append(proto.attrib['name'])
     globals.abstractTypes = set(globals.protosByUnitType.keys())
-    
 
-def main():
+def prepareData():
     globals.config = readConfig()
     gameplayDir = os.path.join(globals.config["paths"]["dataPath"], "game/data/gameplay")
     loadXmls(gameplayDir)
@@ -116,9 +115,13 @@ def main():
     parseUnitTypeData()
     mergeAbilities()
     loadGameCfg()
-    
+
     globals.historyPath = os.path.join(globals.config["paths"]["dataPath"], "game/data/strings", globals.config["paths"]["lang"], "history")
 
+def main():
+
+    prepareData()
+    
     generateTechDescriptions()           
     generateUnitDescriptions()
     generateGodPowerDescriptions()

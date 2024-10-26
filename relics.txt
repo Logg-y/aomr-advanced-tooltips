@@ -1,0 +1,236 @@
+Ankh of Ra
+Player: Favor Trickle Rate: +0.05 per second.
+
+
+Anvil of Hephaestus
+Armory: Gold Research Cost: -50% of current.
+
+
+Eye of Horus
+Town Center and Citadel Center: Population Cap: +4.
+
+
+Sistrum of Bast
+Villager: Food, Wood and Gold Cost: -15% of current.
+
+
+Head of Orpheus
+Building: LOS: +8.
+
+
+Ring of the Nibelung
+Player: Gold Trickle Rate: +0.5 per second.
+
+
+Staff of Dionysus
+Villager: Regeneration Rate: +0.5 per second.
+
+
+Fetters of Fenrir
+Villager: Damage of Melee Attack and Ranged Attack: +20% of base.
+
+
+Gungnir, Odin's Spear
+Hirdman, Hoplite, Spearman and Katapeltes: Damage of Melee Attack: +5% of base.
+
+
+Kithara of Apollo
+Villager: Movement Speed: +10% of base.
+
+
+Dwarven Horseshoes
+Cavalry: Movement Speed: +10% of base.
+
+
+Bow of Artemis
+Ranged Soldier, Ballista and Ranged Myth Unit: Wood and Gold Cost: -10% of current.
+
+
+Scales of Echidna
+Myth Unit: Food, Wood and Gold Cost: -15% of current.
+
+
+Nose of the Sphinx
+Building: Hitpoints: +15% of base.
+
+
+Arrows of the Alfar
+Building: Damage of Melee Attack and Ranged Attack: +20% of base.
+
+
+Arrows of Heracles
+Ranged Line Upgraded and Hero that upgrades with Age: Damage of Ranged Attack: +5% of base.
+
+
+Gambanteinn, Odin's Wand
+Temple: Food, Wood, Gold and Favor Research Cost: -25% of current.
+
+
+Bridle of Pegasus
+Grants a Pegasus that respawns for free 60 seconds after it is killed. This Pegasus does not have a population cost.
+
+
+Ullr's Bow
+Ranged Soldier and Ballista: Max Range of Ranged Attack: +1.
+Ranged Soldier and Ballista: LOS: +1.
+
+
+Blue Crystal Shard
+Villager: Gather rate for Gold and Wood: +5% of base.
+
+
+Armor of Achilles
+Infantry: Damage Vulnerability to Hack: -5% of current.
+
+
+Ship of Fingernails
+Player: Food Trickle Rate: +0.5 per second.
+
+
+Adamantine Shingles
+House: Hitpoints: +200% of base.
+Manor: Hitpoints: +100% of base.
+
+
+Eye of Ornlu
+Hypaspist and Axeman: Damage of Melee Attack: +5% of base.
+Throwing Axeman, Cheiroballista and Cheiroballista (Hero): Damage of Ranged Attack: +5% of base.
+
+
+Tusk of the Iron Boar
+Cavalry: Hitpoints: +10% of base.
+
+
+Pandora's Box
+Myth Unit: Favor Cost: -20% of current.
+
+
+Thundercloud Shawl
+Human Soldier and Hero that upgrades with Age: Damage Vulnerability to Pierce: -5% of current.
+
+
+Harmonia's Necklace
+Villager: Gather rate for Gold: +10% of base.
+
+
+Dwarven Calipers
+Siege: Food, Wood, Gold and Favor Cost: -20% of current.
+
+
+Chariot of Cybele
+Grants two Golden Lions that respawn for free 60 seconds after both are killed.
+
+
+Skulls of the Cercopes
+Grants six Monkeys that respawn for free 120 seconds after all are killed.
+
+
+Canopic Jar of Imsety
+Infantry: Train Time: -25% of current.
+
+
+Tower of Sestus
+Sentry Tower: Damage bonus against Myth Units: +0.4x.
+
+
+Trojan Gate Hinge
+Wall: Hitpoints: +20% of base.
+
+
+Girdle of Hippolyta
+Ranged Soldier: Hitpoints: +10% of base.
+
+
+Pygmalion's Statue
+Villager: Hitpoints: +40% of base.
+
+
+Black Lotus
+Villager: Gather rate for Farm: +10% of base.
+
+
+The Scarab Pendant
+Behemoth, Scarab, Mountain Giant, Colossus and Siege: Crush Damage: +20% of base.
+
+
+Hermes' Winged Sandals
+Hero: Movement Speed: +10% of base.
+
+
+Pelt of Argus
+Unit: LOS: +6.
+
+
+Oseberg Wagon
+Caravan: Movement Speed: +10% of base.
+Caravan: Food Cost: -25% of base.
+
+
+Scales of a Catoblepas
+Myth Unit: Damage Vulnerability to Pierce: -15% of current.
+
+
+Tail of Cerberus
+Myth Unit: Special Attack Recharge Time: -25% of base.
+
+
+Blanket of Empress Zoe
+Building: Damage Vulnerability to Crush: -10% of current.
+
+
+The Khopesh of Horus
+Hero: Damage bonus against Myth Units: +1x.
+
+
+The Titan's Treasure
+Age Upgrades and Secrets of the Titans: Food and Gold Cost: -10% of current.
+Secrets of the Titans: Wood and Favor Cost: -10% of current.
+
+
+Demeter's Throne
+Storehouse, Granary, Lumber Camp, Mining Camp, Ox Cart, House, Manor and Economic Guild: Build Time: -50% of base.
+Storehouse, Granary, Ox Cart, House, Manor and Economic Guild: Wood Cost: -25% of base.
+Ox Cart: Food Cost: -25% of base.
+Manor and Economic Guild: Gold Cost: -25% of base.
+
+
+Hestia's Hearth
+Villager: Train Time: -5% of base.
+
+
+Ptah's Sceptre
+Farm: Wood and Gold Cost: -25% of current.
+
+
+Tyrfing, Angantyr's Sword
+Hero: Lifesteal from Unit +10%.
+
+
+Svadilfari's Sledge
+Fortress Building: Favor Cost: set to 0.
+
+
+Rheia's Crown
+Town Center, Village Center and Citadel Center: Wood and Gold Cost: -10% of base.
+Town Center, Village Center and Citadel Center: Trickle rate for Favor: +0.01 per second.
+
+
+Texts of Imhotep
+Building: Build Time: -10% of base.
+
+
+Charon's Obol
+Villager, Laborer and Gatherer: Resources returned on death set to: <icon=\"(20)(resources/in_game/res_food.png)\"> 25.
+Dwarf: Resources returned on death set to: <icon=\"(20)(resources/in_game/res_gold.png)\"> 30.
+Citizen: Resources returned on death set to: <icon=\"(20)(resources/in_game/res_food.png)\"> 42.5 and <icon=\"(20)(resources/in_game/res_wood.png)\"> 7.5.
+Citizen (Hero): Resources returned on death set to: <icon=\"(20)(resources/in_game/res_food.png)\"> 60, <icon=\"(20)(resources/in_game/res_wood.png)\"> 10 and <icon=\"(20)(resources/in_game/res_favor.png)\"> 1.
+
+
+Hekate's Torches
+Player: God Power recharge time and God Power recast cost: -10% of current.
+
+
+Archimedes' Ledger
+Siege: Population Usage: -1.
+
+

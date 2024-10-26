@@ -60,7 +60,7 @@ UNIT_CLASS_LABELS = {
     "FoodDropsite": "Food Dropsite",
     "WoodDropsite": "Wood Dropsite",
     "GoldDropsite": "Gold Dropsite",
-    "HeroShadowUpgraded":"Hero, Upgrades with Age",
+    "HeroShadowUpgraded":"Hero that upgrades with Age",
     "LogicalTypeBuildingEmpoweredForLOS": "Empowerment Boosts LOS",
     "LogicalTypeArchaicMythUnit":"Archaic Myth Unit",
     "LogicalTypeClassicalMythUnit":"Classical Myth Unit",

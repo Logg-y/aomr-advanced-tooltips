@@ -40,3 +40,7 @@ Unfortunately playing with the advanced tooltips game setting off hides the cost
 
 # TODO
 
+fishing ship gather rate
+set aura doesn't explicitly say barracks and migdol
+implode blocks garrison
+how many vill shots kill an animal?
