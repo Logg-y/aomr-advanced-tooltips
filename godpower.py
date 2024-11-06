@@ -514,7 +514,7 @@ def generateGodPowerDescriptions():
     godPowerProcessingParams["HesperidesTree"] = GodPowerParams(hesperidestreeItems)
 
     vortex = findGodPowerByName("Vortex")
-    vortexItems = [f"Teleports all {{playerrelationpos}} {{attacktargets}} to a location of your choice."]
+    vortexItems = [f"Teleports all {{playerrelationpos}} {{attacktargets}} to a location of your choice. Garrisoned units are not affected."]
     godPowerProcessingParams["Vortex"] = GodPowerParams(vortexItems)
 
     tartariangate = findGodPowerByName("TartarianGate")
