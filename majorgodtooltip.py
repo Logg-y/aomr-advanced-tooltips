@@ -16,7 +16,7 @@ def generateMajorGodDescriptions():
 
     setContent = globals.dataCollection['string_table.txt']["STR_CIV_SET_LR"]
     setMonumentRadius = float(action.actionTactics('MonumentToVillagers', None).find("action[name='DevoteesMedium']/maxrange").text)
-    globals.stringMap["STR_CIV_SET_LR"] = re.sub("reduce the cost of units in nearby (.*?) by", f"reduce the cost of units in \\1 within {setMonumentRadius:0.3g}m by", setContent)
+    globals.stringMap["STR_CIV_SET_LR"] = re.sub("reduce the cost of units in nearby (.*?) by", f"reduce the cost of Barracks and Migdol units in \\1 within {setMonumentRadius:0.3g}m by", setContent)
 
     thorContent = globals.dataCollection['string_table.txt']["STR_CIV_THOR_LR"]
     thorTech = globals.dataCollection["techtree.xml"].find("tech[@name='ArchaicAgeThor']")
@@ -41,7 +41,7 @@ def generateMajorGodDescriptions():
     lokiBonusUnitSpawning = globals.dataCollection['major_gods.xml'].find("civ[name='Loki']/bonusunitspawning")
     lokiExcludedTargets = common.unwrapAbstractClassPlural([elem.text for elem in lokiBonusUnitSpawning.findall("excludedtarget")])
     lokiSpawnerList = common.unwrapAbstractClassPlural([elem.attrib.get('unit', elem.attrib.get('type')) for elem in lokiBonusUnitSpawning.findall("spawnpointearningfactor")])
-    lokiMythSpawnNew = f"\n{icon.BULLET_POINT} {common.commaSeparatedList(lokiSpawnerList)} work towards summoning Myth Units while enemy objects, except {common.commaSeparatedList(lokiExcludedTargets)}. This ability activates when reaching the Classical Age."
+    lokiMythSpawnNew = f"\n{icon.BULLET_POINT} {common.commaSeparatedList(lokiSpawnerList)} work towards summoning Myth Units while damaging enemy objects, except {common.commaSeparatedList(lokiExcludedTargets)}. This ability activates when reaching the Classical Age."
     lokiMythSpawnNew += f"\n {icon.BULLET_POINT_ALT} Picks a random Age up to your current Age (excluding Archaic) at equal odds. Then, picks a random Norse Myth unit that is trained from the Temple at equal odds, including from Norse minor gods not accessible to Loki."
     lokiMythSpawnNew += f"\n {icon.BULLET_POINT_ALT} The damage required to spawn this unit is the 2x (the sum of its resource costs, with Favor multiplied by 10)."
     lokiSpawnerList.remove("Hersir")
