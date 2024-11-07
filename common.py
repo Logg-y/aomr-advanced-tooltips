@@ -190,6 +190,7 @@ UNIT_CLASS_LABELS_PLURAL = {
     "AbstractArcher":"Ranged Soldiers",
     "LogicalTypeBuildingsThatShoot":"Buildings that Shoot",
     "AbstractPharaoh":"Pharaohs",
+    "LogicalTypeRangedUnitsAttack":"valid Ranged attack targets",
 
     # Specific protos
     "Serpent":"Serpents",
