@@ -813,12 +813,14 @@ def generateUnitDescriptions():
         unitDescriptionOverrides[unitName] = override
 
     # Non action tied passives that we still want to write text for!
-    nonActionPassiveAbilities = {}
+    nonActionPassiveAbilities: List[Union[str, Tuple[ET.Element, str]]] = []
 
     # Greek
-    nonActionPassiveAbilities['PassiveSolarFlare'] = SunRayRevealerText
+    nonActionPassiveAbilities.append(('PassiveSolarFlare', SunRayRevealerText))
 
     # Egyptian
+    nonActionPassiveAbilities.append(('PassiveVenomous', (common.protoFromName("Wadjet"), f"Attacks deal an additional {action.actionDamageOverTime(action.findActionByName('Wadjet', 'RangedAttack'))}.")))
+
 
     # Norse
     fenrisWolf = protoFromName("FenrisWolfBrood")
@@ -827,56 +829,69 @@ def generateUnitDescriptions():
         tactics = action.actionTactics(fenrisWolf, actionNode)
         if tactics.find("type").text == "LikeBonus":
             wolfboosts.append(actionNode)
-    nonActionPassiveAbilities['AbilityFenrisWolfBrood'] = "\\n".join([action.describeAction(fenrisWolf, x) for x in wolfboosts])
+    nonActionPassiveAbilities.append(('AbilityFenrisWolfBrood', "\\n".join([action.describeAction(fenrisWolf, x) for x in wolfboosts])))
+
 
     # Atlantean
-    nonActionPassiveAbilities['AbilityStymphalianBird'] = f"Attacks deal an additional {action.actionDamageOverTime(action.findActionByName('StymphalianBird', 'RangedAttack'))}."
-    nonActionPassiveAbilities['PassivePetrifiedFrame'] = action.handleIdleStatBonusAction(protoFromName('Cheiroballista'), action.findActionByName('Cheiroballista', 'PetrificationBonus'), None, "")
+    nonActionPassiveAbilities.append(('AbilityStymphalianBird', f"Attacks deal an additional {action.actionDamageOverTime(action.findActionByName('StymphalianBird', 'RangedAttack'))}."))
+    nonActionPassiveAbilities.append(('PassivePetrifiedFrame', action.handleIdleStatBonusAction(protoFromName('Cheiroballista'), action.findActionByName('Cheiroballista', 'PetrificationBonus'), None, "")))
     
 
     # Major god related
 
-    nonActionPassiveAbilities['PassiveDivineShield'] = tech.processEffect(techtree.find("tech[@name='ArchaicAgeIsis']"), techtree.find("tech[@name='ArchaicAgeIsis']/effects/effect[@subtype='GodPowerBlockRadius']")).toString(skipAffectedObjects=True)
+    nonActionPassiveAbilities.append(('PassiveDivineShield', tech.processEffect(techtree.find("tech[@name='ArchaicAgeIsis']"), techtree.find("tech[@name='ArchaicAgeIsis']/effects/effect[@subtype='GodPowerBlockRadius']")).toString(skipAffectedObjects=True)))
 
     monumentEmpowerAura = action.actionTactics('MonumentToVillagers', None).find("action[name='MonumentEmpowerAura']")
-    nonActionPassiveAbilities['PassiveMandjet'] = action.handleAutoRangedModifyAction(protoFromName('MonumentToVillagers'), monumentEmpowerAura, monumentEmpowerAura, "")
+    nonActionPassiveAbilities.append(('PassiveMandjet', action.handleAutoRangedModifyAction(protoFromName('MonumentToVillagers'), monumentEmpowerAura, monumentEmpowerAura, "")))
 
     monumentCheapenAura = action.actionTactics('MonumentToVillagers', None).find("action[name='DevoteesMedium']")
-    nonActionPassiveAbilities['PassiveDevotees'] = action.handleAutoRangedModifyAction(protoFromName('MonumentToVillagers'), monumentCheapenAura, monumentCheapenAura, "")
+    nonActionPassiveAbilities.append(('PassiveDevotees', action.handleAutoRangedModifyAction(protoFromName('MonumentToVillagers'), monumentCheapenAura, monumentCheapenAura, "")))
 
     temporalScaffoldingAction = action.actionTactics('Manor', None).find("action[name='TemporalScaffoldingSmall']")
-    nonActionPassiveAbilities['PassiveTemporalScaffolding'] = action.handleAutoRangedModifyAction(protoFromName('Manor'), temporalScaffoldingAction, temporalScaffoldingAction, "")
+    nonActionPassiveAbilities.append(('PassiveTemporalScaffolding', action.handleAutoRangedModifyAction(protoFromName('Manor'), temporalScaffoldingAction, temporalScaffoldingAction, "")))
+
 
     terrainCreep = globals.dataCollection['major_gods.xml'].find("civ[name='Gaia']/terraincreeps/terraincreep")
     healEffect = globals.dataCollection['terrain_unit_effects.xml'].find("terrainuniteffect[@name='GaiaCreepHealEffect']/effect")
-    nonActionPassiveAbilities['PassiveLush'] = f"Grows up to a {float(terrainCreep.attrib['maxradius']):0.3g}m circle of lush at {float(terrainCreep.attrib['growthrate']):0.3g}m per second. Friendly objects on lush heal {float(healEffect.attrib['amount']):0.3g} per second."
+    nonActionPassiveAbilities.append(('PassiveLush', f"Grows up to a {float(terrainCreep.attrib['maxradius']):0.3g}m circle of lush at {float(terrainCreep.attrib['growthrate']):0.3g}m per second. Friendly objects on lush heal {float(healEffect.attrib['amount']):0.3g} per second."))
 
     # Tech related
 
-    nonActionPassiveAbilities['PassiveAnastrophe'] = action.describeAction(protoFromName("Pentekonter"), action.findActionByName("Pentekonter", "ChargedHandAttack"), chargeType=action.ActionChargeType.REGULAR, tech=techtree.find("tech[@name='Anastrophe']"))
+    nonActionPassiveAbilities.append(('PassiveAnastrophe', action.describeAction(protoFromName("Pentekonter"), action.findActionByName("Pentekonter", "ChargedHandAttack"), chargeType=action.ActionChargeType.REGULAR, tech=techtree.find("tech[@name='Anastrophe']"))))
+    nonActionPassiveAbilities.append(('PassiveVenomous', (techtree.find("tech[@name='ShaftsOfPlague']"), tech.processEffect(techtree.find("tech[@name='ShaftsOfPlague']"), techtree.find("tech[@name='ShaftsOfPlague']/effects/effect[@effecttype='DamageOverTime']")).toString(skipAffectedObjects=False))))
 
-    nonActionPassiveAbilities['PassiveFuneralBarge'] = tech.processTech(techtree.find("tech[@name='FuneralBarge']"), skipAffectedObjects=True)
-    nonActionPassiveAbilities['PassiveDeathlyDonative'] = tech.processTech(techtree.find("tech[@name='FuneralRites']"), skipAffectedObjects=True)
+    nonActionPassiveAbilities.append(('PassiveFuneralBarge', tech.processTech(techtree.find("tech[@name='FuneralBarge']"), skipAffectedObjects=True)))
+    nonActionPassiveAbilities.append(('PassiveDeathlyDonative', tech.processTech(techtree.find("tech[@name='FuneralRites']"), skipAffectedObjects=True)))
 
-    nonActionPassiveAbilities['PassiveHamask'] = tech.processTech(techtree.find("tech[@name='Hamask']"), skipAffectedObjects=True)
-    nonActionPassiveAbilities['PassiveValhallasChosen'] = tech.processEffect(techtree.find("tech[@name='CallOfValhalla']"), techtree.find("tech[@name='CallOfValhalla']/effects/effect[@subtype='ResourceReturn']")).toString(skipAffectedObjects=True)
-    nonActionPassiveAbilities['PassiveNaturesEyes'] = tech.processTech(techtree.find("tech[@name='EyesInTheForest']"), skipAffectedObjects=True)
-    nonActionPassiveAbilities['PassiveViking'] = tech.processTech(techtree.find("tech[@name='Vikings']"), skipAffectedObjects=True)
-    nonActionPassiveAbilities['PassiveSkadisBreath'] = tech.processTech(techtree.find("tech[@name='ArcticWinds']"), skipAffectedObjects=True)
-    nonActionPassiveAbilities['PassiveSkaldicInspiration'] = tech.processTech(techtree.find("tech[@name='LongSerpent']"), skipAffectedObjects=True)
 
-    nonActionPassiveAbilities['PassiveSerratedBlades'] = tech.processEffect(techtree.find("tech[@name='BiteOfTheShark']"), techtree.find("tech[@name='BiteOfTheShark']/effects/effect[@effecttype='DamageOverTime']")).toString(skipAffectedObjects=True)
-    nonActionPassiveAbilities['PassiveBattleFrenzy'] = tech.processTech(techtree.find("tech[@name='DevoteesOfAtlas']"), skipAffectedObjects=True, lineJoin="\\n")
+    nonActionPassiveAbilities.append(('PassiveHamask', tech.processTech(techtree.find("tech[@name='Hamask']"), skipAffectedObjects=True)))
+    nonActionPassiveAbilities.append(('PassiveValhallasChosen', tech.processEffect(techtree.find("tech[@name='CallOfValhalla']"), techtree.find("tech[@name='CallOfValhalla']/effects/effect[@subtype='ResourceReturn']")).toString(skipAffectedObjects=True)))
+    nonActionPassiveAbilities.append(('PassiveNaturesEyes', tech.processTech(techtree.find("tech[@name='EyesInTheForest']"), skipAffectedObjects=True)))
+    nonActionPassiveAbilities.append(('PassiveViking', tech.processTech(techtree.find("tech[@name='Vikings']"), skipAffectedObjects=True)))
+    nonActionPassiveAbilities.append(('PassiveSkadisBreath', tech.processTech(techtree.find("tech[@name='ArcticWinds']"), skipAffectedObjects=True)))
+    nonActionPassiveAbilities.append(('PassiveSkaldicInspiration', tech.processTech(techtree.find("tech[@name='LongSerpent']"), skipAffectedObjects=True)))
+
+
+    nonActionPassiveAbilities.append(('PassiveSerratedBlades', tech.processEffect(techtree.find("tech[@name='BiteOfTheShark']"), techtree.find("tech[@name='BiteOfTheShark']/effects/effect[@effecttype='DamageOverTime']")).toString(skipAffectedObjects=True)))
+    nonActionPassiveAbilities.append(('PassiveBattleFrenzy', tech.processTech(techtree.find("tech[@name='DevoteesOfAtlas']"), skipAffectedObjects=True, lineJoin="\\n")))
+
     
 
-    
-
-    for abilityName, tooltip in nonActionPassiveAbilities.items():
+    for abilityName, tooltip in nonActionPassiveAbilities:
+        sourceObject = None
+        if not isinstance(tooltip, str):
+            sourceObject, tooltip = tooltip
         abilityInfo = globals.dataCollection["abilities_combined"].find(f"power[@name='{abilityName}']")
         if abilityInfo is None:
             raise ValueError(f"Couldn't find civ.abilities entry for {abilityName}")
         displayNameStrId = findAndFetchText(abilityInfo, "rolloverid", None)
-        globals.stringMap[displayNameStrId] = tooltip
+
+        if displayNameStrId not in globals.unitAbilityDescriptions:
+            globals.unitAbilityDescriptions[displayNameStrId] = {}
+        if tooltip not in globals.unitAbilityDescriptions[displayNameStrId].values():
+            globals.unitAbilityDescriptions[displayNameStrId][sourceObject] = tooltip
+
+        #globals.stringMap[displayNameStrId] = tooltip
 
     stringIdsByOverwriters: Dict[str, Dict[ET.Element, str]] = {}
     
@@ -927,6 +942,7 @@ def generateUnitDescriptions():
 
     # For different sources of the same ability (eg lifesteal or "venomous" from Serpent Spear and Shaft of Plague) we need to not list techs as well
     abilityNameStringIdsWithMultipleReplacers = set()
+
     for unitNode in globals.dataCollection["abilities"]["abilities.xml"]:
         for abilityNode in unitNode:
             techNode = abilityNode.find("tech")
@@ -947,14 +963,16 @@ def generateUnitDescriptions():
                         if enablerName is None:
                             brackets = UNIT_ABILITY_SOURCE_COLOUR(f"[{techDisplayName}]")
                         replacement = globals.dataCollection["string_table.txt"][displayNameStrId].replace(" (Passive)", "") + f" {brackets}"
+
                         if displayNameStrId in globals.stringMap and globals.stringMap[displayNameStrId] != replacement:
                             abilityNameStringIdsWithMultipleReplacers.add(displayNameStrId)
-                            #print(displayNameStrId, stringMap[displayNameStrId], replacement)
                         else:
                             globals.stringMap[displayNameStrId] = replacement
     for badStringId in abilityNameStringIdsWithMultipleReplacers:
         del globals.stringMap[badStringId]
         print(f"Ability name {badStringId} had multiple different attempted replacements, removing")
+
+
     for badStringId in BANNED_STRINGS:
         if badStringId in globals.stringMap:
             print(f"Remove entry for blacklisted string {badStringId} ({len(globals.stringMap[badStringId])} chars)")
