@@ -279,7 +279,7 @@ def generateGodPowerDescriptions():
     rainOtherEffect = copy.copy(rainEffect)
     rainOtherEffect.attrib['amount'] = rainOtherEffect.attrib['altamount']
     rainOtherResponse = getTechEffectHandlerResponseForGodPowerEffect(rain, rainOtherEffect)
-    rainItems = ["Grants {playerrelation} increased farming rate.", f"You: {rainMyResponse.toString()}", f"Other Players: {rainOtherResponse.toString()}", "{duration}"]
+    rainItems = ["Grants {playerrelation} increased farming rate.", f"{rainMyResponse.toString()}", "{duration}"]
     godPowerProcessingParams["Rain"] = GodPowerParams(rainItems)
 
     prosperity = findGodPowerByName("Prosperity")

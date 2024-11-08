@@ -760,6 +760,7 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["GullinburstiClassical"] = GullinburstiHandler
     unitDescriptionOverrides["GullinburstiHeroic"] = GullinburstiHandler
     unitDescriptionOverrides["GullinburstiMythic"] = GullinburstiHandler
+    unitDescriptionOverrides["GreatHall"] = UnitDescription(additionalText=f"Produces Hersir {100*float(protoFromName('GreatHall').find('trainingrate').text)-100.0:0.3g}% faster than a Temple.")
     # Atlantean
     unitDescriptionOverrides["Oracle"] = UnitDescription(overrideDescription="Scout, line of sight grows when standing still. Cannot attack.", postActionInfoText={"AutoGatherFavor":oracleAutoGatherFavorHelper("Oracle")}, historyText=oracleHistoryText("Oracle"))
     unitDescriptionOverrides["OracleHero"] = UnitDescription(preActionInfoText={"HandAttack":"Hero scout, line of sight grows when standing still. Generates favor faster than normal Oracles. Good against myth units."}, postActionInfoText={"AutoGatherFavor":oracleAutoGatherFavorHelper("OracleHero")}, historyText=oracleHistoryText("OracleHero"))
@@ -787,6 +788,7 @@ def generateUnitDescriptions():
     # Common/Similar
     unitDescriptionOverrides["SentryTower"] = UnitDescription(showActionsIfDisabled=["RangedAttack"])
     unitDescriptionOverrides["VillageCenter"] = UnitDescription(additionalText=f"Produces units {100.0-100*float(protoFromName('VillageCenter').find('trainingrate').text):0.3g}% slower than a Town Center. Research speed is unaffected.")
+    unitDescriptionOverrides["CitadelCenter"] = UnitDescription(additionalText=f"Trains and researches {100*float(protoFromName('CitadelCenter').find('buildingworkrate').text)-100.0:0.3g}% faster than a Town Center.")
     unitDescriptionOverrides["Dock"] = UnitDescription(additionalText="Can be used as a dropsites by Villagers as well.")
     unitDescriptionOverrides["TitanCerberus"] = TitanHandler
     unitDescriptionOverrides["TitanYmir"] = TitanHandler
