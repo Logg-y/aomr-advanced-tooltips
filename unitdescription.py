@@ -70,6 +70,7 @@ IGNORE_UNITS = (
 "WallConnector",
 "PhoenixFromEgg",
 "TartarianGatePlacement",
+"DryadBlessing",
 )
 
 
@@ -738,10 +739,6 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["PhoenixEgg"] = UnitDescription(linkActionsToAbilities={"PhoenixRebirth":"AbilityPhoenixEgg"})
     unitDescriptionOverrides["Scarab"] = UnitDescription(linkActionsToAbilities={"SelfDestructAttack":"AbilityScarab"})
     # Norse
-    dwarfNotes = ["<tth>Base gather rates compared to Gatherers:"]
-    for res in ("Huntable", "Herdable", "NonConvertableHerdable","WoodResource", "GoldResource", "BerryBush", "AbstractFarm"):
-        dwarfNotes.append(f"{common.commaSeparatedList(common.unwrapAbstractClass(res))}: {compareGatherRates('VillagerDwarf', 'VillagerNorse', res)}")
-    unitDescriptionOverrides["VillagerDwarf"] = UnitDescription(additionalText=dwarfNotes)
     unitDescriptionOverrides["Raven"] = UnitDescription(additionalText="Only one Raven can be waiting to respawn at a time. If both are dead at the same time, the second must wait for the first to respawn before beginning its timer.")
     unitDescriptionOverrides["Berserk"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist infantry. Can build."}, additionalText="Immune to Bolt while in the Archaic age.")
     unitDescriptionOverrides["ThrowingAxeman"] = UnitDescription(preActionInfoText={"RangedAttack":"Specialist infantry only good against other infantry. Can build."})

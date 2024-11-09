@@ -116,6 +116,11 @@ UNIT_CLASS_LABELS = {
     "Herdable":"Herdable",
     "LogicalTypeValidShockwaveTarget":"object affected by Shockwave",
     "Resource":"Resource",
+    "MajorHero":"Heroes with Build Limits",
+    "MinorHero":"Heroes without Build Limits",
+    "LegendHero":"Legends",
+    "All":"All objects",
+    "AbstractDwarf":"Dwarves",
     
 
     # Partial Lies
@@ -295,6 +300,11 @@ def protoFromName(protoName: Union[ET.Element, str]) -> Union[ET.Element, None]:
     if isinstance(protoName, ET.Element):
         return protoName
     return globals.dataCollection["proto.xml"].find(f"./*[@name='{protoName}']")
+
+def techFromName(techName: Union[ET.Element, str]) -> Union[ET.Element, None]:
+    if isinstance(techName, ET.Element):
+        return techName
+    return globals.dataCollection["techtree.xml"].find(f"./*[@name='{techName}']")
 
 
 def addToGlobalAbilityStrings(proto: Union[str, ET.Element], abilityNode: ET.Element, value: str):

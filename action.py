@@ -40,6 +40,7 @@ ACTION_TYPE_NAMES = {
     "ArgivePatronageMyrmidon":"Passive Myrmidon Production",
     "RangedAttackMyth":"Anti-Myth Attack",
     "BeamAttack":"Beam Attack",
+    "AOTGKronosUniqueAura":"Slow Aura",
 }
 
 def findFromActionOrTactics(action: ET.Element, tactics: ET.Element, query: str, default: Any=None, conversion: Union[None, Type] = None):
@@ -376,7 +377,7 @@ def actionOnHitNonDoTEffects(proto: ET.Element, action: ET.Element, ignoreActive
                 text += f" for {float(nodes[0].attrib['duration']):0.3g} seconds."
             targetListString = targetListToString([x.attrib['targetunittype'] for x in nodes])
             if targetListString:
-                text += f" Affects {targetListString}."
+                text += f" Affects {targetListString} within {float(nodes[0].attrib['radius']):0.3g}m."
             items.append(text)
         elif onhitType == "ProgFreeze":
             duration = None
@@ -892,6 +893,8 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
     playerRelation = "your"
     if findAndFetchText(tactics, "targetenemy", ""):
         playerRelation = "enemy"
+    elif findAndFetchText(tactics, "targetenemyincludenature", ""):
+        playerRelation = "nature and enemy "
     elif findAndFetchText(tactics, "targetnonally", ""):
         playerRelation = "non-allied"
     elif findAndFetchText(tactics, "includeally", ""):
@@ -927,6 +930,49 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
     components = [component.strip() for component in components if len(component.strip()) > 0]
     return " ".join(components) + "."
 
+GATHER_ICONS: Dict[str, Union[str, None]] = {
+    "WoodResource":icon.resourceIcon("wood"),
+    "GoldResource":icon.resourceIcon("gold"),
+    "Herdable":icon.generalIcon(r"resources\nature\animals\land\goat_icon.png"),
+    "Huntable":icon.generalIcon(r"resources\nature\animals\land\deer_icon.png"),
+    "NonConvertableHerdable":icon.generalIcon(r"resources\nature\animals\land\chicken_icon.png"),
+    "BerryBush":icon.generalIcon(r"resources\nature\berry_bush_icon.png"),
+    "AbstractFarm":icon.generalIcon(r"resources\shared\static_color\buildings\farm_icon.png"),
+    "FishResource":icon.generalIcon(r"resources\nature\animals\naval\fish_icon.png"),
+    "Temple":None,
+    "Taproot":None,
+    "Resource":None,
+    "HerdableMagnet":None,
+}
+
+def handleGatherAction(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
+    targets = [elem.attrib['type'] for elem in action.findall("rate")]
+    rates = [float(elem.text) for elem in action.findall("rate")]
+    items = [[]]
+    totalItems = 0
+    for index, target in enumerate(targets):
+        if target not in GATHER_ICONS:
+            raise ValueError(f"Unknown gather action target on {proto.attrib['name']}: {target}")
+        thisIcon = GATHER_ICONS[target]
+        if thisIcon is None:
+            continue
+        items[-1].append(f"{thisIcon} {rates[index]:0.3g}")
+        if len(items[-1]) == 5:
+            items.append([])
+
+        totalItems += 1
+    
+    if totalItems == 0:
+        return ""
+    
+    linePrefix = f"\\n   {icon.BULLET_POINT_ALT}"
+    out = "Gather rates:"
+    for line in items:
+        if len(line) > 0:
+            out += linePrefix + " ".join(line)
+            
+    return out
+
 
 def doNothingHandler(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
     return ""
@@ -942,7 +988,7 @@ ACTION_TYPE_HANDLERS: Dict[str, Callable[[ET.Element, ET.Element, Union[None, ET
     "RelicNoPickup":doNothingHandler,
     "Repair":doNothingHandler,
     "Hunting":doNothingHandler,
-    "Gather":doNothingHandler,
+    "Gather":handleGatherAction,
     "NoWork":doNothingHandler,
     "SmartDropsite":doNothingHandler,
 

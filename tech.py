@@ -211,6 +211,13 @@ def dataSubtypeResourceReturnHandler(tech: ET.Element, effect:ET.Element):
 
     return dataSubtypeWithAmountHelper("Resources returned on death {value}: {combinable}", combinableString=resourceText, valueFormat="".format)(tech, effect)
 
+def dataSubtypeResourceReturnRateHandler(tech: ET.Element, effect:ET.Element):
+    resource = effect.attrib.get("resource", "")
+    resourceText = icon.resourceIcon(resource) + f" {100*float(effect.attrib['amount']):0.3g}%"
+
+    return dataSubtypeWithAmountHelper("Cost refunded on death: {combinable}", combinableString=resourceText, valueFormat="".format)(tech, effect)
+
+
 def dataSubtypeOnHitEffectHandler(tech: ET.Element, effect:ET.Element):
     effectType = effect.attrib.get("effecttype", "").lower()
     duration = float(effect.attrib.get("duration", "0.0"))
@@ -462,6 +469,8 @@ def dataSubtypeModifySpawnHandler(tech: ET.Element, effect:ET.Element):
         preText = "On death,"
     elif spawnType == "HitGround":
         preText = "On hitting ground,"
+    elif spawnType == "Build":
+        preText = "When fully built,"
     else:
         print(f"Warning: {tech.attrib['name']} using ModifySpawn with unknown spawntype {spawnType}, ignored")
         return None
@@ -478,6 +487,8 @@ def dataSubtypeProtoUnitFlagHandler(tech: ET.Element, effect:ET.Element):
     flag = effect.attrib['flag']
     if flag == "AreaDamageConstant":
         return EffectHandlerResponse(getEffectTargets(tech, effect), "Remove damage falloff with distance for area attacks")
+    elif flag == "SelfRespawn":
+        return EffectHandlerResponse(getEffectTargets(tech, effect), "On death, respawns in the same location 30s later. This happens only once per unit")
     elif flag in ("HideResourceInventory", "Deleteable", "DisplayRange"):
         return None
     else:
@@ -494,6 +505,9 @@ def dataSubtypeRechargeTimeHandler(tech: ET.Element, effect:ET.Element):
     if rechargeType is not None:
         return None
     return dataSubtypeWithAmountHelper(combinableString="Special Attack Recharge Time")(tech, effect)
+
+def dataSubtypeAuxRechargeTimeHandler(tech: ET.Element, effect:ET.Element):
+    return dataSubtypeWithAmountHelper(combinableString="Secondary Special Attack Recharge Time")(tech, effect)
 
 def dataSubtypeOnHitEffectDurationHandler(tech: ET.Element, effect:ET.Element):
     targetTypes = effect.findall("target[@type='ProtoUnit']")
@@ -525,6 +539,17 @@ def dataSubtypeEmpowerModifyHandler(tech: ET.Element, effect:ET.Element):
         print(f"Warning: {tech.attrib['name']} using unknown EmpowerModify {modifyType}, ignored")
         return None
     return responses
+
+def handleOnTechResearchedTech(tech: ET.Element, effect:ET.Element):
+    if "techtype" not in effect.attrib:
+        techNames = ["any technology"]
+    else:
+        techList = globals.dataCollection["techtree.xml"].findall(f"tech/techtype[.='{effect.attrib['techtype']}']/..")
+        techNames = [common.getObjectDisplayName(techElem) for techElem in techList]
+    text = f"<tth>Upon researching {common.commaSeparatedList(techNames)}:\\n"
+    targetTech = common.techFromName(effect.text)
+    text += processTech(targetTech)
+    return EffectHandlerResponse(getEffectTargets(tech, effect), text)
 
 def dataSubtypeWithAmountHelper(
                       textFormat: str = "{combinable}: {value}",
@@ -589,6 +614,7 @@ DATA_SUBTYPE_HANDLERS: Dict[str, Callable[[ET.Element, ET.Element], Union[Effect
     "godpowercostfactor":dataSubtypeWithAmountHelper(combinableString="God Power recast cost"),
     "godpowerroffactor":dataSubtypeWithAmountHelper(combinableString="God Power recharge time"),
     "resourcereturn":dataSubtypeResourceReturnHandler,
+    "resourcereturnrate":dataSubtypeResourceReturnRateHandler,
     "buildpoints":dataSubtypeWithAmountHelper(combinableString="Build Time"),
     "trainpoints":dataSubtypeWithAmountHelper(combinableString="Train Time"),
     "researchpoints":dataSubtypeWithAmountHelper(combinableString="Research Time"),
@@ -598,6 +624,7 @@ DATA_SUBTYPE_HANDLERS: Dict[str, Callable[[ET.Element, ET.Element], Union[Effect
     "onhiteffect":dataSubtypeOnHitEffectHandler,
     "populationcount":dataSubtypeWithAmountHelper(combinableString="Population Usage"),
     "rechargetime":dataSubtypeRechargeTimeHandler,
+    "auxrechargetime":dataSubtypeAuxRechargeTimeHandler,
     "costbuildingtechs":dataSubtypeWithAmountHelper(textFormat="{combinable} Research Cost: {value}", combinableAttribute="resource"),
     "resourcetricklerate":dataSubtypeWithAmountHelper(textFormat="{combinable} Trickle Rate: {value}", combinableAttribute="resource", flatSuffix=" per second"),
     "unitregenrate":dataSubtypeWithAmountHelper(combinableString="Regeneration Rate", flatSuffix=" per second"),
@@ -645,7 +672,11 @@ DATA_SUBTYPE_HANDLERS: Dict[str, Callable[[ET.Element, ET.Element], Union[Effect
     "godpowerrof":dataSubtypeWithAmountHelper("God Power {combinable}: {value}", combinableString="Recharge"),
     "godpowercost":dataSubtypeWithAmountHelper("God Power {combinable}: {value}", combinableString="Cost"),
     "setage":dataSubtypeIgnore,
-    "godpowerblockradius":dataSubtypeWithAmountHelper("God Power Block Radius: {value}", combinableString="", flatSuffix="m")
+    "godpowerblockradius":dataSubtypeWithAmountHelper("God Power Block Radius: {value}", combinableString="", flatSuffix="m"),
+    "resource":dataSubtypeWithAmountHelper("{combinable}: {value}", combinableAttribute="resource"),
+    "populationcap":dataSubtypeWithAmountHelper("Base Population Cap: {value}", combinableString=""),
+    "selfdestructprotoaction":dataSubtypeIgnore,
+    "damageflags":dataSubtypeIgnore, # could matter someday
 }
 
 
@@ -674,6 +705,8 @@ def processEffect(tech: ET.Element, effect: ET.Element) -> Union[None, EffectHan
     elif effectType == "createunit":
         quantity = int(float(effect.find("pattern").attrib['quantity']))
         return EffectHandlerResponse(common.getDisplayNameForProtoOrClass(effect.attrib['generator']), f"Spawns {quantity} {common.getDisplayNameForProtoOrClass(effect.attrib['unit'])}")
+    elif effectType == "setontechresearchedtech":
+        return handleOnTechResearchedTech(tech, effect)
     else:
         print(f"Warning: Unknown effect type {effectType} on {techName}")
     return None

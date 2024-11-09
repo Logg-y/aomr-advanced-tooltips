@@ -6,6 +6,7 @@ from unitdescription import generateUnitDescriptions
 from tech import generateTechDescriptions
 from godpower import generateGodPowerDescriptions
 from majorgodtooltip import generateMajorGodDescriptions
+from aotg import generateBlessingDescriptions
 import re
 import globals
 
@@ -29,12 +30,16 @@ def readStringTable(path) -> Dict[str, str]:
         table[key] = value
     return table
 
+def mergeXmls(parent: ET.Element, child: ET.Element):
+    for elem in child:
+        parent.append(elem)
+
 def loadXmls(gameplayDir):
     subpaths = ("", "abilities", "god_powers", "tactics")
     for subpath in subpaths:
         currentdir = os.path.join(gameplayDir, subpath)
         for xml in os.listdir(currentdir):
-            if xml.endswith(".xml") or xml.endswith(".tactics") or xml.endswith(".abilities") or xml.endswith(".godpowers"):
+            if xml.endswith(".xml") or xml.endswith(".tactics") or xml.endswith(".abilities") or xml.endswith(".godpowers") or xml.endswith(".techtree"):
                 filepath = os.path.join(currentdir, xml)
                 root = ET.parse(filepath).getroot()
                 if subpath == "":
@@ -43,6 +48,10 @@ def loadXmls(gameplayDir):
                     if subpath not in globals.dataCollection:
                         globals.dataCollection[subpath] = {}
                     globals.dataCollection[subpath][xml] = root
+    
+    mergeXmls(globals.dataCollection['techtree.xml'], globals.dataCollection['aotg_techtree.techtree'])
+    mergeXmls(globals.dataCollection['proto.xml'], globals.dataCollection['aotg_proto.xml'])
+
 
 def mergeAbilities():
     abilities = ET.Element("powers")
@@ -126,6 +135,7 @@ def main():
     generateUnitDescriptions()
     generateGodPowerDescriptions()
     generateMajorGodDescriptions()
+    generateBlessingDescriptions()
     
     
     with open(os.path.join(globals.config["paths"]["outputPath"], "game/data/strings/stringmods.txt"), "w", encoding="utf8") as f:
