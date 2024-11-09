@@ -364,8 +364,8 @@ def generateGodPowerDescriptions():
     godPowerProcessingParams["Tornado"] = GodPowerParams(tornadoItems)
 
     dwarvenmine = findGodPowerByName("DwarvenMine")
-    dwarvenmineItems = [f"Creates a gold mine. The amount of Gold in the mine increases in later Ages. It is also intended to be gathered faster in later Ages, but this is currently bugged and does not function. It only affects the displayed gather rate on the UI while gathering."]
-    dwarvenmineItems += [f" {icon.BULLET_POINT} {common.AGE_LABELS[index]}: {icon.resourceIcon('gold')} {round(float(ageinfo.attrib['goldamount']))}, intended gather rate +{float(ageinfo.attrib['gatherratemultiplier'])-1:0.0%}" for index, ageinfo in enumerate(dwarvenmine.findall("ageadjustment"))]
+    dwarvenmineItems = [f"Creates a gold mine. The amount of Gold in the mine and the gather rate increases in later Ages."]
+    dwarvenmineItems += [f" {icon.BULLET_POINT} {common.AGE_LABELS[index]}: {icon.resourceIcon('gold')} {round(float(ageinfo.attrib['goldamount']))}, gather rate +{float(ageinfo.attrib['gatherratemultiplier'])-1:0.0%}" for index, ageinfo in enumerate(dwarvenmine.findall("ageadjustment"))]
     godPowerProcessingParams["DwarvenMine"] = GodPowerParams(dwarvenmineItems)
 
     spy = findGodPowerByName("Spy")
