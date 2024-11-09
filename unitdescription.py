@@ -785,7 +785,7 @@ def generateUnitDescriptions():
     # Common/Similar
     unitDescriptionOverrides["SentryTower"] = UnitDescription(showActionsIfDisabled=["RangedAttack"])
     unitDescriptionOverrides["VillageCenter"] = UnitDescription(additionalText=f"Produces units {100.0-100*float(protoFromName('VillageCenter').find('trainingrate').text):0.3g}% slower than a Town Center. Research speed is unaffected.")
-    unitDescriptionOverrides["CitadelCenter"] = UnitDescription(additionalText=f"Trains and researches {100*float(protoFromName('CitadelCenter').find('buildingworkrate').text)-100.0:0.3g}% faster than a Town Center.")
+    unitDescriptionOverrides["CitadelCenter"] = UnitDescription(additionalText=f"Researches {100*float(protoFromName('CitadelCenter').find('buildingworkrate').text)-100.0:0.3g}% faster than a Town Center.")
     unitDescriptionOverrides["Dock"] = UnitDescription(additionalText="Can be used as a dropsites by Villagers as well.")
     unitDescriptionOverrides["TitanCerberus"] = TitanHandler
     unitDescriptionOverrides["TitanYmir"] = TitanHandler
