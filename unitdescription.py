@@ -491,6 +491,14 @@ class UnitDescription:
         if matchingNode is not None:
             generalObservations.append(f"Set's Priests convert this in {float(matchingNode.text):0.3g}s.")
 
+        trainingRate = findAndFetchText(protoUnit, "trainingrate", None, float)
+        if trainingRate is not None and trainingRate != 1.0:
+            generalObservations.append(f"Trains units at {trainingRate*100:0.3g}% of standard speed.")
+
+        researchRate = findAndFetchText(protoUnit, "researchrate", None, float)
+        if researchRate is not None and researchRate != 1.0:
+            generalObservations.append(f"Researches at {researchRate*100:0.3g}% of standard speed.")
+
         # Population
         popcapaddition = findAndFetchText(protoUnit, "populationcapaddition", 0.0, float)
         if popcapaddition > 0.0:
@@ -549,6 +557,7 @@ class UnitDescription:
                 if abilityNode is None:
                     raise ValueError(f"{protoName} was passed {passiveAbilityKey} -> {abilityName} but no ability data named {abilityName} was found")
                 common.addToGlobalAbilityStrings(protoUnit, abilityNode, returned)
+
         return generalObservations
     
     def writeHistoryString(self, protoUnit):
@@ -683,6 +692,17 @@ def generateUnitDescriptions():
     gullinburstiHistory = "\\n".join([f"<tth>{age}:\\n" + UnitDescription(preActionInfoText={"BirthAttack":"Shockwave when spawned:"}).generate(protoFromName(f"Gullinbursti{age}")) for age in GullinburstiAges])
     GullinburstiHandler = UnitDescription(hideStats=True, ignoreActions=["HandAttack", "Gore", "DistanceLimiting", "BirthAttack"], historyText=gullinburstiHistory, hideNonActionObservations=True, additionalText="See in-game detail screen or Learn > Compendium > Units > Gullinbursti for detailed age stat progression.")
 
+    dwarvenArmoryRate = findAndFetchText(protoFromName("DwarvenArmory"), "researchrate", 1.0, float)
+    techRates = [f"{common.AGE_LABELS[0]}: Researches at {100*dwarvenArmoryRate:0.3g}% standard Armory speed."]
+    for index, age in enumerate(("Classical", "Heroic", "Mythic")):
+        thorTech = common.techFromName(f"{age}AgeThor")
+        effect = thorTech.find("effects/effect[@subtype='ResearchRate']")
+        effect = thorTech.find("effects/effect[@subtype='ResearchRate']/target[.='DwarvenArmory']/..")
+        if effect.attrib['relativity'] != "Absolute":
+            raise ValueError("Thor age progression techs no longer absolute relativity")
+        dwarvenArmoryRate += float(effect.attrib['amount'])
+        techRates.append(f"{common.AGE_LABELS[index+1]}: Researches at {100*dwarvenArmoryRate:0.3g}% standard Armory speed.")
+    DwarvenArmoryHandler = UnitDescription(hideNonActionObservations=True, additionalText=techRates)
 
     
     prayerEfficiencyZ = globals.dataCollection["game.cfg"]["PrayerEfficiencyModifierZ"]
@@ -758,7 +778,7 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["GullinburstiClassical"] = GullinburstiHandler
     unitDescriptionOverrides["GullinburstiHeroic"] = GullinburstiHandler
     unitDescriptionOverrides["GullinburstiMythic"] = GullinburstiHandler
-    unitDescriptionOverrides["GreatHall"] = UnitDescription(additionalText=f"Produces Hersir {100*float(protoFromName('GreatHall').find('trainingrate').text)-100.0:0.3g}% faster than a Temple.")
+    unitDescriptionOverrides["DwarvenArmory"] = DwarvenArmoryHandler
     # Atlantean
     unitDescriptionOverrides["Oracle"] = UnitDescription(overrideDescription="Scout, line of sight grows when standing still. Cannot attack.", postActionInfoText={"AutoGatherFavor":oracleAutoGatherFavorHelper("Oracle")}, historyText=oracleHistoryText("Oracle"))
     unitDescriptionOverrides["OracleHero"] = UnitDescription(preActionInfoText={"HandAttack":"Hero scout, line of sight grows when standing still. Generates favor faster than normal Oracles. Good against myth units."}, postActionInfoText={"AutoGatherFavor":oracleAutoGatherFavorHelper("OracleHero")}, historyText=oracleHistoryText("OracleHero"))
@@ -785,8 +805,6 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["Behemoth"] = UnitDescription(passiveAbilityLink={"directionalarmor":"AbilityBehemoth"})
     # Common/Similar
     unitDescriptionOverrides["SentryTower"] = UnitDescription(showActionsIfDisabled=["RangedAttack"])
-    unitDescriptionOverrides["VillageCenter"] = UnitDescription(additionalText=f"Produces units {100.0-100*float(protoFromName('VillageCenter').find('trainingrate').text):0.3g}% slower than a Town Center. Research speed is unaffected.")
-    unitDescriptionOverrides["CitadelCenter"] = UnitDescription(additionalText=f"Researches {100*float(protoFromName('CitadelCenter').find('buildingworkrate').text)-100.0:0.3g}% faster than a Town Center.")
     unitDescriptionOverrides["Dock"] = UnitDescription(additionalText="Can be used as a dropsites by Villagers as well.")
     unitDescriptionOverrides["TitanCerberus"] = TitanHandler
     unitDescriptionOverrides["TitanYmir"] = TitanHandler

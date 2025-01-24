@@ -385,7 +385,7 @@ def generateGodPowerDescriptions():
     if len(gullinburstiBirthAttacksDescriptions) == 1:
         gullinburstiItems.append(f"Creates an explosion affecting enemies when spawned: {gullinburstiBirthAttacksDescriptions[0]}")
     else:
-        raise ValueError("Gullinbursti BirthAttacks don't match any more, need to rewrite handling for it")
+        gullinburstiItems.append(f"Creates an explosion damaging nearby enemies when spawned.")
     gullinburstiDistanceLimitings = [(boar, action.findActionByName(boar, "DistanceLimiting")) for boar in gullinburstiProtos]
     gullinburstiDistanceLimitingDescriptions = list(set([action.describeAction(boar, act) for boar, act in gullinburstiDistanceLimitings]))
     if len(gullinburstiDistanceLimitingDescriptions) == 1:
