@@ -40,7 +40,11 @@ Unfortunately playing with the advanced tooltips game setting off hides the cost
 
 # TODO
 
-Fix citadel text
+Isis monument empower should get bigger with empower
+Promethean does not autorespawn
+
+Clarify Oranos oracle favor line (it's not a full capacity bonus)
+Animal favor yield?
 Einheri horn blast - knowing the attack point (and how long he's stuck recovering before he can attack) is technically useful
     Arguably same for shoot/scooters
 How long does promethean offspring birth anim last? If they're stuck in it and targetable this matters
@@ -51,7 +55,6 @@ Reconsider hiding acc
 Note actions that snare - just say "snares" for the standard snare
 Can I get priest empowerment numbers ingame somehow
 Friends can't use sky passages
-dwarven armory research rate variance
 
 Loading tips
     A reminder that you need to go and update mods manually, the time tooltips were generated
