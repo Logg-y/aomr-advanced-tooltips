@@ -7,8 +7,13 @@ from tech import generateTechDescriptions
 from godpower import generateGodPowerDescriptions
 from majorgodtooltip import generateMajorGodDescriptions
 from aotg import generateBlessingDescriptions
+from loadingtips import generateLoadTips
 import re
 import globals
+import json
+import datetime
+import common
+import action
 
 def readConfig() -> configparser.ConfigParser: 
     fp = "config.ini"
@@ -39,8 +44,8 @@ def loadXmls(gameplayDir):
     for subpath in subpaths:
         currentdir = os.path.join(gameplayDir, subpath)
         for xml in os.listdir(currentdir):
+            filepath = os.path.join(currentdir, xml)
             if xml.endswith(".xml") or xml.endswith(".tactics") or xml.endswith(".abilities") or xml.endswith(".godpowers") or xml.endswith(".techtree"):
-                filepath = os.path.join(currentdir, xml)
                 root = ET.parse(filepath).getroot()
                 if subpath == "":
                     globals.dataCollection[xml] = root
@@ -48,6 +53,10 @@ def loadXmls(gameplayDir):
                     if subpath not in globals.dataCollection:
                         globals.dataCollection[subpath] = {}
                     globals.dataCollection[subpath][xml] = root
+            if xml.endswith(".simjson"):
+                with open(filepath, encoding="utf8") as f:
+                    doc = json.load(f)
+                    globals.dataCollection[xml] = doc
     
     mergeXmls(globals.dataCollection['techtree.xml'], globals.dataCollection['aotg_techtree.techtree'])
     mergeXmls(globals.dataCollection['proto.xml'], globals.dataCollection['aotg_proto.xml'])
@@ -124,18 +133,32 @@ def prepareData():
     parseUnitTypeData()
     mergeAbilities()
     loadGameCfg()
-
     globals.historyPath = os.path.join(globals.config["paths"]["dataPath"], "game/data/strings", globals.config["paths"]["lang"], "history")
 
 def main():
-
+    print("Beginning build...")
     prepareData()
+
+    # This class doesn't include Nidhogg, for now
+    mythUnitNotTitanExceptions = ["Titan"]
+    if common.protoFromName("Nidhogg").find("unittype[.='LogicalTypeMythUnitNotTitan']") is None:
+        mythUnitNotTitanExceptions.append("Nidhogg")
+    replacement = f"(except {common.commaSeparatedList(mythUnitNotTitanExceptions)})"
+    common._UNIT_CLASS_LABELS["LogicalTypeMythUnitNotTitan"] = common._UNIT_CLASS_LABELS["LogicalTypeMythUnitNotTitan"].replace("LOGICAL_TYPE_MYTH_UNIT_NOT_TITAN_EXCEPTION", replacement)
+    common._UNIT_CLASS_LABELS_PLURAL["LogicalTypeMythUnitNotTitan"] = common._UNIT_CLASS_LABELS_PLURAL["LogicalTypeMythUnitNotTitan"].replace("LOGICAL_TYPE_MYTH_UNIT_NOT_TITAN_EXCEPTION", replacement)
     
     generateTechDescriptions()           
     generateUnitDescriptions()
     generateGodPowerDescriptions()
     generateMajorGodDescriptions()
     generateBlessingDescriptions()
+    generateLoadTips()
+    
+    
+    additionalCompendium = f"\\n\\nAdvanced Tooltips is active for (hopefully correct) additional information!\\nThis version was built on {datetime.datetime.now().strftime('%d %b %y')}. Game updates or data mods will make displayed values incorrect."
+    additionalCompendium += "\\n\\nAll stats shown in tooltips are for the unit's base data - any techs that apply will NOT be included, including 'hidden' effects such as the bonuses from age advancement given to heroes and myth units.\\n\\n"
+    additionalCompendium += f"\'Snares\' is used as a shorthand for the 'standard' slowing effect ({100*(1.0-action.STANDARD_SNARE['rate']):0.3g}% for {action.STANDARD_SNARE['duration']:0.3g} seconds) caused primarily by nearly every melee attack in the game. Effects that slow movement by any other amount or duration will list their true numbers."
+    globals.stringMap["STR_HISTORY_HISTORY"] = globals.dataCollection["string_table.txt"]["STR_HISTORY_HISTORY"] + additionalCompendium
     
     
     with open(os.path.join(globals.config["paths"]["outputPath"], "game/data/strings/stringmods.txt"), "w", encoding="utf8") as f:

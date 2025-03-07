@@ -1,9 +1,33 @@
 import globals
 from xml.etree import ElementTree as ET
-from typing import Union, List, Dict
+from typing import Union, List, Dict, Callable, TypeVar, Iterable
 import icon
+import os
+import re
+import itertools
+import dataclasses
+
+def commaSeparatedList(words: List[str], joiner="and"):
+    if isinstance(words, str):
+        raise ValueError(f"Blatant mistake: called on flat string: {words}")
+    if len(words) == 0:
+        return ""
+    if len(words) == 1:
+        return words[0]
+    separated = ", ".join(words[:-1])
+    separated += f" {joiner} " + words[-1]
+    return separated
 
 
+def protoFromName(protoName: Union[ET.Element, str]) -> Union[ET.Element, None]:
+    if isinstance(protoName, ET.Element):
+        return protoName
+    return globals.dataCollection["proto.xml"].find(f"./*[@name='{protoName}']")
+
+def techFromName(techName: Union[ET.Element, str]) -> Union[ET.Element, None]:
+    if isinstance(techName, ET.Element):
+        return techName
+    return globals.dataCollection["techtree.xml"].find(f"./*[@name='{techName}']")
 
 # Do not write charge ability descriptions for these units
 # Their abilities share string ids with more common units but have different parameters
@@ -16,13 +40,15 @@ PROTOS_TO_IGNORE_FOR_ABILITY_TOOLTIPS = (
     "Gargarensis",
 )
 
-OVERRIDE_DISPLAY_NAMES = {
-    "MinionReincarnated":"Minion (Mummy)",
-    "Minion":"Minion (Ancestors)",
+_OVERRIDE_DISPLAY_NAMES = {
+    # Once upon a time, these were not functionally identical to each other
+    #"MinionReincarnated":"Minion (Mummy)",
+    #"Minion":"Minion (Ancestors)",
     "HeroOfRagnarok":"Hero of Ragnarok (Gatherer)",
     "HeroOfRagnarokDwarf":"Hero of Ragnarok (Dwarf)",
     "ProjectileSatyrSpearSpecialAttack": "Satyr Piercing Throw Spear",
     "BerserkDamageBoost":"Invisible Berserk Damage Booster",
+    "Settlement":"Settlement/Unfinished Town Center",
     "EyesOnForestRevealer":"Revealer",
     "SunRayRevealer":"Revealer",
     "SunRayGroundRevealer":"Revealer",
@@ -33,13 +59,25 @@ OVERRIDE_DISPLAY_NAMES = {
     "Priest":"Priest",
     "Pharaoh":"Pharaoh",
     "PharaohNewKingdom":"Pharaoh (New Kingdom)",
-    # TODO hopefully remove this WW hackery once the underlying data is fixed
-    "WalkingWoodsCypress":"Most trees",
-    "WalkingWoodsHades":"Hades trees",
+    "MilitaryCampTrainingYard":"Military Camp with Training Yard",
+    "MachineWorkshopTrainingYard":"Machine Workshop with Training Yard",
+    "MilitaryCampTower":"Military Camp with Tower",
+    "MachineWorkshopTower":"Machine Workshop with Tower",
+    "QiongQiAir":"Qiongi (Flying)",
+    "TitanKronos":"Kronos (Campaign)",
+    "AOTGTitanKronos":"Kronos (Arena of the Gods)",
+    "NezhaChild":"Nezha (Classical Age)",
+    "NezhaYouth":"Nezha (Heroic Age)",
+    "Nezha":"Nezha (Mythic Age)",
+    "YanFeifeng":"Yan Feifeng (unmounted)",
+    "YanFeifengRider":"Yan Feifeng (mounted)",
+
+    # Parched Land (exploding fishing ship tech) is normally "A Thousand Li of Parched Land" which isn't very clear
+    "AbilityFishingShipChinese":"Demolition",
 }
 
 
-UNIT_CLASS_LABELS = {
+_UNIT_CLASS_LABELS = {
     "Hero": "Hero",
     "AbstractInfantry":"Infantry",
     "AbstractCavalry":"Cavalry",
@@ -77,7 +115,7 @@ UNIT_CLASS_LABELS = {
     "AbstractTitan":"Titan",
     "MilitaryUnit":"Military Unit",
     "LogicalTypeBuildingsNotWalls":"Building (except Walls)",
-    "LogicalTypeMythUnitNotTitan":"Myth Unit (except Titans)",
+    "LogicalTypeMythUnitNotTitan":f"Myth Unit LOGICAL_TYPE_MYTH_UNIT_NOT_TITAN_EXCEPTION",
     "LogicalTypeShipNotHero":"Ship (except Heroes)",
     "LogicalTypeVillagerNotHero":"Villager (except Heroes)",
     "Favor":"Favor",
@@ -86,13 +124,15 @@ UNIT_CLASS_LABELS = {
     "GoldResource":"Gold",
     "FishResource":"Fish",
     "Food":"Food",
+    "Wood":"Wood",
+    "Gold":"Gold",
     "AbstractFarm":"Farm",
     "Herdable":"Herdable",
     "NonConvertableHerdable":"Chicken-like",
     "LogicalTypeHealed":"Healable Unit",
     "AbstractHealer":"Healer",
     "AbstractTownCenter":"Town Center",
-    "AbstractFortress":"Fortress Building",
+    "AbstractFortress":"Fortress-like Building",
     "LogicalTypeBuildingNotWonderOrTitan":"Building (except Wonder and Titan Gate)",
     "LogicalTypeRangedMythUnit":"Ranged Myth Unit",
     "LogicalTypeBuildingsThatShoot":"Building that Shoots",
@@ -121,7 +161,9 @@ UNIT_CLASS_LABELS = {
     "LegendHero":"Legends",
     "All":"All objects",
     "AbstractDwarf":"Dwarves",
-    
+    "AbstractNezha":"Nezha",
+    "AbstractMilitaryCamp":"Military Camp",
+
 
     # Partial Lies
     "EconomicUpgraded":"Villager",
@@ -130,10 +172,12 @@ UNIT_CLASS_LABELS = {
     "AbstractSettlement":"Town Center",
     "LogicalTypeSunRayProjectile":"Projectile",
     "AbstractTemple":"Temple",
-
+    "LogicalTypeAffectedBySunRay":"Greek Ranged Human Soldiers, Heroes, and Myth Units",
 }
 
-UNIT_CLASS_LABELS_PLURAL = {
+
+
+_UNIT_CLASS_LABELS_PLURAL = {
     "MilitaryUnit":"Military Units",
     "EconomicUnit":"Economic Units",
     "Unit":"Units",
@@ -142,10 +186,9 @@ UNIT_CLASS_LABELS_PLURAL = {
     "Huntable":"Huntables",
     "AbstractFlyingUnit":"Flying Units",
     "HumanSoldier":"Human Soldiers",
-    "LogicalTypeMythUnitNotTitan":"Myth Units (except Titans)",
+    "LogicalTypeMythUnitNotTitan":"Myth Units LOGICAL_TYPE_MYTH_UNIT_NOT_TITAN_EXCEPTION",
     "LogicalTypeVillagerNotHero":"Villagers (except Heroes)",
     "TradeUnit":"Caravans",
-    "LogicalTypeMythUnitNotTitan":"Myth Units (except Titans)",
     "LogicalTypeMythUnitNotFlying":"non-flying Myth Units",
     "AnimalOfSet":"Animals of Set",
     "Hero":"Heroes",
@@ -162,7 +205,6 @@ UNIT_CLASS_LABELS_PLURAL = {
     "AbstractTransportShip":"Transport Ships",
     "AbstractWarship":"War Ships",
     "AbstractSettlement":"Settlements",
-    "LogicalTypeSeidrTarget":"Hersir, Godi, and Valkyrie",
     "LogicalTypeMilitaryProductionBuilding":"Military Production Buildings",
     "AbstractTemple":"Temples",
     "Herdable":"Herdables",
@@ -188,7 +230,9 @@ UNIT_CLASS_LABELS_PLURAL = {
     "Tree":"Trees",
     "Favor":"Favor",
     "WoodResource":"Wood",
+    "Wood":"Wood",
     "GoldResource":"Gold",
+    "Gold":"Gold",
     "FishResource":"Fish",
     "Food":"Food",
     "AbstractInfantry":"Infantry",
@@ -196,8 +240,24 @@ UNIT_CLASS_LABELS_PLURAL = {
     "LogicalTypeBuildingsThatShoot":"Buildings that Shoot",
     "AbstractPharaoh":"Pharaohs",
     "LogicalTypeRangedUnitsAttack":"valid Ranged attack targets",
+    "LogicalTypeBuildingsNotWalls":"Buildings (except Walls)",
+    "AbstractVillager":"Villagers",
+    "all":"all objects",
+    "All":"all objects",
 
-    # Specific protos
+
+    # Partial lies for clarity:
+    "LogicalTypeHealed":"Healable Units",
+    "LogicalTypeGarrisonInShips":"Transportable Units",
+    "LogicalTypeFreezableMythUnit":"nearly all land Myth Units",
+    "LogicalTypeBuildingSmall":"Buildings (except Wonder and Titan Gate)",
+    "LogicalTypeBuildingLarge":"Buildings (except Wonder and Titan Gate)",
+    "LogicalTypeSeidrTarget":"Hersir, Godi, and Valkyries",
+    
+    
+}
+
+_PLURAL_UNIT_NAMES = {
     "Serpent":"Serpents",
     "Automaton":"Automatons",
     "UFO":"UFOs",
@@ -207,14 +267,58 @@ UNIT_CLASS_LABELS_PLURAL = {
     "Nidhogg":"Nidhogg",
     "Football":"Footballs",
     "SiegeWorks":"Siege Works",
+    "TownCenter":"Town Centers",
+    "TownCenterAbandoned":"Town Centers", # partial lie
+    "Settlement":"Settlements/Unfinished Town Centers",
+    "CitadelCenter":"Citadel Centers",
+    "VillageCenter":"Village Centers",
+    "House":"Houses",
+    "Granary":"Granaries",
+    "Temple":"Temples",
+    "Dock":"Docks",
+    "Armory":"Armories",
+    "DwarvenArmory":"DwarvenArmories",
+    "Market":"Markets",
+    "Farm":"Farms",
+    "FarmShennong":"Shennong's Farms",
+    "SentryTower":"Sentry Towers",
+    "Storehouse":"Storehouses",
+    "Chicken":"Chickens",
+    "ChickenEvil":"Chickens", # they explode, but ingame they are still simply "chicken"
+    "SeaSnake":"Sea Snakes",
+    "Kuafu":"Kuafus",
+    "PiXiu":"Pixius",
+    "BerryBush":"Berry Bushes",
+    "MirrorTower":"Mirror Towers",
+    "Fortress":"Fortresses",
+    "MigdolStronghold":"Migdol Strongholds",
+    "Palace":"Palaces",
+    "AsgardianHillFort":"Asgardian Hill Forts",
+    "Baolei":"Baoleis",
+    "Pharaoh":"Pharaohs",
+    "PharaohNewKingdom":"New Kingdom Pharaohs",
+    "Carnivora":"Carnivora",
+    "Tent":"Tents",
+    "Obelisk":"Obelisks",
+    "Lighthouse":"Lighthouses",
+    "OxCartBuilding":"Ox Carts",
+    "VillagerNorse":"Gatherers",
+    "VillagerAtlantean":"Citizens",
+    "VillagerAtlanteanHero":"Hero Citizens",
+    "Oracle":"Oracles",
+    "OracleHero":"Hero Oracles",
+    "MachineWorkshopTower":"Machine Workshops (with Tower)",
+    "MilitaryCampTower":"Military Camps (with Tower)",
+    "TentSPC":"Tents",
+    "VillagerChinese":"Peasants",
+    "HillFort":"Hill Forts",
 
-    # Partial lies for clarity:
-    "LogicalTypeHealed":"Units",
-    "LogicalTypeGarrisonInShips":"Transportable Units",
-    "LogicalTypeFreezableMythUnit":"nearly all land Myth Units",
-    "LogicalTypeBuildingSmall":"Buildings (except Wonder and Titan Gate)",
-    "LogicalTypeBuildingLarge":"Buildings (except Wonder and Titan Gate)",
-    
+
+    # Named characters or one-of-a-kinds that don't make sense to pluralise where "regular" objects would
+    "TitanKronos":"Kronos",
+    "ChiYouBig":"Chiyou",
+    "Gargarensis":"Gargarensis",
+    "SonOfOsiris":"Son of Osiris", # opting to not pluralise
 }
 
 
@@ -230,6 +334,9 @@ ABSTRACT_TYPES_TO_UNWRAP = (
     "AbstractSettlement",
     "NonConvertableHerdable", # is just chicken right now
     "LogicalTypeValidSentinelTarget",
+    "AbstractSocketedTownCenter",
+    "AbstractTowerBuildLimit",
+    "AbstractHouseBuildLimit",
 )
 
 AGE_LABELS = (f"{icon.generalIcon('resources/shared/static_color/technologies/archaic_age_icon.png')} Archaic",
@@ -238,43 +345,52 @@ AGE_LABELS = (f"{icon.generalIcon('resources/shared/static_color/technologies/ar
               f"{icon.generalIcon('resources/shared/static_color/technologies/mythic_age_icon.png')} Mythic",
               f"{icon.generalIcon('resources/shared/static_color/technologies/wonder_age_icon.png')} Wonder")
 
-def commaSeparatedList(words: List[str], joiner="and"):
-    if len(words) == 0:
-        return ""
-    if len(words) == 1:
-        return words[0]
-    separated = ", ".join(words[:-1])
-    separated += f" {joiner} " + words[-1]
-    return separated
 
-def getDisplayNameForProtoOrClass(object: Union[str, ET.Element], plural=False) -> str:
-    if not isinstance(object, str):
-        return getObjectDisplayName(object)
-    proto = protoFromName(object)
-    if proto is not None:
-        return getObjectDisplayName(proto)
+
+def _getDisplayNamesFromAbstractClass(abstract: str, plural=False) -> List[str]:
+    "Return user-facing display names from a single passed abstract class. External use should go thorugh getDisplayNameForProtoOrClass instead."
+    if abstract in globals.protosByUnitType:
+        targetsList = globals.protosByUnitType[abstract]
+        if abstract in ABSTRACT_TYPES_TO_UNWRAP or len(targetsList) <= AUTO_UNWRAP_ABSTRACT_TYPE_SIZE: 
+            return sorted(list(dict.fromkeys(map(lambda x: getDisplayNameForProtoOrClass(x, plural=plural), targetsList))))
     if plural:
-        return UNIT_CLASS_LABELS_PLURAL[object] # KeyError means a label needs adding to the dictionary manually
-    return UNIT_CLASS_LABELS[object] # KeyError means a label needs adding to the dictionary manually
+        if abstract not in _UNIT_CLASS_LABELS_PLURAL:
+            print(f"Warning: No plural label for unit class {abstract}")
+            return [abstract]
+        return [_UNIT_CLASS_LABELS_PLURAL[abstract]] # KeyError means a label needs adding to the dictionary manually
+    if abstract not in _UNIT_CLASS_LABELS:
+        print(f"Warning: no singular label for unit class {abstract}")
+        return [abstract]
+    return [_UNIT_CLASS_LABELS[abstract]] # KeyError means a label needs adding to the dictionary manually
 
-def unwrapAbstractClass(targetName: Union[str, List[str]], plural=False) -> List[str]:
-    if isinstance(targetName, list):
-        returns = []
-        for item in targetName:
-            returned = unwrapAbstractClass(item, plural=plural)
-            for item in returned:
-                returns.append(item)
-        return list(dict.fromkeys(returns))
-    if targetName in globals.protosByUnitType:
-        targetsList = globals.protosByUnitType[targetName]
-        if targetName in ABSTRACT_TYPES_TO_UNWRAP or len(targetsList) <= AUTO_UNWRAP_ABSTRACT_TYPE_SIZE:
-            return list(dict.fromkeys(map(lambda x: getDisplayNameForProtoOrClass(x, plural=plural), targetsList)))
-    return [getDisplayNameForProtoOrClass(targetName, plural=plural)]
+def getListOfDisplayNamesForProtoOrClass(protoOrAbstract: Union[str, ET.Element, Iterable[Union[str, ET.Element]]], plural=False) -> List[str]:
+    "Return a not-yet-joined user-facing display name encompassing a Protounit, abstract type, or list of any combination of these."
+    if not isinstance(protoOrAbstract, str) and not isinstance(protoOrAbstract, ET.Element):
+        # Assumed: some iterable combination of the two
+        workingList = []
+        for item in protoOrAbstract:
+            workingList += getListOfDisplayNamesForProtoOrClass(item, plural)
+        return sorted(list(set(workingList)))
+    proto = protoFromName(protoOrAbstract)
+    if proto is not None:
+        return [getObjectDisplayName(proto, plural)]
+    return _getDisplayNamesFromAbstractClass(protoOrAbstract, plural)
 
-unwrapAbstractClassPlural = lambda targetName: unwrapAbstractClass(targetName, True)
+def getDisplayNameForProtoOrClass(protoOrAbstract: Union[str, ET.Element, Iterable[Union[str, ET.Element]]], plural=False) -> str:
+    "Return a user-facing display name encompassing a Protounit, abstract type, or list of any combination of these."
+    return commaSeparatedList(getListOfDisplayNamesForProtoOrClass(protoOrAbstract, plural))
 
-def getObjectDisplayName(object: ET.Element) -> str:
-    override = OVERRIDE_DISPLAY_NAMES.get(object.attrib.get("name", None), None)
+def getDisplayNameForProtoOrClassPlural(protoOrAbstract: Union[str, ET.Element, Iterable[Union[str, ET.Element]]]) -> str:
+    return getDisplayNameForProtoOrClass(protoOrAbstract, True)
+
+def getObjectDisplayName(object: ET.Element, plural: bool = False) -> str:
+    internalObjectName = object.attrib.get("name", None)
+    if plural:
+        if internalObjectName in _PLURAL_UNIT_NAMES:
+            return _PLURAL_UNIT_NAMES[internalObjectName]
+        print(f"Warning: No plural defined for object {internalObjectName}, assuming singular")
+        
+    override = _OVERRIDE_DISPLAY_NAMES.get(object.attrib.get("name", None), None)
     if override is not None:
         return override
     displayNameIdNode = object.find("displaynameid")
@@ -296,15 +412,6 @@ def findAndFetchText(root: ET.Element, query: str, default, convert=None):
         return node.text
     return default
 
-def protoFromName(protoName: Union[ET.Element, str]) -> Union[ET.Element, None]:
-    if isinstance(protoName, ET.Element):
-        return protoName
-    return globals.dataCollection["proto.xml"].find(f"./*[@name='{protoName}']")
-
-def techFromName(techName: Union[ET.Element, str]) -> Union[ET.Element, None]:
-    if isinstance(techName, ET.Element):
-        return techName
-    return globals.dataCollection["techtree.xml"].find(f"./*[@name='{techName}']")
 
 
 def addToGlobalAbilityStrings(proto: Union[str, ET.Element], abilityNode: ET.Element, value: str):
@@ -325,6 +432,9 @@ def handleSharedStringIDConflicts(userDict: Dict[str, Dict[ET.Element, str]]):
             protoNames = []
             protoList = list(valueDict.keys())
             for proto in protoList:
+                if proto is None:
+                    errdict = {k.attrib['name'] if k is not None else None: valueDict[k] for k in valueDict.keys()}
+                    raise ValueError(f"Conflict for stringid {key}: some members have None set as a source (expected ET.Element): {errdict}")
                 protoName = proto.attrib["name"]
                 displayName = getObjectDisplayName(proto)
                 if displayName is None:
@@ -369,3 +479,178 @@ def handleSharedStringIDConflicts(userDict: Dict[str, Dict[ET.Element, str]]):
             globals.stringMap[key] = "\\n".join(descriptions)
             #print(key, valueDict.values())
             print(f"{workingSet} share {key} but want different values for it: written {'out each entry separately' if not lineByLine else 'line by line comparison'}")
+
+def prependTextToHistoryFile(objectName: str, objectType: str, text: Union[str, List[str]]):
+    """Prepend some amount of text to a history file.
+    objectType should probably be one of "units" or "techs".
+    objectName should be the proto/techtree tech name of the thing being modified.
+    
+    Fails if there is no history file for the given object."""
+
+    historyFile = os.path.join(globals.historyPath, objectType, f"{objectName}.txt")
+    if not os.path.isfile(historyFile):
+        #print(f"Warning: {protoName} has no history file!")
+        return
+    # Most of these are utf16, WITH BOM unlike some other places in the game.
+    # But not all...
+    # Shoutouts to Gargarensis.txt and Regent.txt that are utf8
+    for attempt in range(0, 2):
+        encoding = "utf-16" if attempt == 0 else "utf-8"
+        try:
+            with open(historyFile, "r", encoding=encoding) as f:
+                strid = f.readlines()[0].strip()
+        except UnicodeError: # utf16 stream does not start with BOM
+            continue
+        if strid in globals.dataCollection["string_table.txt"]:
+            break
+    if strid not in globals.dataCollection["string_table.txt"]:
+        # These cases are PROBABLY on the devs, but my attempts at parsing the string table might need some help too
+        print(f"Warning: History file for {objectType}/{objectName} has nonexistent string id {strid}, couldn't write its entry")
+        return
+    
+    if not isinstance(text, str):
+        text = "\\n".join(text)
+
+    globals.stringMap[strid] = text + "\\n"*3 + "----------\\n" + globals.dataCollection["string_table.txt"][strid]
+
+def findGodPowerByName(powerName: Union[str, ET.Element]) -> ET.Element:
+    if isinstance(powerName, str):
+        return globals.dataCollection["god_powers_combined"].find(f"power[@name='{powerName}']")
+    return powerName
+
+def collapseSpaces(string: str) -> str:
+    return re.sub(" +", " ", string)
+    
+def attemptAllWordwiseTextMerges(inputStrings: List[str], outputIdentifier: Union[str, None]=None, maxReplacements=0.1):
+    stringsByWordCount: Dict[int, List[str]] = {}
+    for stringContent in inputStrings:
+        count = len(collapseSpaces(stringContent).split(" "))
+        if count not in stringsByWordCount:
+            stringsByWordCount[count] = []
+        stringsByWordCount[count].append(stringContent)
+    
+
+    for wordCount, strings in stringsByWordCount.items():
+        if len(strings) > 1:
+            # Variant of "powerset" from the itertools docs page!
+            possibleStringLists = reversed(list(itertools.chain.from_iterable(itertools.combinations(strings, r) for r in range(2, len(strings)+1))))
+            for possibleList in possibleStringLists:
+                mergeResponse = wordwiseTextMerger(possibleList, outputIdentifier, maxReplacements)
+                if mergeResponse is not None:
+                    print(possibleList)
+                    print(f"Fuzzy wordwise merge performed merge on {outputIdentifier} with wordcount {wordCount} -> {mergeResponse}")
+                    for possibleString in possibleList:
+                        inputStrings.remove(possibleString)
+                    return [mergeResponse, *attemptAllWordwiseTextMerges(inputStrings, outputIdentifier, maxReplacements)]
+                    #return [mergeResponse, *list(stringsWithColourisationKeys.keys())]
+    return inputStrings
+
+class WordwiseMergeRemoveAffixes:
+    def __init__(self, words):
+        words = list(set(words))
+        output = []
+        self.prefix = ""
+        self.suffix = ""
+        # Things we are trying to handle here:
+        # Myth Unit: Damage: +10%
+        # Myth Unit: Hitpoints: +10%
+        # -> Myth Unit: Damage: and Hitpoints: +10% (need to avoid duplicated colons)
+
+        # Merging "+1m/+2m/+3m" and make it into "+1/2/3m" or similar
+        # (as well as worse issues like newlines becoming part of the split)
+
+        # Nonsensical text merging, eg Arkantos and Ajax getting split to Arkantos and jax
+        commonStartChars = 1
+        commonEndChars = -1
+        while 1:
+            samplePrefix = words[0][:commonStartChars]
+            # There is never a reason for prefixes to contain letters
+            if not all([word.startswith(words[0][:commonStartChars]) for word in words]) or re.search("[0-9]", samplePrefix) is not None or re.search("[A-Za-z]", samplePrefix) is not None:
+                commonStartChars -= 1
+                break
+            commonStartChars += 1
+        while 1:
+            sampleSuffix = words[0][commonEndChars:]
+            hasNumericWord = False
+            for word in words:
+                try:
+                    float(word[commonStartChars:commonStartChars+1])
+                    hasNumericWord = True 
+                    break
+                except ValueError:
+                    pass
+            isBad = False
+            # Letter suffixes only allowed if numeric, eg "2m" - but splitting up actual words is a no-no
+            # So allow it only if the first character of any combinable word is a number
+            if not hasNumericWord and re.search("[A-Za-z]", sampleSuffix):
+                isBad = True
+            elif not all([word.endswith(words[0][commonEndChars:]) for word in words]):
+                isBad = True # suffix doesn't match
+            elif re.search("[0-9]", sampleSuffix) is not None:
+                isBad = True # numeric suffix never allowed
+            if isBad:
+                commonEndChars += 1
+                break
+            commonEndChars -= 1
+
+        sharedPrefix = words[0][:commonStartChars]
+        # Attempting slices with 0 as the end index introduces an extra suffix that shouldn't be there
+        if commonEndChars == 0:
+            sharedSuffix = ""
+        else:
+            sharedSuffix = words[0][commonEndChars:]
+        for word in words:
+            if commonEndChars == 0:
+                strippedAffixes = word[commonStartChars:]
+            else:
+                strippedAffixes = word[commonStartChars:commonEndChars]
+            output.append(strippedAffixes)
+        self.words = output
+        self.prefix = sharedPrefix
+        self.suffix = sharedSuffix
+
+        
+
+def wordwiseTextMerger(strings: List[str], outputIdentifier: Union[str, None]=None, maxReplacements=0.1) -> Union[str, None]:
+    """Try merging multiple strings into a single one wordwise. 
+
+    :param strings: The strings to merge.
+    :param outputIdentifier: An identifier included in error messages only.
+    :return: None if merging was not possible, else a merged string
+    :rtype: Union[str, None]
+    """
+    stringsSplitToWords = [collapseSpaces(string).split(" ") for string in strings]
+
+    wordLengths = list(set([len(words) for words in stringsSplitToWords]))
+    if len(wordLengths) > 1:
+        return None
+    
+    items = []
+
+    maxReplacementInt = max(1, round(maxReplacements*wordLengths[0]))
+    diffIndexes = []
+
+    outputWords = []
+
+    for wordIndex in range(0, wordLengths[0]):
+        thisWords = []
+        for wordList in stringsSplitToWords:
+            thisWords.append(wordList[wordIndex])
+        affixes = WordwiseMergeRemoveAffixes(thisWords)
+        if len(affixes.words) > 1:
+            diffIndexes.append(wordIndex)
+            if len(diffIndexes) > maxReplacementInt:
+                return None
+            # Don't allow merge of numbers 
+            for word in affixes.words:
+                try:
+                    float(word)
+                    return None
+                except ValueError:
+                    pass
+                        
+            outputWords.append(f"{affixes.prefix}{commaSeparatedList(affixes.words)}{affixes.suffix}")
+        else:
+            outputWords.append(thisWords[0])
+    return " ".join(outputWords)
+        

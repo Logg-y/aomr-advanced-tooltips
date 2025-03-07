@@ -1,5 +1,6 @@
 import globals
 import common
+from common import findGodPowerByName
 import tech
 import action
 from xml.etree import ElementTree as ET
@@ -51,7 +52,7 @@ def protoGodPowerDamage(proto: str, actionName: str, damageMultiplier: float=1.0
     protoElem = common.protoFromName(proto)
     actionElem = action.findActionByName(protoElem, actionName)
     if damageOnly:
-        return action.actionDamageOnly(actionElem, hideRof=True, damageMultiplier=damageMultiplier)
+        return action.actionDamageOnly(protoElem, actionElem, hideRof=True, damageMultiplier=damageMultiplier)
     return action.actionDamageFull(protoElem, actionElem, hideRof=True, hideRange=True, ignoreActive=True, damageMultiplier=damageMultiplier, hideDamageBonuses=hideDamageBonuses)
 
 def processGodPower(godpower: ET.Element) -> Union[None, str]:
@@ -145,7 +146,7 @@ def processGodPower(godpower: ET.Element) -> Union[None, str]:
             attackTargetsExpandedTypes.append(target)
         else:
             attackTargetsExpandedTypes += globals.protosByUnitType[target]
-    replacements["attacktargets"] = common.commaSeparatedList(common.unwrapAbstractClass(attackTargets, plural=True))
+    replacements["attacktargets"] = common.commaSeparatedList(common.getListOfDisplayNamesForProtoOrClass(attackTargets, plural=True))
     if usePlacementTargetType:
         restrictedTargets = [elem.text for elem in godpower.findall("explicitlyrestrictedplacementtargettype")]
     else:
@@ -165,7 +166,7 @@ def processGodPower(godpower: ET.Element) -> Union[None, str]:
             restrictedTargetsRevised.append(target)
             
     if restrictedTargetsRevised:
-        replacements["attacktargets"] += f", except {common.commaSeparatedList(common.unwrapAbstractClass(restrictedTargetsRevised, plural=True))}"
+        replacements["attacktargets"] += f", except {common.commaSeparatedList(common.getListOfDisplayNamesForProtoOrClass(restrictedTargetsRevised, plural=True))}"
 
     if isinstance(params.text, list):
         items += [line.format(**replacements) for line in params.text]
@@ -192,10 +193,6 @@ def findGodPowerRecharges():
                 powerName = granted.attrib['power']
                 globals.godPowerRecharges[powerName] = float(granted.attrib['cooldown'])
 
-def findGodPowerByName(powerName: Union[str, ET.Element]) -> ET.Element:
-    if isinstance(powerName, str):
-        return globals.dataCollection["god_powers_combined"].find(f"power[@name='{powerName}']")
-    return powerName
 
 # There's a bug that is making the damage interval of certain powers 50ms longer than the data would have you believe
 DAMAGE_INTERVAL_BUG_AMOUNT = 0.05
@@ -214,7 +211,7 @@ def generateGodPowerDescriptions():
     godPowerProcessingParams["Sentinel"] = GodPowerParams(sentinelItems)
 
     lure = findGodPowerByName("Lure")
-    lureAttractedTargets = common.commaSeparatedList(common.unwrapAbstractClass([elem.text for elem in lure.findall("attracttype")], plural=False), "or")
+    lureAttractedTargets = common.commaSeparatedList(common.getListOfDisplayNamesForProtoOrClass([elem.text for elem in lure.findall("attracttype")], plural=False), "or")
     lureSpawns = common.getDisplayNameForProtoOrClass(lure.find('spawnproto').text) + "s"
     lureItems = [f"Creates a Lure, functioning as a Food dropsite, and several {lureSpawns}. Every {common.findAndFetchText(lure, 'attractrate', 0.0, float):0.3g} seconds, tries to attract one {lureAttractedTargets} between {common.findAndFetchText(lure, 'minrange', 0.0, float):0.3g} and {common.findAndFetchText(lure, 'maxrange', 0.0, float):0.3g}m away. Once its food limit has been reached, the Lure remains as a Food dropsite."]
     lureItems += [f" {icon.BULLET_POINT} {common.AGE_LABELS[index]}: Attracts {icon.resourceIcon('food')} {ageinfo.attrib['maxfood']}, {ageinfo.attrib['numspawns']} {lureSpawns}" for index, ageinfo in enumerate(lure.findall("ageinfo"))]
@@ -259,7 +256,7 @@ def generateGodPowerDescriptions():
     godPowerProcessingParams["PlentyVault"] = GodPowerParams(plentyItems)
 
     lightningstorm = findGodPowerByName("LightningStorm")
-    lightningstormItems = [f"Summon a Lightning Storm. Lightning strikes inflict {protoGodPowerDamage(lightningstorm.find('strikeproto').text, 'HandAttack')}", "Affects {playerrelationpos} {attacktargets}, but will always prefer targeting units if there are any in the area.", "Takes about 7-8 seconds for lightning strike rate to increase. Average number of strikes: about 45.", "Preferentially targets objects closest to the southeast edge of the map.", "{radius}", "{duration}"]
+    lightningstormItems = [f"Summon a Lightning Storm. Lightning strikes inflict {protoGodPowerDamage(lightningstorm.find('strikeproto').text, 'HandAttack', damageOnly=True)}", "Affects {playerrelationpos} {attacktargets}, but will always prefer targeting units if there are any in the area.", "Takes about 7-8 seconds for lightning strike rate to increase. Average number of strikes: about 45.", "Preferentially targets objects closest to the southeast edge of the map.", "{radius}", "{duration}"]
     godPowerProcessingParams["LightningStorm"] = GodPowerParams(lightningstormItems)
 
     earthquake = findGodPowerByName("Earthquake")
@@ -436,7 +433,7 @@ def generateGodPowerDescriptions():
     godPowerProcessingParams["WalkingWoods"] = GodPowerParams(walkingwoodsItems)
 
     tempest = findGodPowerByName("Tempest")
-    tempestItems = [f"Summons a storm of ice that affects {{playerrelationpos}} {{attacktargets}}. Each shard inflicts {protoGodPowerDamage(tempest.find('strikeproto').text, 'HandAttack')} Shards appear to be strike targets in the area completely at random. Expected number of shards: about 140.", "{radius}", "{duration}"]
+    tempestItems = [f"Summons a storm of ice that affects {{playerrelationpos}} {{attacktargets}}. Each shard inflicts {protoGodPowerDamage(tempest.find('strikeproto').text, 'HandAttack')} Shards appear to strike targets in the area completely at random. Expected number of shards: about 140.", "{radius}", "{duration}"]
     godPowerProcessingParams["Tempest"] = GodPowerParams(tempestItems)
 
     ragnarok = findGodPowerByName("Ragnarok")
@@ -447,10 +444,13 @@ def generateGodPowerDescriptions():
     fimbulwinterMainPack = int(fimbulwinter.find("packsize").text)
     fimbulwinterExtraMainPacks = int(fimbulwinter.find("numextramainpackspawns").text)
     fimbulwinterMiniPack = int(fimbulwinter.find("minipacksize").text)
-    # Targets all non-friendly TCs with main packs
-    # Spawns an extra 5 main packs on random TCs
-    # Dumps 2 wolves on VCs
-    fimbulwinterItems = [f"Spawns {fimbulwinterMainPack} Fimbulwinter Wolves on every Settlement that isn't controlled by you or your allies. Picks {fimbulwinterExtraMainPacks} of these at random, and spawns an additional {fimbulwinterMainPack} wolves around them. Spawn an additional {fimbulwinterMiniPack} wolves around enemy Village Centers. Wolf packs wander up to {float(fimbulwinter.find('maxpackwanderdistance').text):0.3g}m from their target, seeking out things to attack. At the end of the duration, any surviving wolves die.", "{duration}", unitdescription.describeUnit("FimbulwinterWolf")]
+    fimbulwinterSoftCap = int(fimbulwinter.find("wolfcountsoftcap").text)
+    fimbulwinterHardCap = int(fimbulwinter.find("wolfcounthardcap").text)
+    # Seemingly:
+    # 1) Targets all non-friendly TCs with main packs (down to 2 per pack once soft cap)
+    # 2) Spawns extra 5 main packs on random TCs (skip if soft cap reached)
+    # 3) Dumps 2 wolves on VCs (skip if soft cap reached)
+    fimbulwinterItems = [f"Spawns Fimbulwinter Wolves all over the map.  At the end of the duration, any surviving wolves die.", f"First, spawns {fimbulwinterMainPack} Fimbulwinter Wolves on every Settlement that isn't controlled by you or your allies, starting with unowned settlements. Once {fimbulwinterSoftCap} total wolves are spawned, the pack size is reduced to {fimbulwinterMiniPack}. No more than {fimbulwinterHardCap} wolves can be spawned under any circumstances.", f"If {fimbulwinterSoftCap:0.3g} or fewer wolves have been spawned at this point, picks {fimbulwinterExtraMainPacks} non-friendly settlement{'s' if fimbulwinterExtraMainPacks > 1 else ''} at random, and spawns an additional {fimbulwinterMainPack} wolves around {'them' if fimbulwinterExtraMainPacks > 1 else 'it'}.", f"If less than {fimbulwinterSoftCap:0.3g} total wolves have been spawned, spawns an additional {fimbulwinterMiniPack} wolves around enemy Village Centers until {fimbulwinterSoftCap:0.3g} total wolves are spawned or all Village Centers have been targeted.", f"Wolf packs wander up to {float(fimbulwinter.find('maxpackwanderdistance').text):0.3g}m from their target, seeking out things to attack.", "{duration}", unitdescription.describeUnit("FimbulwinterWolf")]
     godPowerProcessingParams["Fimbulwinter"] = GodPowerParams(fimbulwinterItems)
 
     nidhogg = findGodPowerByName("Nidhogg")
@@ -475,7 +475,7 @@ def generateGodPowerDescriptions():
     gaiaforestTree = common.protoFromName('TreeGaia')
     gaiaforestAvoidList = []
     for item in gaiaforest.findall("placementrestriction"):
-        gaiaforestAvoidList += common.unwrapAbstractClass(item.text)
+        gaiaforestAvoidList += common.getListOfDisplayNamesForProtoOrClass(item.text, plural=True)
     gaiaforestAvoidDistance = float(gaiaforest.find("placementrestriction").attrib['radius'])
     gaiaforestItems = [f"Creates {float(gaiaforest.find('totalnumberoftrees').text):0.3g} trees in the targeted area. These trees contain {icon.resourceIcon('wood')} {round(float(gaiaforestTree.find('initialresource').text))} and are gathered {100*(float(gaiaforestTree.find('gatherratemultiplier').text)-1.0):0.3g}% faster. Cannot spawn trees within {gaiaforestAvoidDistance:0.3g}m of {common.commaSeparatedList(list(set(gaiaforestAvoidList)), 'or')}."]
     godPowerProcessingParams["GaiaForest"] = GodPowerParams(gaiaforestItems)
@@ -538,16 +538,126 @@ def generateGodPowerDescriptions():
     implodeUnitSuckRate = 1/((float(implode.find("unitimplodetimedelaymin").text)+float(implode.find("unitimplodetimedelaymax").text))/2)
     # It sucks units with the same positional bias as lightning storm
     implodeItems = [f"Creates a floating sphere that begins to suck in all players' {{attacktargets}} within {float(implode.find('pullradius').text):0.3g}m. Prevents garrisoning in the area of effect. The sphere soon begins to suck up about {implodeUnitSuckRate:0.3g} units per second.  Units designated to be pulled are connected to the sphere with a blue ray: if the units are able to get {float(implode.find('unitescaperadius').text):0.3g}m from the sphere before being pulled in, they escape unharmed. Preferentially pulls units closest to the southeast edge of the map first."]
-    implodeItems += [f"Units that are sucked up by the sphere take {protoGodPowerDamage('ImplodeSphere', 'HandAttack')} when they reach the sphere, and again every {float(implode.find('damageintervalseconds').text):0.3g} second until the sphere explodes."]
-    implodeItems += [f"The sphere explosion inflicts {protoGodPowerDamage('ImplodeShockwave', 'HandAttack')} This damage strikes all objects within {float(implode.find('exploderadius').text):0.3g}m and has no damage falloff. Units sucked into the sphere are not hit by this. The explosion damage is increased by {100*float(implode.find('poweraccumulationincrement').text):0.3g}% per unit sucked into the sphere, to a maximum damage bonus of {100*float(implode.find('maximumaccumulatedpower').text):0.3g}%."]
+    implodeItems += [f"Units that are sucked up by the sphere take {protoGodPowerDamage('ImplodeSphere', 'HandAttack', damageOnly=True)} when they reach the sphere, and again every {float(implode.find('damageintervalseconds').text):0.3g} second until the sphere explodes."]
+    implodeItems += [f"The sphere explosion inflicts {protoGodPowerDamage('ImplodeShockwave', 'HandAttack', damageOnly=True)} This damage strikes all objects within {float(implode.find('exploderadius').text):0.3g}m and has no damage falloff. Units sucked into the sphere are not hit by this. The explosion damage is increased by {100*float(implode.find('poweraccumulationincrement').text):0.3g}% per unit sucked into the sphere, to a maximum damage bonus of {100*float(implode.find('maximumaccumulatedpower').text):0.3g}%."]
     implodeItems += [f"Friendly objects take only 10% damage from both sources.", "{powerblocker}", "{los}"]
     godPowerProcessingParams["Implode"] = GodPowerParams(implodeItems)
+
+    peachblossomItems = [unitdescription.describeUnit("ThePeachBlossomSpring")]
+    godPowerProcessingParams["ThePeachBlossomSpring"] = GodPowerParams(peachblossomItems)
+
+    creation = findGodPowerByName("Creation")
+    creationBaseQuantity = int(creation.find("createunit").attrib['quantity'])
+    creationProto = creation.find("createunit").text
+    creationItems = [f"Summons Clay Peasants. The quantity produced depends on age. At the end of the power, any surviving Clay Peasants die and resources they are holding are lost."]
+    creationItems += [f" {icon.BULLET_POINT} {common.AGE_LABELS[0]}: {creationBaseQuantity}"]
+    creationItems += [f" {icon.BULLET_POINT} {common.AGE_LABELS[index+1]}: {int(elem.attrib['quantityaddon'])+creationBaseQuantity}" for index, elem in enumerate(creation.findall("ageadjustment"))]
+    creationItems += ["{duration}"]
+    creationItems += ["<tth>Clay Peasant:", unitdescription.describeUnit(creationProto)]
+    godPowerProcessingParams["Creation"] = GodPowerParams(creationItems)
+
+    prosperousseeds = findGodPowerByName("ProsperousSeeds")
+    prosperousseedsItems = [f"Replaces up to {common.findAndFetchText(prosperousseeds, 'numbertotransform', 0, float):0.3g} Farms with Shennong's Farms.", "{radius}"]
+    prosperousseedsItems += [unitdescription.describeUnit("FarmShennong")]
+    godPowerProcessingParams["ProsperousSeeds"] = GodPowerParams(prosperousseedsItems)
+
+    lightningweapons = findGodPowerByName("LightningWeapons")
+    lightningweaponsItems = ["Grants {playerrelation} the following effects:", *describeGodPowerEffectsLikeDataTech(lightningweapons), "{duration}"]
+    godPowerProcessingParams["LightningWeapons"] = GodPowerParams(lightningweaponsItems)
+
+    earthwall = findGodPowerByName("EarthWall")
+    earthwallSegments = common.findAndFetchText(earthwall, "wallsegmentcount", 0, int)
+    earthwallDamagePercent = float(earthwall.find("damagetiers/damagetier").text)
+    earthwallSegmentsToDestroyEntirely = 1/earthwallDamagePercent
+    earthwallBuildPoints = common.findAndFetchText(common.protoFromName("EarthWall"), "buildpoints", 0.0, float)
+    earthwallBuildRate = common.findAndFetchText(common.protoFromName("EarthWall"), "autobuildrate", 1.0, float)
+    earthwallBuildTime = earthwallBuildPoints/earthwallBuildRate
+    earthwallItems = [f"Creates a ring of {earthwallSegments} Earth Wall segments around the targeted friendly building. They start at half hitpoints, and build up to full strength over {earthwallBuildTime:0.3g} seconds. These segments all function like gates.", "{radius}"]
+    earthwallItems += [unitdescription.describeUnit("EarthWall")]
+    godPowerProcessingParams["EarthWall"] = GodPowerParams(earthwallItems)
+
+    vanish = findGodPowerByName("Vanish")
+    vanishItems = [f"All {{playerrelationpos}} {{attacktargets}} in the targeted area at the time of casting become invisible. When each individual unit attacks or performs another hostile action, its invisibility ends for that unit only. Damaging trails left behind units like Nezha and Fei are disabled while invisible, but auras are not.", "{duration}", "{radius}"]
+    godPowerProcessingParams["Vanish"] = GodPowerParams(vanishItems)
+
+    forestprotection = findGodPowerByName("ForestProtection")
+    forestprotectionInterval = common.findAndFetchText(forestprotection, "staytime", 1.0, float)
+    forestprotectionRootTime = common.findAndFetchText(forestprotection, "rootedtime", 1.0, float)
+    forestprotectionDamageHero = float(forestprotection.find("rooteddamage[.='Hero']").attrib['damage'])
+    forestprotectionDamageUnit = float(forestprotection.find("rooteddamage[.='Unit']").attrib['damage'])
+    forestprotectionHeroMultiplier = forestprotectionDamageHero/forestprotectionDamageUnit
+    forestprotectionHeal = common.findAndFetchText(forestprotection, "rootedheal", 1.0, float)
+    forestprotectionSlowHeal = common.findAndFetchText(forestprotection, "slowhealmultiplier", 1.0, float)
+    forestprotectionItems = [f"Causes one of {{playerrelationpos}} Buildings to produce a defensive aura until it is destroyed. Every {forestprotectionInterval:0.3g} seconds, enemy {{attacktargets}} in the area take {icon.damageTypeIcon('divine')} {forestprotectionDamageUnit:0.3g} ({icon.iconUnitClass('Hero')} x{forestprotectionHeroMultiplier:0.3g}) and become unable to move for {forestprotectionRootTime} seconds. Friendly units in the area of effect are healed {forestprotectionHeal:0.3g} hitpoints per second. Targets that have moved or been involved in combat in the last 3 seconds are healed at {100*forestprotectionSlowHeal:0.3g}% speed."]
+    forestprotectionItems += ["{radius}"]
+    godPowerProcessingParams["ForestProtection"] = GodPowerParams(forestprotectionItems)
+
+    droughtland = findGodPowerByName("DroughtLand")
+    droughtlandDamageProportion = float(droughtland.find("initialdamage").attrib['fraction'])
+    droughtlandDamageTarget = droughtland.find("initialdamage").text
+    droughtlandAllyRatio = common.findAndFetchText(droughtland, "allydamageratio", 0.0, float)
+    droughtlandCreep = globals.dataCollection['terrain_unit_effects.xml'].find("terrainuniteffect[@name='DroughtCreepEffect']")
+    droughtlandHpModification = float(droughtlandCreep.find("effect[@type='maxHP']").attrib['amount'])
+
+    if droughtlandAllyRatio != 0.0:
+        raise ValueError("DroughtLand friendly fires now")
+
+    droughtlandItems = [f"Enemy {common.getDisplayNameForProtoOrClass(droughtlandDamageTarget, True)} in the targeted area immediately lose {100*droughtlandDamageProportion:0.3g}% of their current hitpoints. For the duration of the power, their maximum hitpoints is lowered by {100*droughtlandHpModification:0.3g}%. Friendly buildlings in the area are completely unaffected."]
+    droughtlandItems += ["{radius}", "{duration}"]
+    godPowerProcessingParams["DroughtLand"] = GodPowerParams(droughtlandItems)
+
+    venombeast = findGodPowerByName("VenomBeast")
+    venombeastBaseQuantity = int(venombeast.find("createunit").attrib['quantity'])
+    venombeastProto = venombeast.find("createunit").text
+    venombeastItems = [f"Summons Fei. The quantity produced depends on age. At the end of the power, any surviving Fei die."]
+    venombeastItems += [f" {icon.BULLET_POINT} {common.AGE_LABELS[index+1]}: {int(elem.attrib['quantityaddon'])+venombeastBaseQuantity}" for index, elem in enumerate(venombeast.findall("ageadjustment")) if index > 0]
+    venombeastItems += ["{duration}"]
+    venombeastItems += ["<tth>Fei:", unitdescription.describeUnit(venombeastProto)]
+    godPowerProcessingParams["VenomBeast"] = GodPowerParams(venombeastItems)
+
+    # AreaAttack seems to be used when it hits ground and has distance falloff
+    # In any case (?) is a fire field created?
+
+    # Strike count seems to be ~255, which gets hit by the accuracy
+    blazingprairie = findGodPowerByName("BlazingPrairie")
+    blazingprairieAccuracy = common.findAndFetchText(blazingprairie, "accuracy", 0.0, float)
+    blazingprairieStrike = blazingprairie.find("strikeproto").text
+    blazingprairieAreaAttack = blazingprairie.find("areaattackaction").text
+    blazingprairieFireArea = blazingprairie.find("groundimpactvfxproto").text
+    blazingprairieItems = [f"Summons a storm of about 255 fireballs. Each fireball has a {100*blazingprairieAccuracy:0.3g}% chance to hit random {{playerrelationpos}} {{attacktargets}}. The remainder strike a random location, but are more likely to land towards the centre. Aimed strikes inflict {protoGodPowerDamage(blazingprairieStrike, 'HandAttack')} Random unaimed fireballs damage anything close enough to them (with damage falloff): {protoGodPowerDamage(blazingprairieStrike, blazingprairieAreaAttack)} All fireballs leave lingering fire: {action.actionDamageOverTimeArea(blazingprairieFireArea)}", "{radius}", "{duration}"]
+    godPowerProcessingParams["BlazingPrairie"] = GodPowerParams(blazingprairieItems)
+    
+    greatflood = findGodPowerByName("GreatFlood")
+    greatfloodInitialVelocity = common.findAndFetchText(greatflood, "initialvelocity", 0.0, float)
+    greatfloodFinalVelocity = common.findAndFetchText(greatflood, "finalvelocity", 0.0, float)
+    greatfloodRampTime = common.findAndFetchText(greatflood, "ramptime", 0.0, float)
+    # Assuming: linear speedup over ramp time
+    # I didn't bother to test this though, but the point that it goes WAY FURTHER than the cursor suggests
+    greatfloodAccel = (greatfloodFinalVelocity-greatfloodInitialVelocity)/greatfloodRampTime
+    greatfloodSpeedupDisplacement = 0.5*greatfloodAccel*greatfloodRampTime*greatfloodRampTime
+    greatfloodRemainingTime = common.findAndFetchText(greatflood, "activetime", 0.0, float) - greatfloodRampTime
+    greatfloodRemainingDisplacement = greatfloodRemainingTime*greatfloodFinalVelocity
+    greatfloodDistance = greatfloodSpeedupDisplacement+greatfloodRemainingDisplacement
+    # Friendly fire multiplier of 0.1 seems to be hardcoded
+    greatfloodProto = greatflood.find("waveprotounit").text
+    greatfloodInitialAction = greatflood.find("initialattackname").text
+    # Not bugged for +0.05ms
+    greatfloodInterval = common.findAndFetchText(greatflood, "attackinterval", 1.0, float)
+    greatfloodDPS = protoGodPowerDamage(greatfloodProto, "HandAttack", damageMultiplier=1.0/greatfloodInterval)
+    greatfloodItems = [f"Summons a gigantic wave that travels in your chosen direction. On initial contact, hits {{playerrelationpos}} {{attacktargets}} for {protoGodPowerDamage(greatfloodProto, greatfloodInitialAction)} Objects remaining in contact with the wave suffer damage per second: {greatfloodDPS} Affected Units (except Titans) are swept along with the wave as it travels.", "Friendly targets take 10% damage from both sources, but are not swept away.", f"The wave speeds up to {greatfloodFinalVelocity:0.3g} m/s over {greatfloodRampTime:0.3g}s as it travels {greatfloodDistance:0.3g}m before dissipating.", "{duration}"]
+    godPowerProcessingParams["GreatFlood"] = GodPowerParams(greatfloodItems)
+
+    yinglong = findGodPowerByName("YinglongsWrath")
+    yinglongItems = [f"Summons Yinglong at a location of your choice.", unitdescription.describeUnit("YingLong")]
+    godPowerProcessingParams["YinglongsWrath"] = GodPowerParams(yinglongItems)
+
 
     titangate = findGodPowerByName("TitanGate")
     titangateRecharge = "{:0.3g}".format(float(techtree.find("tech[@name='WonderAgeTitan']/effects/effect[@subtype='PowerROF']").attrib['amount']))
     titangateCost= "{:0.3g}".format(float(techtree.find("tech[@name='WonderAgeTitan']/effects/effect[@subtype='PowerCost']").attrib['amount']))
     titangateItems = [f"Places a Titan Gate at 50% hitpoints. When fully built, unleashes a Titan.", "Can only be recast if you have a Wonder."]
     godPowerProcessingParams["TitanGate"] = GodPowerParams(titangateItems, overrideRecharge=titangateRecharge, overrideCost=titangateCost)
+
 
     godpowers = globals.dataCollection["god_powers_combined"]
 

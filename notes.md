@@ -39,31 +39,23 @@ Unfortunately playing with the advanced tooltips game setting off hides the cost
 
 
 # TODO
+    
 
-Isis monument empower should get bigger with empower
-Promethean does not autorespawn
-
+Isis monument shield should get bigger with empower
+Promethean offspring don't refund res for kronos
 Clarify Oranos oracle favor line (it's not a full capacity bonus)
-Animal favor yield?
+Can I get priest empowerment numbers ingame somehow
+
+Is loki's MU spawn text obtuse?
+Animal favor yield for norse?
 Einheri horn blast - knowing the attack point (and how long he's stuck recovering before he can attack) is technically useful
     Arguably same for shoot/scooters
 How long does promethean offspring birth anim last? If they're stuck in it and targetable this matters
 how many vill shots kill an animal?
-Heroisation should probably not be described as research in any cases - while consistent with internal behaviour this confuses the heck out of people
-Promethean offspring don't refund res for kronos
-Reconsider hiding acc
-Note actions that snare - just say "snares" for the standard snare
-Can I get priest empowerment numbers ingame somehow
-Friends can't use sky passages
+
+
 
 Loading tips
-    A reminder that you need to go and update mods manually, the time tooltips were generated
-    Standard snare
-    Food decay rate
-    Damage vs unfinished foundations
-    Player score formula
-    Building dropsites deposits other carried resources
     Repairing cost/rate
-    Damage over time effects inherit the damage bonuses of the attack and pauses during garrison apparently? test wadjet and sharkbite
     Norse favor mechanics
-    TCs take about 5 minutes to profit (should this go on the TC itself?)
+    

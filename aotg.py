@@ -14,29 +14,33 @@ RARITY_COLOURS: Dict[int, Callable[[str], str]] = {
     0: lambda s: "<color=0.80,0.80,0.80>" + s + "</color>", # simple, grey
     1: lambda s: "<color=0.55,0.82,0.42>" + s + "</color>", # fine, green
     2: lambda s: "<color=0.36,0.60,1.00>" + s + "</color>", # heroic, blue
-    3: lambda s: "<color=0.93,0.31,0.31>" + s + "</color>", # eternal, red
+    3: lambda s: "<color=0.81,0.42,0.98>" + s + "</color>", # mythical, purple
+    4: lambda s: "<color=1.00,0.50,0.20>" + s + "</color>", # divine, orange
+    5: lambda s: "<color=0.93,0.31,0.31>" + s + "</color>", # eternal, red
 }
 
 def wordwiseBlessingHandler(stringId: str, elemsByRarity: Dict[int, ET.Element]) -> Union[str, None]:
-    textByRarity: Dict[int, List[str]] = {}
+    stringsToRarity: Dict[str, int] = {}
     for rarity, techElem in elemsByRarity.items():
         response = tech.processTech(techElem)
         if response is not None and len(response.strip()) > 0:
-            textByRarity[rarity] = response.split(" ")
-    if len(textByRarity) == 0:
+            stringsToRarity[response] = rarity
+    if len(stringsToRarity) == 0:
         #print(f"Warning: no text generated for blessing {stringId}")
         return None
-    err = None
+    
+
+    textByRarity: Dict[int, List[str]] = {}
+    for stringContent, rarity in stringsToRarity.items():
+        if rarity is None:
+            rarity = len(textByRarity)
+        if rarity in textByRarity:
+            raise ValueError(f"Aotg wordwise text merger: duplicate colourisation key {rarity} for {stringId}")
+        textByRarity[rarity] = common.collapseSpaces(stringContent).split(" ")
+
     wordLengths = list(set([len(words) for words in textByRarity.values()]))
     if len(wordLengths) > 1:
-        err = f"Wordwise comparison for {stringId} failed: {wordLengths}"
-
-    if err is not None:
-        pretty = {}
-        for rarity, parts in textByRarity.items():
-            pretty[rarity] = " ".join(parts)
-        pprint.pprint(pretty)
-        raise ValueError(err)
+        raise ValueError(f"Aotg wordwise tech merger: different word lengths for {stringId}")
     
     items = []
 
@@ -48,40 +52,26 @@ def wordwiseBlessingHandler(stringId: str, elemsByRarity: Dict[int, ET.Element])
         if len(wordsAtThisPosition) == 1:
             items.append(thisWord[rarity])
         else:
+            affixes = common.WordwiseMergeRemoveAffixes(wordsAtThisPosition)
             # Look for common prefix/suffix, and move that outside the split section
             # This should stop "+1m/+2m/+3m" and make it into "+1/2/3m" or similar
             # (as well as worse issues like newlines becoming part of the split)
-            commonStartChars = 1
-            commonEndChars = -1
-            while 1:
-                samplePrefix = wordsAtThisPosition[0][:commonStartChars]
-                if not all([word.startswith(wordsAtThisPosition[0][:commonStartChars]) for word in wordsAtThisPosition]) or re.search("[0-9]", samplePrefix) is not None:
-                    commonStartChars -= 1
-                    break
-                commonStartChars += 1
-            while 1:
-                sampleSuffix = wordsAtThisPosition[0][commonEndChars:]
-                if not all([word.endswith(wordsAtThisPosition[0][commonEndChars:]) for word in wordsAtThisPosition]) or re.search("[0-9]", sampleSuffix) is not None:
-                    commonEndChars += 1
-                    break
-                commonEndChars -= 1
-
+            commonStartChars = len(affixes.prefix)
+            commonEndChars = len(affixes.suffix)
+            #print(affixes.prefix, affixes.suffix, affixes.words)
             sortedVariants = []
-            sharedPrefix = wordsAtThisPosition[0][:commonStartChars]
-            # Attempting slices with 0 as the end index introduces an extra suffix that shouldn't be there
-            if commonEndChars == 0:
-                sharedSuffix = ""
-            else:
-                sharedSuffix = wordsAtThisPosition[0][commonEndChars:]
-            for rarity in sorted(textByRarity.keys()):
+            for rarity in textByRarity:
                 thisText = textByRarity[rarity][wordIndex]
                 if commonEndChars == 0:
                     strippedAffixes = thisText[commonStartChars:]
                 else:
-                    strippedAffixes = thisText[commonStartChars:commonEndChars]
+                    strippedAffixes = thisText[commonStartChars:-commonEndChars]
+                #print(stringId, strippedAffixes, thisText, commonStartChars, commonEndChars)
                 sortedVariants.append(RARITY_COLOURS[rarity](strippedAffixes))
-            items.append(f"{sharedPrefix}{'/'.join(sortedVariants)}{sharedSuffix}")
+            items.append(f"{affixes.prefix}{'/'.join(sortedVariants)}{affixes.suffix}")
     return " ".join(items)
+
+    
 
 def incrementalBlessingHandler(introText="Higher tiers of this blessing grant all lower tiers' effects as well.") -> Callable[[str, Dict[int, str]], Union[str, None]]:
     def inner(stringId: str, elemsByRarity: Dict[int, ET.Element]):
@@ -94,6 +84,35 @@ def incrementalBlessingHandler(introText="Higher tiers of this blessing grant al
                 items += [f"{colour(text)}" for text in response.split("\\n")]
         return "\\n".join(items)
     return inner
+
+AGES_TO_INDEX = {
+    "ArchaicAge":0,
+    "ClassicalAge":1,
+    "HeroicAge":2,
+    "MythicAge":3,
+    "WonderAge":4,
+}
+
+def ageProgressionBlessingHandler(stringId: str, elemsByRarity: Dict[int, ET.Element]):
+    ageData: Dict[str, Dict[int, ET.Element]] = {}
+    for rarity in sorted(elemsByRarity.keys()):
+        colour = RARITY_COLOURS[rarity]
+        techElem = elemsByRarity[rarity]
+        techTargets = [common.techFromName(e.text) for e in techElem.findall("effects/effect[@type='TechStatus']")]
+        for target in techTargets:
+            targetAge = target.find("prereqs/specificage").text
+            if targetAge not in ageData:
+                ageData[targetAge] = {}
+            ageData[targetAge][rarity] = target
+    responsesByAgeIndex = {}
+    for age, entriesByRarity in ageData.items():
+        response = wordwiseBlessingHandler(f"_{age}_{stringId}", entriesByRarity)
+        index = AGES_TO_INDEX[age]
+        responsesByAgeIndex[index] = response
+    
+    responses = [f"{common.AGE_LABELS[index]}: {responsesByAgeIndex[index]}" for index in sorted(responsesByAgeIndex.keys())]
+    
+    return "\\n".join(responses)
 
 @dataclasses.dataclass
 class AotgBlessingHandler:
@@ -129,6 +148,11 @@ def generateBlessingDescriptions():
 
     aotgBlessingHandlers["STR_AOTG_EFF_GAIA_UNIQUE_DESC"] = AotgBlessingHandler(handlerFunction= lambda x, y: f"Town Centers may spend {gaiaTechCost} to produce 10 Dryads. These Dryads lose {-1*common.findAndFetchText(blessingDryad, "unitregen", 0.0, float):0.3g} hitpoints/second.")
 
+    aotgBlessingHandlers["STR_BLESS_EFF_FAVOR_ON_AGE_UP_DESC"] = AotgBlessingHandler(handlerFunction=ageProgressionBlessingHandler)
+    aotgBlessingHandlers["STR_BLESS_EFF_HEALING_TEMPLES_DESC"] = AotgBlessingHandler(handlerFunction=ageProgressionBlessingHandler)
+    aotgBlessingHandlers["STR_AOTG_EFF_DWARF_ON_AGE_UP_DESC"] = AotgBlessingHandler(handlerFunction=ageProgressionBlessingHandler)
+    aotgBlessingHandlers["STR_BLESS_EFF_AGE_UP_MYTH_UNIT_DESC"] = AotgBlessingHandler(handlerFunction=ageProgressionBlessingHandler)
+
     # stringid: {rarity: techtree element}
     stringIdsToTechUsers: Dict[str, Dict[int, ET.Element]] = {}
 
@@ -152,9 +176,10 @@ def generateBlessingDescriptions():
     
     for stringId in stringIdsToTechUsers:
         # As of right now there is no way to get tier 3 (eternal) of blessings with 0-2 defined
-        if 0 in stringIdsToTechUsers[stringId] and 1 in stringIdsToTechUsers[stringId] and 2 in stringIdsToTechUsers[stringId]:
-            if 3 in stringIdsToTechUsers[stringId]:
-                del stringIdsToTechUsers[stringId][3]
+        # With daily challenges I don't know if I can take this chance any more - can extract colours for the unseen tiers from the blessing UI border assets
+        #if 0 in stringIdsToTechUsers[stringId] and 1 in stringIdsToTechUsers[stringId] and 2 in stringIdsToTechUsers[stringId]:
+        #    if 3 in stringIdsToTechUsers[stringId]:
+        #        del stringIdsToTechUsers[stringId][3]
 
         handler = aotgBlessingHandlers.get(stringId, defaultHandler)
         response = handler.handlerFunction(stringId, stringIdsToTechUsers[stringId])
@@ -171,8 +196,9 @@ def otherAotgStrings():
     # Thoth's Divine Wisdom - fine
     # Freyja's Second Ride - the box is too small, trying to document this fully is hopeless.
     freyja = f"Cavalry are {100*(float(globals.dataCollection['techtree.xml'].find("tech[@name='AOTGFreyjaMinorWT']").find("effects/effect").attrib['amount'])-1.0):0.3g}% more expensive, but spawn infantry units when killed."
-    for culture in ("Greek", "Egyptian", "Norse", "Atlantean"):
-        freyja += "\\n" + tech.processTech(common.techFromName(f"AOTGFreyjaMinorWT{culture}"))
+    # The new daily challenges unfortunately don't offer a scrollbar, meaning listing all the unit effects isn't really an option any more.
+    #for culture in ("Greek", "Egyptian", "Norse", "Atlantean"):
+    #    freyja += "\\n" + tech.processTech(common.techFromName(f"AOTGFreyjaMinorWT{culture}"))
     globals.stringMap["STR_AOTG_RULE_FREYJA_MINOR_DESC"] = freyja
 
     # Prometheus' Secret Knowledge
@@ -197,7 +223,7 @@ def otherAotgStrings():
     # Aphrodite's Rite of Flourishing
     globals.stringMap["STR_AOTG_RULE_APHRODITE_MINOR_DESC"] = "Affects human players only. 10 minutes into the game, all Villagers are duplicated.\\n" + tech.processTech(common.techFromName("AOTGAphroditeMinorWT"))
 
-    # Oceanus' Driftwood Empire
+    # Oceanus' Driftwood Empire - not used, but it's in the data
     globals.stringMap["STR_AOTG_RULE_OCEANUS_MINOR_DESC"] = "Affects human players only. Start with +10000 Wood, but Villagers cannot gather any more."
 
     # Freyr's Harsh Weather
