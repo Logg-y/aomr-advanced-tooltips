@@ -605,7 +605,8 @@ def dataSubtypeProtoUnitFlagHandler(tech: ET.Element, effect:ET.Element):
     if flag == "AreaDamageConstant":
         return EffectHandlerResponse(getEffectTargets(tech, effect), "Remove damage falloff with distance for area attacks")
     elif flag == "TradeAddAllyResources":
-        return EffectHandlerResponse(getEffectTargets(tech, effect), "When trading with an ally's Town Center: that ally also gains 10% of your trade Gold profit. Does not apply to Food and Wood from Autumn of Abundance.")
+        # According to the data modding guide: the hardcoded 10% here is actually the modifyamount of the target's action.
+        return EffectHandlerResponse(getEffectTargets(tech, effect), "When trading with an ally's Town Center: that ally also gains 10% of your trade Gold profit.")
     elif flag == "SelfRespawn":
         return EffectHandlerResponse(getEffectTargets(tech, effect), "On death, respawns in the same location 30s later. This happens only once per unit")
     elif flag in ("HideResourceInventory", "Deleteable", "DisplayRange"):
@@ -1103,6 +1104,15 @@ def generateTechDescriptions():
         techManualAdditions["SkyFire"] = TechAddition(startEntry=[f"Sky Lantern: On death over Land: {skyfireLand}", f"Sky Lantern: On death over Water: {skyfireLand}"], lineFilter=lambda x: "VFX" not in x)
 
     techManualAdditions["AdvancedDefenses"] = TechAddition(startEntry="Wall Connector: Allows instant conversion to Tower")
+
+    pixiuModifyExponent = common.findAndFetchText(action.findActionByName("PiXiu", "Trade"), "modifyexponent", 0.0, float) * 0.1
+    autumnOfAbundanceEffects = common.techFromName("AutumnOfAbundance").findall("effects/effect[@subtype='MinWorkRate']")
+    autumnOfAbundanceAmounts = list(set([float(x.attrib['amount']) for x in autumnOfAbundanceEffects]))
+    if len(autumnOfAbundanceAmounts) != 1:
+        raise ValueError(f"Autumn of Abundance assumptions invalidated: {autumnOfAbundanceAmounts}")
+    pixiuModifyExponent *= autumnOfAbundanceAmounts[0]
+
+    techManualAdditions["AutumnOfAbundance"] = TechAddition(endEntry=f"With Silk Road: Pixiu trading with an ally gives them {100*pixiuModifyExponent:0.3g}% of your Gold profit as Food and Wood.")
 
     maelstromSpawnAction = action.findActionByName("DouJian", "RangedAttack").find("onhiteffect[@proto]")
     maelstromObject = common.protoFromName(maelstromSpawnAction.attrib['proto'])
