@@ -170,7 +170,7 @@ def actionDamageFull(protoUnit: ET.Element, action: ET.Element, isDPS=False, hid
     hideNumProjectiles = False
     numProjectiles = actionNumProjectiles(protoUnit, action, format=False)
     hasProjectile = findAndFetchText(action, "projectile", None) is not None
-    if not hasProjectile:
+    if not hasProjectile or isDPS:
         hideNumProjectiles = True
     components = [actionDamageOnly(protoUnit, action, isDPS, hideRof=hideRof, damageMultiplier=damageMultiplier, hideNumProjectiles=hideNumProjectiles)]
     if not hideArea:
