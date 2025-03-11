@@ -1457,9 +1457,9 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
     if isInfection:
         playerRelation = [entry.replace("enemy", "friendly") for entry in playerRelation]
 
-    if findFromActionOrTactics(action, tactics, "modifyself", ""):
+    if findFromActionOrTactics(action, tactics, "modifyself", 0, int) > 0:
         playerRelation.insert(0, "itself")
-    elif isInfection and findFromActionOrTactics(action, tactics, "modifyselfifinfection", ""):
+    elif isInfection and findFromActionOrTactics(action, tactics, "modifyselfifinfection", 0, int):
         playerRelation.insert(0, "itself")
 
     components.append(common.commaSeparatedList(playerRelation))
