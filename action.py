@@ -105,7 +105,7 @@ def actionDamageBonus(action: ET.Element):
 def actionDamageOnly(proto: ET.Element, action: ET.Element, isDPS=False, hideRof=False, hideNumProjectiles=False, damageMultiplier=1.0):
     damages = []
     # If showing number of projectiles, don't multiply up damage - else it'll suggest you're shooting 6 projectiles each at 6x damage or whatever.
-    mult = damageMultiplier * actionDamageMultiplier(proto, action, isDPS=isDPS, ignoreNumProjectiles=not hideNumProjectiles)
+    mult = damageMultiplier * actionDamageMultiplier(proto, action, isDPS=isDPS, singleProjectile=not hideNumProjectiles)
 
     for damage in action.findall("damage"):
         damageType = damage.attrib["type"]
@@ -150,11 +150,11 @@ def actionRof(action: ET.Element):
     return f"{icon.iconRof()} {rof:0.3g}"
 
 
-def actionDamageMultiplier(proto: ET.Element, action: ET.Element, isDPS=True, ignoreNumProjectiles=False):
+def actionDamageMultiplier(proto: ET.Element, action: ET.Element, isDPS=True, singleProjectile=False):
     rof = findAndFetchText(action, "rof", 1.0, float)
     if not isDPS:
         rof = 1.0
-    if ignoreNumProjectiles:
+    if singleProjectile:
         numProjectiles = 1
     else:
         numProjectiles = actionNumProjectiles(proto, action, format=False)
@@ -288,13 +288,13 @@ def onhiteffectTargetString(onhiteffect: ET.Element, hitword="hit", default="tar
         return ""
     return f"{hitword} {default}"
 
-def actionDamageOverTime(proto: ET.Element, action: ET.Element, isDPS=False, damageMultiplier=1.0):
+def actionDamageOverTime(proto: ET.Element, action: ET.Element, isDPS=False, damageMultiplier=1.0, singleProjectile=False):
     dots = action.findall("onhiteffect[@type='DamageOverTime']")
     dur = None
     targetType = None
     damages = ""
     prob = None
-    mult = damageMultiplier * actionDamageMultiplier(proto, action, isDPS=isDPS)
+    mult = damageMultiplier * actionDamageMultiplier(proto, action, isDPS=isDPS, singleProjectile=singleProjectile)
     for dot in dots:
         thisDur = float(dot.attrib["duration"])
         if dur is not None and thisDur != dur:

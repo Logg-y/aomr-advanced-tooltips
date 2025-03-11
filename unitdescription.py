@@ -1009,7 +1009,7 @@ def generateUnitDescriptions():
     nonActionPassiveAbilities.append(('PassiveSolarFlare', SunRayRevealerText))
 
     # Egyptian
-    nonActionPassiveAbilities.append(('PassiveVenomous', (common.protoFromName("Wadjet"), f"Attacks deal an additional {action.actionDamageOverTime(protoFromName("Wadjet"), action.findActionByName('Wadjet', 'RangedAttack'))}.")))
+    nonActionPassiveAbilities.append(('PassiveVenomous', (common.protoFromName("Wadjet"), f"Attacks deal an additional {action.actionDamageOverTime(protoFromName("Wadjet"), action.findActionByName('Wadjet', 'RangedAttack'), singleProjectile=True)}.")))
 
 
     # Norse
@@ -1023,7 +1023,7 @@ def generateUnitDescriptions():
 
 
     # Atlantean
-    nonActionPassiveAbilities.append(('AbilityStymphalianBird', f"Attacks deal an additional {action.actionDamageOverTime(protoFromName("StymphalianBird"), action.findActionByName('StymphalianBird', 'RangedAttack'))}."))
+    nonActionPassiveAbilities.append(('AbilityStymphalianBird', f"Each projectile that hits deals an additional {action.actionDamageOverTime(protoFromName("StymphalianBird"), action.findActionByName('StymphalianBird', 'RangedAttack'), singleProjectile=True)}."))
     nonActionPassiveAbilities.append(('PassivePetrifiedFrame', action.handleIdleStatBonusAction(protoFromName('Cheiroballista'), action.findActionByName('Cheiroballista', 'PetrificationBonus'), None, "")))
     
     # Chinese
