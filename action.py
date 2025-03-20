@@ -119,9 +119,9 @@ def actionDamageOnly(proto: ET.Element, action: ET.Element, isDPS=False, hideRof
                 damages.append(f"{icon.damageTypeIcon(damageType)} {round(damageAmount)}")
             else:
                 damages.append(f"{icon.damageTypeIcon(damageType)} {damageAmount:0.3g}")
+    if not hideRof:
+        damages.append(actionRof(action))
     if not isDPS:
-        if not hideRof:
-            damages.append(actionRof(action))
         if not hideNumProjectiles:
             damages.append(actionNumProjectiles(proto, action))
     damages = [x for x in damages if len(x.strip()) > 0]
@@ -1469,6 +1469,8 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
 
     allowedTargetTypes = [x.text for x in findAllFromActionOrTactics(action, tactics, "modifyabstracttype")]
     forbidTargetTypes = [x.text for x in findAllFromActionOrTactics(action, tactics, "forbidabstracttype")+findAllFromActionOrTactics(action, tactics, "forbidunittype")]
+    if findFromActionOrTactics(action, tactics, "modifyflyingunits", 0, int) == 0:
+        forbidTargetTypes.append("AbstractFlyingUnit")
     components.append(targetListToString(allowedTargetTypes, forbidTargetTypes))
 
     components[-1] += "."
