@@ -19,6 +19,11 @@ RARITY_COLOURS: Dict[int, Callable[[str], str]] = {
     5: lambda s: "<color=0.93,0.31,0.31>" + s + "</color>", # eternal, red
 }
 
+# problematic aotg_effects.xml named items to ignore
+IGNORE_AOTG_EFFECTS = [
+    "BossNidhoggSpawn"      # AI only version (spawns on fort death) which overrides the player version if not ignored
+    ]
+
 def wordwiseBlessingHandler(stringId: str, elemsByRarity: Dict[int, ET.Element]) -> Union[str, None]:
     stringsToRarity: Dict[str, int] = {}
     for rarity, techElem in elemsByRarity.items():
@@ -157,6 +162,8 @@ def generateBlessingDescriptions():
     stringIdsToTechUsers: Dict[str, Dict[int, ET.Element]] = {}
 
     for effect in globals.dataCollection['aotg_effects.xml']:
+        if common.findAndFetchText(effect, "name", None, str) in IGNORE_AOTG_EFFECTS:
+            continue
         techName = common.findAndFetchText(effect, "tech", None, str)
         stringId = common.findAndFetchText(effect, "descriptionid", None, str)
         if stringId is None or techName is None:
