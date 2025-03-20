@@ -15,7 +15,7 @@ import copy
 NOTABLE_UNIT_CLASSES = ("Hero", "AbstractInfantry", "AbstractArcher", "AbstractCavalry", "AbstractSiegeWeapon", "AbstractVillager", "AbstractArcherShip", "AbstractSiegeShip", 
                         "AbstractCloseCombatShip", "MythUnit", "HeroShadowUpgraded", "HumanSoldier", "Ship", "Building", "CavalryLineUpgraded", "InfantryLineUpgraded", "ArcherLineUpgraded", 
                         "Huntable", "FoodDropsite", "WoodDropsite", "GoldDropsite", "LogicalTypeBuildingEmpoweredForLOS", "LogicalTypeArchaicMythUnit", "LogicalTypeClassicalMythUnit", "LogicalTypeHeroicMythUnit",
-                        "LogicalTypeAffectedByCeaseFireBuildingSlow", "LogicalTypeCanSeeStealth", )
+                        "LogicalTypeAffectedByCeaseFireBuildingSlow", "LogicalTypeCanSeeStealth")
 
 # Key : [list of unit classes that are hidden if a unit has this class]
 # Stating both "ship" and "archer ship" is a bit pointless.
@@ -395,6 +395,8 @@ class UnitDescription:
             for thisType in NOTABLE_UNIT_CLASSES:
                 if thisType in matchedTypes:
                     orderedTypes.append(common.getDisplayNameForProtoOrClass(thisType))
+            if checkProtoFlag(protoUnit, "unittype", "LogicalTypeDivineImmunity"):
+                orderedTypes.append("Divine Immunity")
             if action.findActionByName(protoUnit, "Pickup"):
                 orderedTypes.append("Carries Relics")
             if checkProtoFlag(protoUnit, "flag", "KnockoutDeath"):

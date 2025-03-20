@@ -1070,12 +1070,9 @@ def generateTechDescriptions():
     vibrantLandTreeProtos = [elem.text for elem in vibrantLandPower.findall("treeproto")]
     vibrantLandWoodAmounts = [float(common.protoFromName(proto).find("initialresource[@resourcetype='Wood']").text) for proto in vibrantLandTreeProtos]
     vibrantLandWood = int(sum(vibrantLandWoodAmounts)/len(vibrantLandWoodAmounts))
-    vibrantLandGatherRateMult = list(set([float(common.protoFromName(proto).find("gatherratemultiplier").text) for proto in vibrantLandTreeProtos]))
-    if len(vibrantLandGatherRateMult) != 1:
-        raise ValueError("VibrantLand gather rate mult changed")
     
 
-    techManualAdditions["VibrantLand"] = TechAddition(startEntry=f"House: Every {vibrantLandInterval:0.3g}s, spawns a tree containing {icon.resourceIcon('Wood')} {vibrantLandWood}. These trees are gathered {100*vibrantLandGatherRateMult[0]-100.0:0.3g}% faster. {' '.join(vibrantLandRestrictions)}",
+    techManualAdditions["VibrantLand"] = TechAddition(startEntry=f"House: Every {vibrantLandInterval:0.3g}s, spawns a tree containing {icon.resourceIcon('Wood')} {vibrantLandWood}. {' '.join(vibrantLandRestrictions)}",
                                                       lineFilter=lambda x: "House: Wood Carry" not in x)
     # Spoils of War
     nuwaBountyEarnings = globals.dataCollection["major_gods.xml"].find("civ[name='Fuxi']/bountyresourceearning").findall("bountyreward")
@@ -1103,7 +1100,9 @@ def generateTechDescriptions():
     else:
         techManualAdditions["SkyFire"] = TechAddition(startEntry=[f"Sky Lantern: On death over Land: {skyfireLand}", f"Sky Lantern: On death over Water: {skyfireLand}"], lineFilter=lambda x: "VFX" not in x)
 
-    techManualAdditions["AdvancedDefenses"] = TechAddition(startEntry="Wall Connector: Allows instant conversion to Tower")
+    advancedDefensesTransformTech = common.techFromName("WallConnectorToTower")
+    advancedDefensesTransformTime = common.findAndFetchText(advancedDefensesTransformTech, "resaerchpoints", 0.0, float)
+    techManualAdditions["AdvancedDefenses"] = TechAddition(startEntry=f"Wall Connector: Allows conversion to Tower ({advancedDefensesTransformTime} seconds)")
 
     pixiuModifyExponent = common.findAndFetchText(action.findActionByName("PiXiu", "Trade"), "modifyexponent", 0.0, float) * 0.1
     autumnOfAbundanceEffects = common.techFromName("AutumnOfAbundance").findall("effects/effect[@subtype='MinWorkRate']")

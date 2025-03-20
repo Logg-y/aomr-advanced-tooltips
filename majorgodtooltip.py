@@ -92,7 +92,8 @@ def generateMajorGodDescriptions():
     globals.stringMap[common.findGodPowerByName("YinAndYangTechree").find("rolloverid").text] = yinyangTechtree
 
     nuwaContent = globals.dataCollection["string_table.txt"]["STR_CIV_NUWA_LR"]
-    nuwaContent = re.sub("Foundations automatically construct", "Foundations automatically construct (at 1 point/second)", nuwaContent)
+    nuwaAutobuildRate = 1.0 - float(common.techFromName("ArchaicAgeNuwa").find("effects/effect[@modifytype='AutoBuildRate']").attrib['amount'])
+    nuwaContent = re.sub(f"Foundations automatically construct", f"Foundations (except Walls and Farms) automatically construct (at {nuwaAutobuildRate:0.3g} points/second)", nuwaContent)
     if "terracotta" not in nuwaContent.lower():
         # This bonus is currently missing
         nuwaTerracottaEffect = common.techFromName("ArchaicAgeNuwa").find("effects/effect[@subtype='UnitRegenRate']")

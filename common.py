@@ -76,7 +76,6 @@ _OVERRIDE_DISPLAY_NAMES = {
     "AbilityFishingShipChinese":"Demolition",
 }
 
-
 _UNIT_CLASS_LABELS = {
     "Hero": "Hero",
     "AbstractInfantry":"Infantry",
@@ -163,6 +162,7 @@ _UNIT_CLASS_LABELS = {
     "AbstractDwarf":"Dwarves",
     "AbstractNezha":"Nezha",
     "AbstractMilitaryCamp":"Military Camp",
+    "LogicalTypeDivineImmunity":"targets with Divine Immunity",
 
 
     # Partial Lies
@@ -244,6 +244,7 @@ _UNIT_CLASS_LABELS_PLURAL = {
     "AbstractVillager":"Villagers",
     "all":"all objects",
     "All":"all objects",
+    "LogicalTypeDivineImmunity":"targets with Divine Immunity",
 
 
     # Partial lies for clarity:

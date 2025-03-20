@@ -571,8 +571,9 @@ def generateGodPowerDescriptions():
     earthwallSegmentsToDestroyEntirely = 1/earthwallDamagePercent
     earthwallBuildPoints = common.findAndFetchText(common.protoFromName("EarthWall"), "buildpoints", 0.0, float)
     earthwallBuildRate = common.findAndFetchText(common.protoFromName("EarthWall"), "autobuildrate", 1.0, float)
+    earthwallPercentHealth = 100.0 * common.findAndFetchText(common.protoFromName("EarthWall"), "initialhitpoints", 1.0, float) / common.findAndFetchText(common.protoFromName("EarthWall"), "maxhitpoints", 1.0, float)
     earthwallBuildTime = earthwallBuildPoints/earthwallBuildRate
-    earthwallItems = [f"Creates a ring of {earthwallSegments} Earth Wall segments around the targeted friendly building. They start at half hitpoints, and build up to full strength over {earthwallBuildTime:0.3g} seconds. These segments all function like gates.", "{radius}"]
+    earthwallItems = [f"Creates a ring of {earthwallSegments} Earth Wall segments around the targeted friendly building. They start at {earthwallPercentHealth:0.3g}% hitpoints, and build up to full strength over {earthwallBuildTime:0.3g} seconds. These segments all function like gates.", "{radius}"]
     earthwallItems += [unitdescription.describeUnit("EarthWall")]
     godPowerProcessingParams["EarthWall"] = GodPowerParams(earthwallItems)
 

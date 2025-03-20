@@ -40,6 +40,7 @@ Unfortunately playing with the advanced tooltips game setting off hides the cost
 
 # TODO
     
+godpowerblockradius on great flood protounit
 
 Isis monument shield should get bigger with empower
 Promethean offspring don't refund res for kronos

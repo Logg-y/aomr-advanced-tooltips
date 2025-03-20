@@ -141,8 +141,16 @@ def main():
 
     # This class doesn't include Nidhogg, for now
     mythUnitNotTitanExceptions = ["Titan"]
-    if common.protoFromName("Nidhogg").find("unittype[.='LogicalTypeMythUnitNotTitan']") is None:
-        mythUnitNotTitanExceptions.append("Nidhogg")
+    # This is technically correct but returns some useless things like Locusts
+    #for protoElem in globals.dataCollection["proto.xml"]:
+    #    if protoElem.find("unittype[.='MythUnit']", None) is not None:
+    #        if protoElem.find("unittype[.='LogicalTypeMythUnitNotTitan']", None) is None:
+    #            mythUnitNotTitanExceptions.append(protoElem.attrib['name'])
+
+    possibleMythUnitNotTitanExceptions = ("Nidhogg", "YingLong")
+    for exception in possibleMythUnitNotTitanExceptions:
+        if common.protoFromName(exception).find("unittype[.='LogicalTypeMythUnitNotTitan']") is None:
+            mythUnitNotTitanExceptions.append(exception)
     replacement = f"(except {common.commaSeparatedList(mythUnitNotTitanExceptions)})"
     common._UNIT_CLASS_LABELS["LogicalTypeMythUnitNotTitan"] = common._UNIT_CLASS_LABELS["LogicalTypeMythUnitNotTitan"].replace("LOGICAL_TYPE_MYTH_UNIT_NOT_TITAN_EXCEPTION", replacement)
     common._UNIT_CLASS_LABELS_PLURAL["LogicalTypeMythUnitNotTitan"] = common._UNIT_CLASS_LABELS_PLURAL["LogicalTypeMythUnitNotTitan"].replace("LOGICAL_TYPE_MYTH_UNIT_NOT_TITAN_EXCEPTION", replacement)
