@@ -1061,7 +1061,7 @@ def generateUnitDescriptions():
 
     terrainCreep = globals.dataCollection['major_gods.xml'].find("civ[name='Gaia']/terraincreeps/terraincreep")
     healEffect = globals.dataCollection['terrain_unit_effects.xml'].find("terrainuniteffect[@name='GaiaCreepHealEffect']/effect")
-    nonActionPassiveAbilities.append(('PassiveLush', f"Grows up to a {float(terrainCreep.attrib['maxradius']):0.3g}m circle of lush at {float(terrainCreep.attrib['growthrate']):0.3g}m per second. Friendly objects on lush heal {float(healEffect.attrib['amount']):0.3g} per second."))
+    nonActionPassiveAbilities.append(('PassiveLush', f"Grows up to a {float(terrainCreep.attrib['maxradius']):0.3g}m circle of lush at {float(terrainCreep.attrib['growthrate']):0.3g}m per second. Your objects on lush heal {float(healEffect.attrib['amount']):0.3g} per second."))
 
     # Tech related
 

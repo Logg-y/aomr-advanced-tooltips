@@ -62,7 +62,7 @@ def generateMajorGodDescriptions():
     gaiaContent = globals.dataCollection['string_table.txt']["STR_CIV_GAIA_LR"]
     terrainCreep = globals.dataCollection['major_gods.xml'].find("civ[name='Gaia']/terraincreeps/terraincreep")
     healEffect = globals.dataCollection['terrain_unit_effects.xml'].find("terrainuniteffect[@name='GaiaCreepHealEffect']/effect")
-    gaiaLushNew = f"grow up to a {float(terrainCreep.attrib['maxradius']):0.3g}m circle of Lush at {float(terrainCreep.attrib['growthrate']):0.3g}m per second. Friendly objects on Lush heal {float(healEffect.attrib['amount']):0.3g} per second."
+    gaiaLushNew = f"grow up to a {float(terrainCreep.attrib['maxradius']):0.3g}m circle of Lush at {float(terrainCreep.attrib['growthrate']):0.3g}m per second. Your objects on Lush heal {float(healEffect.attrib['amount']):0.3g} per second."
     gaiaContent = re.sub("grow Lush.", gaiaLushNew, gaiaContent)
     gaiaContent = re.sub("\n.*Lush heals.*", "", gaiaContent)
     globals.stringMap["STR_CIV_GAIA_LR"] = gaiaContent
