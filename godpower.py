@@ -587,9 +587,11 @@ def generateGodPowerDescriptions():
     forestprotectionDamageHero = float(forestprotection.find("rooteddamage[.='Hero']").attrib['damage'])
     forestprotectionDamageUnit = float(forestprotection.find("rooteddamage[.='Unit']").attrib['damage'])
     forestprotectionHeroMultiplier = forestprotectionDamageHero/forestprotectionDamageUnit
-    forestprotectionHeal = common.findAndFetchText(forestprotection, "rootedheal", 1.0, float)
-    forestprotectionSlowHeal = common.findAndFetchText(forestprotection, "slowhealmultiplier", 1.0, float)
-    forestprotectionItems = [f"Causes one of {{playerrelationpos}} Buildings to produce a defensive aura until it is destroyed. Every {forestprotectionInterval:0.3g} seconds, enemy {{attacktargets}} in the area take {icon.damageTypeIcon('divine')} {forestprotectionDamageUnit:0.3g} ({icon.iconUnitClass('Hero')} x{forestprotectionHeroMultiplier:0.3g}) and become unable to move for {forestprotectionRootTime} seconds. Friendly units in the area of effect are healed {forestprotectionHeal:0.3g} hitpoints per second. Targets that have moved or been involved in combat in the last 3 seconds are healed at {100*forestprotectionSlowHeal:0.3g}% speed."]
+    # This data is seemingly not used
+    #forestprotectionHeal = common.findAndFetchText(forestprotection, "rootedheal", 1.0, float)
+    #forestprotectionSlowHeal = common.findAndFetchText(forestprotection, "slowhealmultiplier", 1.0, float)
+    forestprotectionHealAction = action.describeAction("VFXForestProtectionArea", "AllyHealModify")
+    forestprotectionItems = [f"Causes one of {{playerrelationpos}} Buildings to produce a defensive aura until it is destroyed. Every {forestprotectionInterval:0.3g} seconds, enemy {{attacktargets}} in the area take {icon.damageTypeIcon('divine')} {forestprotectionDamageUnit:0.3g} ({icon.iconUnitClass('Hero')} x{forestprotectionHeroMultiplier:0.3g}) and become unable to move for {forestprotectionRootTime} seconds. {forestprotectionHealAction}"]
     forestprotectionItems += ["{radius}"]
     godPowerProcessingParams["ForestProtection"] = GodPowerParams(forestprotectionItems)
 
