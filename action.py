@@ -1456,7 +1456,7 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
     elif findFromActionOrTactics(action, tactics, "targetnonally", ""):
         playerRelation = ["non-allied"]
     elif findFromActionOrTactics(action, tactics, "includeally", ""):
-        playerRelation = ["your", "your allies"]
+        playerRelation = ["your", "allied'"]
 
     # This is a huge assumption about how infection works
     if isInfection:
