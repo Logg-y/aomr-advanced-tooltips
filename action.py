@@ -257,7 +257,7 @@ def rechargeRate(proto: ET.Element, action:ET.Element, chargeType: ActionChargeT
         return "Unknown"
     return f"{icon.iconTime()} {float(recharge.text):0.3g}"
 
-def onhiteffectTargetString(onhiteffect: ET.Element, hitword="hit", default="targets", additionalHitTargets: Union[str, None, List[str]]=None):
+def onhiteffectTargetString(onhiteffect: ET.Element, hitword="hit", default="targets", additionalHitTargets: Union[str, None, List[str]]=None, additionalForbiddenTargets: Union[str, None, List[str]]=None):
     targetElems = onhiteffect.findall("target")
     targetTypes = []
     ignoreTypes = []
@@ -266,6 +266,11 @@ def onhiteffectTargetString(onhiteffect: ET.Element, hitword="hit", default="tar
             targetTypes.append(additionalHitTargets)
         else:
             targetTypes += additionalHitTargets
+    if additionalForbiddenTargets is not None:
+        if isinstance(additionalForbiddenTargets, str):
+            ignoreTypes.append(additionalForbiddenTargets)
+        else:
+            ignoreTypes += additionalForbiddenTargets
     onhiteffectTarget = onhiteffect.attrib.get("targetunittype", None)
     if onhiteffectTarget is not None:
         targetTypes.append(onhiteffectTarget)

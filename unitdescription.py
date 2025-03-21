@@ -899,11 +899,13 @@ def generateUnitDescriptions():
 
     # Fei have a lot of duplicated target text - and with the confusing amount of stuff going on with them, they need all the help they can get
     feiTargeting = action.onhiteffectTargetString(protoFromName("Fei").find("protoaction/onhiteffect[@type='DamageOverTime']"), hitword = "").strip()
+    feiTargetingNoFlying = action.onhiteffectTargetString(protoFromName("Fei").find("protoaction/onhiteffect[@type='DamageOverTime']"), hitword = "", additionalForbiddenTargets=["AbstractFlyingUnit"]).strip()
     def feiPostprocessor(lines):
         l = []
         for index, line in enumerate(lines):
             if index + 1 < len(lines):
                 line = line.replace(feiTargeting, "non-Hero land units")
+                line = line.replace(feiTargetingNoFlying, "non-Hero land units")
             l.append(line)
         return l
     feiHandler = UnitDescription(generaliseInfectionEffects=True, textPostprocessor=feiPostprocessor, additionalText=f"\'Non-Hero land units\' includes {feiTargeting}.")
