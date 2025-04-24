@@ -421,14 +421,14 @@ def handleModifyStructure(parentElem: ET.Element) -> str:
                 continue
             if child.attrib["type"] == "ArmorSpecific":
                 if amountInitial > 1.0:
-                    armorMods.append(f"{icon.armorTypeIcon(child.attrib['dmgtype'].lower())} -{(amountInitial-1)*100:0.3g}%")
+                    armorMods.append(f"{icon.armorTypeIcon(child.attrib['dmgtype'].lower())} +{(amountInitial-1)*100:0.3g}%")
                 else:
-                    armorMods.append(f"{icon.armorTypeIcon(child.attrib['dmgtype'].lower())} +{(amountInitial-1)*-100:0.3g}%")
+                    armorMods.append(f"{icon.armorTypeIcon(child.attrib['dmgtype'].lower())} -{(amountInitial-1)*-100:0.3g}%")
                 if amountFinal is not None:
                     if amountFinal > 1.0:
-                        armorModsFinal.append(f"{icon.armorTypeIcon(child.attrib['dmgtype'].lower())} -{(amountFinal-1)*100:0.3g}%")
+                        armorModsFinal.append(f"{icon.armorTypeIcon(child.attrib['dmgtype'].lower())} +{(amountFinal-1)*100:0.3g}%")
                     else:
-                        armorModsFinal.append(f"{icon.armorTypeIcon(child.attrib['dmgtype'].lower())} +{(amountFinal-1)*-100:0.3g}%")
+                        armorModsFinal.append(f"{icon.armorTypeIcon(child.attrib['dmgtype'].lower())} -{(amountFinal-1)*-100:0.3g}%")
             elif child.attrib["type"] == "ForcedTarget":
                 text = f"forces victims to attack the user"
                 otherEffects.append(text)
@@ -465,7 +465,7 @@ def handleModifyStructure(parentElem: ET.Element) -> str:
                 raise ValueError(f"Unknown onhit stat modification: {child.attrib['type']}")
         thisItem = ""
         if len(armorMods):
-            thisItem += f" Modifies damage vulnerabilities by {' '.join(armorMods)}."
+            thisItem += f" Modifies damage resistances by {' '.join(armorMods)}."
         if len(otherEffects):
             otherEffectsJoined = common.commaSeparatedList(otherEffects)
             otherEffectsJoined = " " + otherEffectsJoined[0].upper() + otherEffectsJoined[1:] + "."
@@ -913,6 +913,9 @@ def handleHealAction(proto: ET.Element, action: ET.Element, tactics: Union[None,
 
 def handleAutoConvertAction(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
     s = f"If no nearby units of its owner are near, may be converted by other players' units within {actionRange(proto, action)}."
+    modifyabstracttypes = findAllFromActionOrTactics(action, tactics, "modifyabstracttype")
+    if len(modifyabstracttypes) > 0:
+        s += f" Cannot be converted if the owner has nearby {common.commaSeparatedList(common.getListOfDisplayNamesForProtoOrClass([elem.text for elem in modifyabstracttypes], plural=True), 'or')}."
     if action.find("cannotbeconvertedbyallies") is not None:
         s += " Cannot be converted by allies."
     return s
@@ -1010,8 +1013,8 @@ def handleSpawnAssistUnitAction(proto: ET.Element, action: ET.Element, tactics: 
     projectileTactics = actionTactics(protoElem, projectileAttack)
     bounces = findFromActionOrTactics(projectileAttack, projectileTactics, "modifytargetlimit", 1, int)
     dist = findFromActionOrTactics(projectileAttack, projectileTactics, "maxrange", 1.0, float)
-    
-    return f"{actionName} {rechargeRate(proto, action, chargeType, tech)}: {actionTargetTypeText(proto, action)} Fires a projectile which bounces between targets, hitting up to {bounces:0.3g} different targets. Each successive target can be no further from {dist:0.3g}m from the last. Upon returning to the user, they are healed for the total damage dealt. {actionDamageFull(proto, action, hideArea=True, ignoreActive=tech is not None)}"
+    healRate = findFromActionOrTactics(projectileAttack, projectileTactics, "modifymultiplier", 1.0, float)
+    return f"{actionName} {rechargeRate(proto, action, chargeType, tech)}: {actionTargetTypeText(proto, action)} Fires a projectile which bounces between targets, hitting up to {bounces:0.3g} different targets. Each successive target can be no further from {dist:0.3g}m from the last. Upon returning to the user, they are healed for {100*healRate:0.3g}% of the total damage dealt. {actionDamageFull(proto, action, hideArea=True, ignoreActive=tech is not None)}"
 
 def handleAreaRestrictAction(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
     radius = findFromActionOrTactics(action, tactics, "damagearea", 0.0, float)

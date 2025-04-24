@@ -15,7 +15,7 @@ import copy
 NOTABLE_UNIT_CLASSES = ("Hero", "AbstractInfantry", "AbstractArcher", "AbstractCavalry", "AbstractSiegeWeapon", "AbstractVillager", "AbstractArcherShip", "AbstractSiegeShip", 
                         "AbstractCloseCombatShip", "MythUnit", "HeroShadowUpgraded", "HumanSoldier", "Ship", "Building", "CavalryLineUpgraded", "InfantryLineUpgraded", "ArcherLineUpgraded", 
                         "Huntable", "FoodDropsite", "WoodDropsite", "GoldDropsite", "LogicalTypeBuildingEmpoweredForLOS", "LogicalTypeArchaicMythUnit", "LogicalTypeClassicalMythUnit", "LogicalTypeHeroicMythUnit",
-                        "LogicalTypeAffectedByCeaseFireBuildingSlow", "LogicalTypeCanSeeStealth")
+                        "LogicalTypeAffectedByCeaseFireBuildingSlow", "LogicalTypeCanSeeStealth", "AbstractTower", "AbstractWall")
 
 # Key : [list of unit classes that are hidden if a unit has this class]
 # Stating both "ship" and "archer ship" is a bit pointless.
@@ -433,6 +433,8 @@ class UnitDescription:
                 orderedTypes.append(f"Affected by {'/'.join(affectedBy)}")
             if protoUnit.find("unittype[.='Unit']") is not None and protoUnit.find("unittype[.='LogicalTypeConvertsHerds']") is None:
                 orderedTypes.append("Cannot convert Herdables")
+            if protoUnit.find("unittype[.='LogicalTypeBuildingThatConvertsConvertibles']") is not None:
+                orderedTypes.append("Protects Convertible Structures")
             
 
             orderedTypes += self.additionalClasses
@@ -701,7 +703,7 @@ def oracleAutoGatherFavorHelper(protoName):
     # Experimentally this seems hardcoded to 0.01 (thanks Thanik for working through this)
     quadraticTerm = 0.01 * modifymultiplier/modifybase
     valueAtMax = rate + quadraticTerm * rateCap * rateCap
-    return f"Produces more based on the current idle LOS boost amount. Without upgrades, this reaches {icon.resourceIcon('favor')} {valueAtMax:0.3g} per second. Area overlapping with other Oracles does not count."
+    return f"Produces more based on the current idle LOS boost amount. Without upgrades, this reaches {icon.resourceIcon('favor')} {valueAtMax:0.3g} per second. Area overlapping with other Oracles or beyond the edges of the map does not count."
 
 def oracleHistoryText(protoName):
     actionElem = action.findActionByName(protoName, 'AutoGatherFavor')
@@ -797,7 +799,7 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["Prodromos"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist cavalry only good against other cavalry."})
     unitDescriptionOverrides["Militia"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist infantry spawned from destroyed buildings of Poseidon. Good against cavalry."})
     unitDescriptionOverrides["Myrmidon"] = UnitDescription(preActionInfoText={"HandAttack":f"Generalist infantry that inflicts armor ignoring {icon.damageTypeIcon('divine')} Divine damage with attacks."})
-    unitDescriptionOverrides["Hetairos"] = UnitDescription(preActionInfoText={"HandAttack":f"Generalist cavalry that inflict area damage."})
+    unitDescriptionOverrides["Hetairos"] = UnitDescription(preActionInfoText={"HandAttack":f"Generalist cavalry that inflict area damage, especially good against ranged soldiers."})
     unitDescriptionOverrides["Gastraphetoros"] = UnitDescription(preActionInfoText={"RangedAttack":f"Generalist archer with considerable bonus against buildings."})
     unitDescriptionOverrides["Pegasus"] = UnitDescription(additionalText=f"Pegasus from the Bridle of Pegasus respawn in {float(techtree.find('tech[@name=' + stringLiteralHelper('BridleOfPegasusRespawn') +']/delay').text):0.3g}s. Pegasus from Winged Messenger respawn in {float(techtree.find('tech[@name=' + stringLiteralHelper('WingedMessengerRespawn') +']/delay').text):0.3g}s.")
     unitDescriptionOverrides["Hydra"] = UnitDescription(passiveAbilityLink={"veterancy":"AbilityHydra"}, nonActionObservationArgs={"veterancy":["head"]})
@@ -816,7 +818,7 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["Axeman"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry only good against other infantry."})
     unitDescriptionOverrides["Slinger"] = UnitDescription(preActionInfoText={"RangedAttack":"Specialist ranged unit only good against other ranged units."})
     unitDescriptionOverrides["ChariotArcher"] = UnitDescription(preActionInfoText={"RangedAttack":"Generalist ranged unit, especially good against infantry."}, additionalText="Receives a free Medium line upgrade.")
-    unitDescriptionOverrides["CamelRider"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist cavalry unit, especially good against other cavalry."}, additionalText="Receives a free Medium line upgrade.")
+    unitDescriptionOverrides["CamelRider"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist cavalry unit, good against rangd soldiers and other cavalry."}, additionalText="Receives a free Medium line upgrade.")
     unitDescriptionOverrides["WarElephant"] = UnitDescription(preActionInfoText={"HandAttack":"Very slow cavalry, good against whatever units or buildings it can reach."}, additionalText="Receives a free Medium line upgrade.")
     unitDescriptionOverrides["Priest"] = UnitDescription(overrideDescription="Hero with a ranged attack that is good against myth units, but weak against other targets.", additionalText="Hands of the Pharaoh is required to pick up relics.")
     unitDescriptionOverrides["Pharaoh"] = UnitDescription(preActionInfoText={"RangedAttack":"Hero with a ranged attack that is especially good against myth units."})
@@ -871,14 +873,14 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["Behemoth"] = UnitDescription(passiveAbilityLink={"directionalarmor":"AbilityBehemoth"})
     # Chinese
     trainingYard = lambda protoUnit: f"With Training Yard: Produces units {100*(common.findAndFetchText(protoFromName(protoUnit + 'TrainingYard'), 'trainingrate', 1.0, float)-1):0.3g}% faster."
-    towerAddon = lambda protoUnit: f"With Tower: Counts towards regular Tower build limit. +{common.findAndFetchText(protoFromName(protoUnit+'Tower'), 'los', 0, float) - common.findAndFetchText(protoFromName(protoUnit), 'los', 0, float):0.3g} LOS, adds attack: {action.describeAction(protoUnit+'Tower', 'RangedAttack')}"
+    towerAddon = lambda protoUnit: f"With Tower: Counts as Tower for techs and bonuses, counts towards regular Tower build limit. +{common.findAndFetchText(protoFromName(protoUnit+'Tower'), 'los', 0, float) - common.findAndFetchText(protoFromName(protoUnit), 'los', 0, float):0.3g} LOS, adds attack: {action.describeAction(protoUnit+'Tower', 'RangedAttack')}"
     unitDescriptionOverrides["MilitaryCamp"] = UnitDescription(overrideDescription="Produces infantry and Wuzu Javelineers. May be upgraded with either a Training Yard or Tower.", additionalText=[trainingYard("MilitaryCamp"), towerAddon("MilitaryCamp")])
     unitDescriptionOverrides["MachineWorkshop"] = UnitDescription(overrideDescription="Produces archers and siege units. May be upgraded with either a Training Yard or Tower.", additionalText=[trainingYard("MachineWorkshop"), towerAddon("MachineWorkshop")])
     unitDescriptionOverrides["DaoSwordsman"] = UnitDescription(preActionInfoText={"HandAttack":"Slow generalist infantry."}, actionNameOverrides={"SelfDestructAttack":"Infantry Buff"})
     unitDescriptionOverrides["GeHalberdier"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry only good against cavalry."}, actionNameOverrides={"SelfDestructAttack":"Infantry Buff"})
     unitDescriptionOverrides["WuzuJavelineer"] = UnitDescription(preActionInfoText={"RangedAttack":"Specialist ranged soldier only good against other ranged soldiers."})
-    unitDescriptionOverrides["FireArcher"] = UnitDescription(preActionInfoText={"RangedAttack":"Generalist ranged soldier, especially good against infantry. Has a minor bonus against buildings."})
-    unitDescriptionOverrides["ChuKoNu"] = UnitDescription(preActionInfoText={"RangedAttack":f"Generalist ranged soldier, especially good against infantry. High damage output, but long reload time ({action.actionRof(action.findActionByName('ChuKoNu', 'RangedAttack'))})."}, ignoreActions=["SelfDestructAttack"])
+    unitDescriptionOverrides["FireArcher"] = UnitDescription(preActionInfoText={"RangedAttack":"Specialist ranged soldier only good against infantry. Has a minor bonus against buildings."})
+    unitDescriptionOverrides["ChuKoNu"] = UnitDescription(preActionInfoText={"RangedAttack":f"Generalist ranged soldier. High damage output, but long reload time ({action.actionRof(action.findActionByName('ChuKoNu', 'RangedAttack'))})."}, ignoreActions=["SelfDestructAttack"])
     unitDescriptionOverrides["WhiteHorseCavalry"] = UnitDescription(preActionInfoText={"HandAttack":f"Generalist cavalry, especially good against archers. Has a ranged attack which must recharge between uses."})
     unitDescriptionOverrides["TigerCavalry"] = UnitDescription(preActionInfoText={"HandAttack":f"Generalist cavalry, especially good against archers and other cavalry. When killed, the rider continues fighting on foot."}, additionalText="<tth>Dismounted form:\\n  " + icon.BULLET_POINT + " " + describeUnit('TigerCavalryDismounted'))
     pioneerClassicalRange = float(common.techFromName("ClassicalAgeChinese").find("effects/effect[@subtype='MaximumRange']/target[.='Pioneer']/..").attrib['amount'])
@@ -1101,8 +1103,8 @@ def generateUnitDescriptions():
     # Other misc unit related strings
 
     # Chinese training yard/tower commands
-    globals.stringMap["STR_TRANSFORM_TO_MILITARY_CAMP_TOWER_LR"] = towerAddon("MilitaryCamp") + " Only one addon may be built per building."
-    globals.stringMap["STR_TRANSFORM_TO_MACHINE_WORKSHOP_TOWER_LR"] = towerAddon("MachineWorkshop") + " Only one addon may be built per building."
+    globals.stringMap["STR_TRANSFORM_TO_MILITARY_CAMP_TOWER_LR"] = icon.iconTime() + f" {common.findAndFetchText(common.techFromName("MilitaryCampToTower"), "researchpoints", 0.0, float):0.3g}: " + towerAddon("MilitaryCamp") + " Only one addon may be built per building."
+    globals.stringMap["STR_TRANSFORM_TO_MACHINE_WORKSHOP_TOWER_LR"] = icon.iconTime() + f" {common.findAndFetchText(common.techFromName("MachineWorkshopToTower"), "researchpoints", 0.0, float):0.3g}: " + towerAddon("MachineWorkshop") + " Only one addon may be built per building."
     globals.stringMap["STR_TRANSFORM_TO_MILITARY_CAMP_TRAINING_YARD_LR"] = trainingYard("MilitaryCamp") + " Only one addon may be built per building."
     globals.stringMap["STR_TRANSFORM_TO_MACHINE_WORKSHOP_TRAINING_YARD_LR"] = trainingYard("MachineWorkshop") + " Only one addon may be built per building."
 

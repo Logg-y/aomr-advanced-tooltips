@@ -537,8 +537,12 @@ def generateGodPowerDescriptions():
     # 35 died
     implodeUnitSuckRate = 1/((float(implode.find("unitimplodetimedelaymin").text)+float(implode.find("unitimplodetimedelaymax").text))/2)
     # It sucks units with the same positional bias as lightning storm
+
+    implodeInterval = float(implode.find('damageintervalseconds').text)
+    implodeRepeatText = "" if implodeInterval > 30 else f", and again every {implodeInterval:0.3g} seconds until the sphere explodes"
+
     implodeItems = [f"Creates a floating sphere that begins to suck in all players' {{attacktargets}} within {float(implode.find('pullradius').text):0.3g}m. Prevents garrisoning in the area of effect. The sphere soon begins to suck up about {implodeUnitSuckRate:0.3g} units per second.  Units designated to be pulled are connected to the sphere with a blue ray: if the units are able to get {float(implode.find('unitescaperadius').text):0.3g}m from the sphere before being pulled in, they escape unharmed. Preferentially pulls units closest to the southeast edge of the map first."]
-    implodeItems += [f"Units that are sucked up by the sphere take {protoGodPowerDamage('ImplodeSphere', 'HandAttack', damageOnly=True)} when they reach the sphere, and again every {float(implode.find('damageintervalseconds').text):0.3g} second until the sphere explodes."]
+    implodeItems += [f"Units that are sucked up by the sphere take {protoGodPowerDamage('ImplodeSphere', 'HandAttack', damageOnly=True)} when they reach the sphere{implodeRepeatText}."]
     implodeItems += [f"The sphere explosion inflicts {protoGodPowerDamage('ImplodeShockwave', 'HandAttack', damageOnly=False)} This damage strikes all objects within {float(implode.find('exploderadius').text):0.3g}m and has no damage falloff. Units sucked into the sphere are not hit by this. The explosion damage is increased by {100*float(implode.find('poweraccumulationincrement').text):0.3g}% per unit sucked into the sphere, to a maximum damage bonus of {100*float(implode.find('maximumaccumulatedpower').text):0.3g}%."]
     implodeItems += [f"Friendly objects take only 10% damage from both sources.", "{powerblocker}", "{los}"]
     godPowerProcessingParams["Implode"] = GodPowerParams(implodeItems)
@@ -612,8 +616,9 @@ def generateGodPowerDescriptions():
     venombeast = findGodPowerByName("VenomBeast")
     venombeastBaseQuantity = int(venombeast.find("createunit").attrib['quantity'])
     venombeastProto = venombeast.find("createunit").text
-    venombeastItems = [f"Summons Fei. The quantity produced depends on age. At the end of the power, any surviving Fei die."]
-    venombeastItems += [f" {icon.BULLET_POINT} {common.AGE_LABELS[index+1]}: {int(elem.attrib['quantityaddon'])+venombeastBaseQuantity}" for index, elem in enumerate(venombeast.findall("ageadjustment")) if index > 0]
+    venombeastItems = [f"Summons {venombeastBaseQuantity} Fei. At the end of the power, any surviving Fei die."]
+    # No longer age scaling, but here in case of revert
+    #venombeastItems += [f" {icon.BULLET_POINT} {common.AGE_LABELS[index+1]}: {int(elem.attrib['quantityaddon'])+venombeastBaseQuantity}" for index, elem in enumerate(venombeast.findall("ageadjustment")) if index > 0]
     venombeastItems += ["{duration}"]
     venombeastItems += ["<tth>Fei:", unitdescription.describeUnit(venombeastProto)]
     godPowerProcessingParams["VenomBeast"] = GodPowerParams(venombeastItems)
@@ -621,13 +626,13 @@ def generateGodPowerDescriptions():
     # AreaAttack seems to be used when it hits ground and has distance falloff
     # In any case (?) is a fire field created?
 
-    # Strike count seems to be ~255, which gets hit by the accuracy
+    # Strike count seems to be ~205, which gets hit by the accuracy
     blazingprairie = findGodPowerByName("BlazingPrairie")
     blazingprairieAccuracy = common.findAndFetchText(blazingprairie, "accuracy", 0.0, float)
     blazingprairieStrike = blazingprairie.find("strikeproto").text
     blazingprairieAreaAttack = blazingprairie.find("areaattackaction").text
     blazingprairieFireArea = blazingprairie.find("groundimpactvfxproto").text
-    blazingprairieItems = [f"Summons a storm of about 255 fireballs. Each fireball has a {100*blazingprairieAccuracy:0.3g}% chance to hit random {{playerrelationpos}} {{attacktargets}}. The remainder strike a random location, but are more likely to land towards the centre. Aimed strikes inflict {protoGodPowerDamage(blazingprairieStrike, 'HandAttack')} Random unaimed fireballs damage anything close enough to them (with damage falloff): {protoGodPowerDamage(blazingprairieStrike, blazingprairieAreaAttack)} All fireballs leave lingering fire: {action.actionDamageOverTimeArea(blazingprairieFireArea)}", "{radius}", "{duration}"]
+    blazingprairieItems = [f"Summons a storm of about 205 fireballs. Each fireball has a {100*blazingprairieAccuracy:0.3g}% chance to hit random {{playerrelationpos}} {{attacktargets}}. The remainder strike a random location, but are more likely to land towards the centre. Aimed strikes inflict {protoGodPowerDamage(blazingprairieStrike, 'HandAttack')} Random unaimed fireballs damage anything close enough to them (with damage falloff): {protoGodPowerDamage(blazingprairieStrike, blazingprairieAreaAttack)} All fireballs leave lingering fire: {action.actionDamageOverTimeArea(blazingprairieFireArea)}", "{radius}", "{duration}"]
     godPowerProcessingParams["BlazingPrairie"] = GodPowerParams(blazingprairieItems)
     
     greatflood = findGodPowerByName("GreatFlood")

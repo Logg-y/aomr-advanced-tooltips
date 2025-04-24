@@ -212,6 +212,7 @@ def otherAotgStrings():
     prometheusTGBuildPoints = float(globals.dataCollection['techtree.xml'].find("tech[@name='AOTGPrometheusMinorWT']").find("effect[@subtype='BuildPoints']").attrib['amount'])
     prometheusTGAutoBuild = float(globals.dataCollection['techtree.xml'].find("tech[@name='AOTGPrometheusMinorWT']").find("effect[@subtype='AutoBuildRate']").attrib['amount'])
     globals.stringMap["STR_AOTG_RULE_PROMETHEUS_MINOR_DESC"] = f"Human players start with a free usage of Titan Gate. It takes {prometheusTGBuildPoints:0.3g}x longer to build than normal, but slowly builds itself as if {prometheusTGAutoBuild:0.3g} Greek villagers were working on it."
+    globals.stringMap["STR_AOTG_RULE_PROMETHEUS_MINOR_OBJ"] = f"Titan gate: Early, free, takes {prometheusTGBuildPoints:0.3g}x longer to complete"
 
     # Hel's Mythic Frenzy - The tech changes BUILD POINTS???
     hel = tech.processTech(globals.dataCollection['techtree.xml'].find("tech[@name='AOTGHelMinorWT']"))
@@ -226,6 +227,7 @@ def otherAotgStrings():
 
     # Horus' Ancestral Protection
     globals.stringMap["STR_AOTG_RULE_HORUS_MINOR_DESC"] = tech.processTech(common.techFromName("AOTGHorusMinorWT"))
+    globals.stringMap["STR_AOTG_RULE_HORUS_MINOR_OBJ"] = "Units: -50% hitpoints, resurrect 30s after death"
 
     # Aphrodite's Rite of Flourishing
     globals.stringMap["STR_AOTG_RULE_APHRODITE_MINOR_DESC"] = "Affects human players only. 10 minutes into the game, all Villagers are duplicated.\\n" + tech.processTech(common.techFromName("AOTGAphroditeMinorWT"))
@@ -238,7 +240,7 @@ def otherAotgStrings():
     globals.stringMap["STR_AOTG_WT_HARSHSEASONS_SPRING_BONUS"] = "Villagers and Human Soldiers train twice as fast"
     globals.stringMap["STR_AOTG_WT_HARSHSEASONS_SUMMER_BONUS"] = "Forest Fires a random tree every 30 seconds, then regrows it with Gaia Forest"
     globals.stringMap["STR_AOTG_WT_HARSHSEASONS_AUTUMN_BONUS"] = "Villager food gather rates +100% of base"
-    globals.stringMap["STR_AOTG_WT_HARSHSEASONS_WINTER_BONUS"] = "Casts Frost (10s) at a random unit of every player after 45s"
+    globals.stringMap["STR_AOTG_WT_HARSHSEASONS_WINTER_BONUS_1"] = "Casts Frost (10s) at a random unit of every player after 45s"
     globals.stringMap["STR_AOTG_WT_HARSHSEASONS_WINTER_BONUS_2"] = "0.3 Favor per second"
     globals.stringMap["STR_AOTG_WT_HARSHSEASONS_WINTER_BONUS_3"] = "Myth units +50% base speed, Human Soldiers -30% base speed"
     globals.stringMap["STR_AOTG_WT_HARSHSEASONS_WINTER_BONUS_4"] = "Casts Fimbulwinter (halved wolf spawns) after 45s"

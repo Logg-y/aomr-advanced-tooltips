@@ -127,6 +127,9 @@ def generateMajorGodDescriptions():
     globals.stringMap[common.findGodPowerByName("ShieldBlessingTechree").find("rolloverid").text] = shieldblessingTechtree
 
     shennongContent = globals.dataCollection["string_table.txt"]["STR_CIV_SHENNONG_LR"]
+    shennongFixedLandHealTargetElems = common.techFromName("ArchaicAgeShennong").findall("effects/effect[@subtype='BuildingChainEffect'][@modifytype='HealRate']")
+    shennongFixedLandHealTargets = common.getDisplayNameForProtoOrClassPlural([elem.attrib['unittype'] for elem in shennongFixedLandHealTargetElems])
+    shennongContent = shennongContent.replace("Myth units recover", shennongFixedLandHealTargets + " recover")
     globals.stringMap["STR_CIV_SHENNONG_LR"] = shennongContent
 
     shennongspawning = globals.dataCollection["major_gods.xml"].find("civ[name='Shennong']/bonusunitspawning/resourcegoal")

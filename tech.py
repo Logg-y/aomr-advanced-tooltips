@@ -1191,6 +1191,8 @@ def generateTechDescriptions():
 
     common.handleSharedStringIDConflicts(stringIdsByOverwriters)
 
+    ageIndexes = {"ClassicalAge":1, "HeroicAge":2, "MythicAge":3}
+
     # I think I resign myself to hardcoding values here. The normal output will not be anywhere NEAR concise enough
     classicalAgeGeneral = techtree.find("tech[@name='ClassicalAgeGeneral']")
     heroicAgeGeneral = techtree.find("tech[@name='HeroicAgeGeneral']")
@@ -1201,10 +1203,31 @@ def generateTechDescriptions():
     heroDamage = ["{:0.3g}".format(100*(-1+float(age.find("effects/effect[@subtype='Damage']/target[.='HeroShadowUpgraded']/..").attrib['amount']))) for age in ageUpTechs]
     ageUpComponents.append(f"Age Upgraded Heroes: Hitpoints +{'/'.join(heroHitpoints)}% of base, Damage +{'/'.join(heroDamage)}% of base (Classical/Heroic/Mythic).")
     tradePostBuffs = ["{:0.3g}".format(float(age.find("effects/effect[@action='AutoGatherFood']/target[.='TradingPost']/..").attrib['amount'])) for age in ageUpTechs]
-    ageUpComponents.append(f"Trading Post gather rates: +{'/'.join(tradePostBuffs)}")
+    ageUpComponents.append(f"Trading Post gather rates: +{'/'.join(tradePostBuffs)} per second.")
+
+    # Greek hero effects
+    greekHeroTrainIncreases = []
+    greekHeroDamageIncreases = []
+    for ageName, ageIndex in ageIndexes.items():
+        greekTech = common.techFromName(ageName + "Greek")
+        greekTechEffect = greekTech.find("effects/effect[@subtype='TrainPoints']/target[.='HeroShadowUpgraded']/..")
+        if greekTechEffect is None:
+            greekHeroTrainIncreases.append("0")
+        else:
+            greekHeroTrainIncreases.append(f"{-100*(float(greekTechEffect.attrib['amount'])-1.0):0.3g}")
+        greekTechEffect = greekTech.find("effects/effect[@subtype='Damagebonus'][@unittype='MythUnit']/target[.='HeroShadowUpgraded']/..")
+        if greekTechEffect is None:
+            greekHeroDamageIncreases.append("0")
+        else:
+            greekHeroDamageIncreases.append(f"{float(greekTechEffect.attrib['amount']):0.3g}")
+    ageUpComponents.append(f"Greek Hero training time: -{'/'.join(greekHeroTrainIncreases)}% of current.")
+    ageUpComponents.append(f"Greek Hero bonus vs Myth Units: +{'/'.join(greekHeroDamageIncreases)}x.")
+
     globals.stringMap["STR_FORMAT_MINOR_GOD_LR"] = f"\\n {icon.BULLET_POINT} ".join(ageUpComponents) + f"\\n\\n {icon.BULLET_POINT} " + globals.dataCollection["string_table.txt"]["STR_FORMAT_MINOR_GOD_LR"]
 
-    ageIndexes = {"ClassicalAge":1, "HeroicAge":2, "MythicAge":3}
+    
+
+    
 
     # Advancement messages
     for tech in techtree:

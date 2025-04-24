@@ -163,7 +163,7 @@ _UNIT_CLASS_LABELS = {
     "AbstractNezha":"Nezha",
     "AbstractMilitaryCamp":"Military Camp",
     "LogicalTypeDivineImmunity":"targets with Divine Immunity",
-
+    "LogicalTypeBuildingThatConvertsConvertibles":"Building that protect convertible structures",
 
     # Partial Lies
     "EconomicUpgraded":"Villager",
@@ -245,6 +245,7 @@ _UNIT_CLASS_LABELS_PLURAL = {
     "all":"all objects",
     "All":"all objects",
     "LogicalTypeDivineImmunity":"targets with Divine Immunity",
+    "LogicalTypeBuildingThatConvertsConvertibles":"Buildings that protect convertible structures",
 
 
     # Partial lies for clarity:
