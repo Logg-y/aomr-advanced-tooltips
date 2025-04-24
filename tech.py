@@ -1101,8 +1101,8 @@ def generateTechDescriptions():
         techManualAdditions["SkyFire"] = TechAddition(startEntry=[f"Sky Lantern: On death over Land: {skyfireLand}", f"Sky Lantern: On death over Water: {skyfireLand}"], lineFilter=lambda x: "VFX" not in x)
 
     advancedDefensesTransformTech = common.techFromName("WallConnectorToTower")
-    advancedDefensesTransformTime = common.findAndFetchText(advancedDefensesTransformTech, "resaerchpoints", 0.0, float)
-    techManualAdditions["AdvancedDefenses"] = TechAddition(startEntry=f"Wall Connector: Allows conversion to Tower ({advancedDefensesTransformTime} seconds)")
+    advancedDefensesTransformTime = common.findAndFetchText(advancedDefensesTransformTech, "researchpoints", 0.0, float)
+    techManualAdditions["AdvancedDefenses"] = TechAddition(startEntry=f"Wall Connector: Allows conversion to Tower ({advancedDefensesTransformTime:0.3g} seconds).")
 
     pixiuModifyExponent = common.findAndFetchText(action.findActionByName("PiXiu", "Trade"), "modifyexponent", 0.0, float) * 0.1
     autumnOfAbundanceEffects = common.techFromName("AutumnOfAbundance").findall("effects/effect[@subtype='MinWorkRate']")
