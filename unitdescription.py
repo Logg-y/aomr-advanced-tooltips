@@ -1068,7 +1068,8 @@ def generateUnitDescriptions():
     # Tech related
 
     nonActionPassiveAbilities.append(('PassiveAnastrophe', action.describeAction(protoFromName("Pentekonter"), action.findActionByName("Pentekonter", "ChargedHandAttack"), chargeType=action.ActionChargeType.REGULAR, tech=techtree.find("tech[@name='Anastrophe']"))))
-    nonActionPassiveAbilities.append(('PassiveVenomous', (techtree.find("tech[@name='ShaftsOfPlague']"), tech.processEffect(techtree.find("tech[@name='ShaftsOfPlague']"), techtree.find("tech[@name='ShaftsOfPlague']/effects/effect[@effecttype='DamageOverTime']")).toString(skipAffectedObjects=False))))
+    shaftsOfPlagueText = "\n".join(tech.handlerResponseListToStrings(tech.processEffect(common.techFromName("ShaftsOfPlague"), techtree.find("tech[@name='ShaftsOfPlague']/effects/effect[@effecttype='DamageOverTime']")), skipAffectedObjects=True))
+    nonActionPassiveAbilities.append(('PassiveVenomous', (techtree.find("tech[@name='ShaftsOfPlague']"), shaftsOfPlagueText)))
 
     nonActionPassiveAbilities.append(('PassiveFuneralBarge', tech.processTech(techtree.find("tech[@name='FuneralBarge']"), skipAffectedObjects=True)))
     nonActionPassiveAbilities.append(('PassiveDeathlyDonative', tech.processTech(techtree.find("tech[@name='FuneralRites']"), skipAffectedObjects=True)))
@@ -1082,7 +1083,8 @@ def generateUnitDescriptions():
     nonActionPassiveAbilities.append(('PassiveSkaldicInspiration', tech.processTech(techtree.find("tech[@name='LongSerpent']"), skipAffectedObjects=True)))
 
 
-    nonActionPassiveAbilities.append(('PassiveSerratedBlades', tech.processEffect(techtree.find("tech[@name='BiteOfTheShark']"), techtree.find("tech[@name='BiteOfTheShark']/effects/effect[@effecttype='DamageOverTime']")).toString(skipAffectedObjects=True)))
+    biteOfTheSharkText = "\n".join(tech.handlerResponseListToStrings(tech.processEffect(common.techFromName("BiteOfTheShark"), techtree.find("tech[@name='BiteOfTheShark']/effects/effect[@effecttype='DamageOverTime']")), skipAffectedObjects=True))
+    nonActionPassiveAbilities.append(('PassiveSerratedBlades', (techtree.find("tech[@name='BiteOfTheShark']"), biteOfTheSharkText)))
     nonActionPassiveAbilities.append(('PassiveBattleFrenzy', tech.processTech(techtree.find("tech[@name='DevoteesOfAtlas']"), skipAffectedObjects=True, lineJoin="\\n")))
 
     nonActionPassiveAbilities.append(('PassiveMasterOfWeaponry', tech.processEffect(techtree.find("tech[@name='MasterOfWeaponry']"), techtree.find("tech[@name='MasterOfWeaponry']/effects/effect[@effecttype='Snare']")).toString(skipAffectedObjects=True)))

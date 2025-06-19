@@ -945,6 +945,13 @@ class TechAddition:
     # However, it does have potential to make a complete mess of things
     fuzzyMerge: bool = True
 
+def handlerResponseListToStrings(input: Union[EffectHandlerResponse, List[EffectHandlerResponse]], skipAffectedObjects: bool=False) -> List[str]:
+    if isinstance(input, EffectHandlerResponse):
+        return [input.toString(skipAffectedObjects=skipAffectedObjects)]
+    combineHandlerResponses(input)
+    strings = [response.toString(skipAffectedObjects=skipAffectedObjects) for response in input]
+    return strings
+
 
 def processTech(tech: ET.Element, skipAffectedObjects: bool=False, lineJoin: str=f"\\n"):
     #print(f"Processing tech: {tech.attrib['name']}")
@@ -1119,7 +1126,7 @@ def generateTechDescriptions():
     maelstromTarget = common.getDisplayNameForProtoOrClass(maelstromSpawnAction.find("target[@attacktype]").attrib['attacktype'])
     maelstromLifetime = common.findAndFetchText(maelstromObject, "lifespan", 0.0, float)
     maelstromPullRadius = common.findAndFetchText(action.actionTactics(maelstromObject, "WaterTornado"), "maxrange", 0.0, float)
-    maelstromDamageAuras = " ".join([action.describeAction(maelstromObject, aura) for aura in ("AreaDamage", "EnemySpeedModify")])
+    maelstromDamageAuras = " ".join([action.describeAction(maelstromObject, aura) for aura in ("AreaDamage",)])
     techManualAdditions["Maelstrom"] = TechAddition(startEntry=f"Doujian: Each projectile fired at a {maelstromTarget} in water has a {maelstromChance:0.3g}% to spawn a Maelstrom. Maelstroms last {maelstromLifetime:0.3g} seconds, pulling in enemy units within {maelstromPullRadius:0.3g}m. Enemy units in the middle of the Maelstrom spin and cannot attack properly. {maelstromDamageAuras}",
                                                     lineFilter=lambda line: "Modifies Ranged Attack" not in line)
     
