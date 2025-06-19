@@ -293,7 +293,7 @@ def onhiteffectTargetString(onhiteffect: ET.Element, hitword="hit", default="tar
         return ""
     return f"{hitword} {default}"
 
-def actionDamageOverTime(proto: ET.Element, action: ET.Element, isDPS=False, damageMultiplier=1.0, singleProjectile=False):
+def actionDamageOverTime(proto: ET.Element, action: ET.Element, isDPS=False, damageMultiplier=1.0, singleProjectile=False, ignoreActive=False):
     dots = action.findall("onhiteffect[@type='DamageOverTime']")
     dur = None
     targetType = None
@@ -301,6 +301,8 @@ def actionDamageOverTime(proto: ET.Element, action: ET.Element, isDPS=False, dam
     prob = None
     mult = damageMultiplier * actionDamageMultiplier(proto, action, isDPS=isDPS, singleProjectile=singleProjectile)
     for dot in dots:
+        if ignoreActive == False and int(dot.attrib.get("active", 1)) == 0:
+            continue
         thisDur = float(dot.attrib["duration"])
         if dur is not None and thisDur != dur:
             raise ValueError(f"Unsupported mismatched DoT durations for {action.find('name').text}")

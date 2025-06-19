@@ -471,16 +471,23 @@ def dataSubtypeOnHitEffectActiveHandler(tech: ET.Element, effect:ET.Element):
             actionElement = action.findActionByName(proto, effect.attrib['action'])
             #responses.append(EffectHandlerResponse(unwrapAbstractClass(target), "Modifies action {combinable}:" + f" {action.actionOnHitNonDoTEffects(proto, actionElement, True)}"))
             actionName = action.getActionName(proto, actionElement, nameNonChargeActions=True)
+            modifyDetails = action.actionOnHitNonDoTEffects(proto, actionElement, True, effectName)
+            if modifyDetails == "":
+                modifyDetails = action.actionDamageOverTime(proto, actionElement, ignoreActive=True)
+                if modifyDetails != "":
+                    modifyDetails = f"Inflicts an additional {modifyDetails}"
+            if modifyDetails == "":
+                continue
             if "targettype" in effect.attrib:
                 if isAbstractType:
-                    responses.append(EffectHandlerResponse(common.getObjectDisplayName(proto), f"Modifies {actionName} against " + "{combinable}" + f": {action.actionOnHitNonDoTEffects(proto, actionElement, True)}", effect.attrib['targettype']))
+                    responses.append(EffectHandlerResponse(common.getObjectDisplayName(proto), f"Modifies {actionName} against " + "{combinable}:" + f" {modifyDetails}", effect.attrib['targettype']))
                 else:
-                    responses.append(dataSubtypeWithAmountHelper(f"Modifies {actionName}" + " against {combinable}:" + f" {action.actionOnHitNonDoTEffects(proto, actionElement, True)}", combinableAttribute="targettype", combinableAttributeFormat=common.getDisplayNameForProtoOrClassPlural)(tech, effect))
+                    responses.append(dataSubtypeWithAmountHelper(f"Modifies {actionName}" + " against {combinable}:" + f" {modifyDetails}", combinableAttribute="targettype", combinableAttributeFormat=common.getDisplayNameForProtoOrClassPlural)(tech, effect))
             else:
                 if isAbstractType:
-                    responses.append(EffectHandlerResponse(common.getObjectDisplayName(proto), "Modifies {combinable}:" + f" {action.actionOnHitNonDoTEffects(proto, actionElement, True)}", actionName))
+                    responses.append(EffectHandlerResponse(common.getObjectDisplayName(proto), "Modifies {combinable}:" + f" {modifyDetails}", actionName))
                 else:
-                    responses.append(dataSubtypeWithAmountHelper("Modifies {combinable}: " + f" {action.actionOnHitNonDoTEffects(proto, actionElement, True)}", combinableAttribute="action")(tech, effect))
+                    responses.append(dataSubtypeWithAmountHelper("Modifies {combinable}:" + f" {modifyDetails}", combinableAttribute="action")(tech, effect))
     return responses
 
 
@@ -946,9 +953,11 @@ class TechAddition:
     fuzzyMerge: bool = True
 
 def handlerResponseListToStrings(input: Union[EffectHandlerResponse, List[EffectHandlerResponse]], skipAffectedObjects: bool=False) -> List[str]:
+    print("list to strings", input)
     if isinstance(input, EffectHandlerResponse):
         return [input.toString(skipAffectedObjects=skipAffectedObjects)]
     combineHandlerResponses(input)
+    print(input)
     strings = [response.toString(skipAffectedObjects=skipAffectedObjects) for response in input]
     return strings
 
