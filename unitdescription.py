@@ -813,6 +813,9 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["Odysseus"] = HideFlyingAttack
     unitDescriptionOverrides["Chiron"] = HideFlyingAttack
     unitDescriptionOverrides["Hippolyta"] = HideFlyingAttack
+    unitDescriptionOverrides["Trireme"] = UnitDescription(preActionInfoText={"RangedAttack":"Archer ship, good against close combat ships."})
+    unitDescriptionOverrides["Juggernaut"] = UnitDescription(preActionInfoText={"RangedAttack":"Siege ship, good against archer ships."})
+    unitDescriptionOverrides["Pentekonter"] = UnitDescription(preActionInfoText={"HandAttack":"Close combat ship, good against siege ships."})
     # Egyptian
     unitDescriptionOverrides["Spearman"] = UnitDescription(preActionInfoText={"HandAttack":"Fast semi-specialised infantry, mostly only good against cavalry."})
     unitDescriptionOverrides["Axeman"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry only good against other infantry."})
@@ -827,6 +830,9 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["Phoenix"] = UnitDescription(ignoreActions=["FlyingUnitAttack"], overrideNonActionObservations={"spawns":f"Leaves an egg on death. After {float(action.actionTactics('PhoenixEgg', 'PhoenixRebirth').find('maintaintrainpoints').text):0.3g} seconds, it hatches back into a Phoenix."}, passiveAbilityLink={"spawns":"AbilityPhoenix"})
     unitDescriptionOverrides["PhoenixEgg"] = UnitDescription(linkActionsToAbilities={"PhoenixRebirth":"AbilityPhoenixEgg"})
     unitDescriptionOverrides["Scarab"] = UnitDescription(linkActionsToAbilities={"SelfDestructAttack":"AbilityScarab"})
+    unitDescriptionOverrides["Kebenit"] = UnitDescription(preActionInfoText={"RangedAttack":"Archer ship, good against close combat ships."})
+    unitDescriptionOverrides["WarBarge"] = UnitDescription(preActionInfoText={"RangedAttack":"Siege ship, good against archer ships."})
+    unitDescriptionOverrides["RammingGalley"] = UnitDescription(preActionInfoText={"HandAttack":"Close combat ship, good against siege ships."})
     # Norse
     unitDescriptionOverrides["Raven"] = UnitDescription(additionalText="Only one Raven can be waiting to respawn at a time. If both are dead at the same time, the second must wait for the first to respawn before beginning its timer.")
     unitDescriptionOverrides["Berserk"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist infantry. Can build."}, additionalText="Immune to Bolt while in the Archaic age.")
@@ -847,6 +853,9 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["GullinburstiHeroic"] = GullinburstiHandler
     unitDescriptionOverrides["GullinburstiMythic"] = GullinburstiHandler
     unitDescriptionOverrides["DwarvenArmory"] = DwarvenArmoryHandler
+    unitDescriptionOverrides["Longboat"] = UnitDescription(preActionInfoText={"RangedAttack":"Archer ship, good against close combat ships."})
+    unitDescriptionOverrides["DragonShip"] = UnitDescription(preActionInfoText={"RangedAttack":"Siege ship, good against archer ships."})
+    unitDescriptionOverrides["Dreki"] = UnitDescription(preActionInfoText={"HandAttack":"Close combat ship, good against siege ships."})
     # Atlantean
     unitDescriptionOverrides["Oracle"] = UnitDescription(overrideDescription="Scout, line of sight grows when standing still. Cannot attack.", postActionInfoText={"AutoGatherFavor":oracleAutoGatherFavorHelper("Oracle")}, historyText=oracleHistoryText("Oracle"))
     unitDescriptionOverrides["OracleHero"] = UnitDescription(preActionInfoText={"HandAttack":"Hero scout, line of sight grows when standing still. Generates favor faster than normal Oracles. Good against myth units."}, postActionInfoText={"AutoGatherFavor":oracleAutoGatherFavorHelper("OracleHero")}, historyText=oracleHistoryText("OracleHero"))
@@ -871,6 +880,9 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["SiegeBireme"] = UnitDescription(linkActionsToAbilities={"FlameAttack":"PassiveSolarFlame"})
     unitDescriptionOverrides["Promethean"] = UnitDescription(passiveAbilityLink={"spawns":"AbilityPromethean"})
     unitDescriptionOverrides["Behemoth"] = UnitDescription(passiveAbilityLink={"directionalarmor":"AbilityBehemoth"})
+    unitDescriptionOverrides["Bireme"] = UnitDescription(preActionInfoText={"RangedAttack":"Archer ship, good against close combat ships."})
+    unitDescriptionOverrides["SiegeBireme"] = UnitDescription(preActionInfoText={"RangedAttack":"Siege ship, good against archer ships."})
+    unitDescriptionOverrides["FireShip"] = UnitDescription(preActionInfoText={"RangedAttack":"Close combat ship, good against siege ships."})
     # Chinese
     trainingYard = lambda protoUnit: f"With Training Yard: Produces units {100*(common.findAndFetchText(protoFromName(protoUnit + 'TrainingYard'), 'trainingrate', 1.0, float)-1):0.3g}% faster."
     towerAddon = lambda protoUnit: f"With Tower: Counts as Tower for techs and bonuses, counts towards regular Tower build limit. +{common.findAndFetchText(protoFromName(protoUnit+'Tower'), 'los', 0, float) - common.findAndFetchText(protoFromName(protoUnit), 'los', 0, float):0.3g} LOS, adds attack: {action.describeAction(protoUnit+'Tower', 'RangedAttack')}"
@@ -898,6 +910,9 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["Nezha"] = NezhaHandler
     terracottaFavoredLandHealing = float(common.techFromName("ArchaicAgeChinese").find("effects/effect[@unittype='TerracottaRider'][@relativity='Percent']").attrib['amount'])
     unitDescriptionOverrides["TerracottaRider"] = UnitDescription(additionalText=f"Health loss is slowed to {100*terracottaFavoredLandHealing:0.3g}% of current value on Favored Land.")
+    unitDescriptionOverrides["DouJian"] = UnitDescription(preActionInfoText={"RangedAttack":"Archer ship, good against close combat ships."})
+    unitDescriptionOverrides["LouChuan"] = UnitDescription(preActionInfoText={"RangedAttack":"Siege ship, good against archer ships."})
+    unitDescriptionOverrides["MengChong"] = UnitDescription(preActionInfoText={"HandAttack":"Close combat ship, good against siege ships."})
 
     # Fei have a lot of duplicated target text - and with the confusing amount of stuff going on with them, they need all the help they can get
     feiTargeting = action.onhiteffectTargetString(protoFromName("Fei").find("protoaction/onhiteffect[@type='DamageOverTime']"), hitword = "").strip()
