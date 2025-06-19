@@ -471,11 +471,14 @@ def dataSubtypeOnHitEffectActiveHandler(tech: ET.Element, effect:ET.Element):
             actionElement = action.findActionByName(proto, effect.attrib['action'])
             #responses.append(EffectHandlerResponse(unwrapAbstractClass(target), "Modifies action {combinable}:" + f" {action.actionOnHitNonDoTEffects(proto, actionElement, True)}"))
             actionName = action.getActionName(proto, actionElement, nameNonChargeActions=True)
-            modifyDetails = action.actionOnHitNonDoTEffects(proto, actionElement, True, effectName)
-            if modifyDetails == "":
+            if effectName == "DamageOverTime":
                 modifyDetails = action.actionDamageOverTime(proto, actionElement, ignoreActive=True)
                 if modifyDetails != "":
                     modifyDetails = f"Inflicts an additional {modifyDetails}"
+            else:
+                modifyDetails = action.actionOnHitNonDoTEffects(proto, actionElement, True, [effectName])
+               
+            #print(f"Details for {tech.attrib['name']} -> {proto.attrib['name']} effecttype {effectName} action {effect.attrib['action']} -> {modifyDetails}")
             if modifyDetails == "":
                 continue
             if "targettype" in effect.attrib:
@@ -953,11 +956,9 @@ class TechAddition:
     fuzzyMerge: bool = True
 
 def handlerResponseListToStrings(input: Union[EffectHandlerResponse, List[EffectHandlerResponse]], skipAffectedObjects: bool=False) -> List[str]:
-    print("list to strings", input)
     if isinstance(input, EffectHandlerResponse):
         return [input.toString(skipAffectedObjects=skipAffectedObjects)]
     combineHandlerResponses(input)
-    print(input)
     strings = [response.toString(skipAffectedObjects=skipAffectedObjects) for response in input]
     return strings
 

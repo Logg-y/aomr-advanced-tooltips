@@ -479,16 +479,14 @@ def handleModifyStructure(parentElem: ET.Element) -> str:
         items.append(thisItem)
     return " ".join(items)
 
-def actionOnHitNonDoTEffects(proto: ET.Element, action: ET.Element, ignoreActive=False, filterOnHitTypes=None):
+def actionOnHitNonDoTEffects(proto: ET.Element, action: ET.Element, ignoreActive=False, filterOnHitTypes: Union[None, List[str]]=None):
     onhiteffects = action.findall("onhiteffect")
     tactics = actionTactics(proto, action)
     if tactics is not None:
         onhiteffects += tactics.findall("onhiteffect")
     items = []
-
     if filterOnHitTypes is not None:
         onhiteffects = list(filter(lambda x: x.attrib['type'] in filterOnHitTypes, onhiteffects))
-    
     nodesByType = {}
 
     for onhiteffect in onhiteffects:
