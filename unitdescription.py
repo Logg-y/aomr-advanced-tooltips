@@ -703,7 +703,7 @@ def oracleAutoGatherFavorHelper(protoName):
     # Experimentally this seems hardcoded to 0.01 (thanks Thanik for working through this)
     quadraticTerm = 0.01 * modifymultiplier/modifybase
     valueAtMax = rate + quadraticTerm * rateCap * rateCap
-    return f"Produces more based on the current idle LOS boost amount. Without upgrades, this reaches {icon.resourceIcon('favor')} {valueAtMax:0.3g} per second. Area overlapping with other Oracles or beyond the edges of the map does not count."
+    return f"Produces more based on the current idle LOS boost amount. Without upgrades, this reaches {icon.resourceIcon('favor')} {valueAtMax:0.3g} per second. Area overlapping with other Oracles does not count."
 
 def oracleHistoryText(protoName):
     actionElem = action.findActionByName(protoName, 'AutoGatherFavor')

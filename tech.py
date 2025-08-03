@@ -1214,7 +1214,7 @@ def generateTechDescriptions():
     classicalAgeGeneral = techtree.find("tech[@name='ClassicalAgeGeneral']")
     heroicAgeGeneral = techtree.find("tech[@name='HeroicAgeGeneral']")
     mythicAgeGeneral = techtree.find("tech[@name='MythicAgeGeneral']")
-    ageUpComponents = ["Myth Units of Earlier Ages: Hitpoints, Damage, and Healing: +20% of base."]
+    ageUpComponents = ["Myth Units of Earlier Ages: Hitpoints, Damage, Healing, and Slow/Stun duration: +20% of base."]
     ageUpTechs = (classicalAgeGeneral, heroicAgeGeneral, mythicAgeGeneral)
     heroHitpoints = ["{:0.3g}".format(100*(-1+float(age.find("effects/effect[@subtype='Hitpoints']/target[.='HeroShadowUpgraded']/..").attrib['amount']))) for age in ageUpTechs]
     heroDamage = ["{:0.3g}".format(100*(-1+float(age.find("effects/effect[@subtype='Damage']/target[.='HeroShadowUpgraded']/..").attrib['amount']))) for age in ageUpTechs]

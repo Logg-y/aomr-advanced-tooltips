@@ -128,8 +128,9 @@ def processGodPower(godpower: ET.Element) -> Union[None, str]:
         playerRelationPossessive = "your or your allies' "
         playerRelation = "you and your allies"
     else:
-        print(f"Warning: {powerName} has unhandled powerplayerrelation {playerRelation}")
-        playerRelation = ""
+        print(f"Warning: {powerName} has unhandled powerplayerrelation {playerRelation.text}")
+        playerRelation = "all players?"
+        playerRelationPossessive = "all players'? "
     replacements['playerrelation'] = playerRelation.strip()
     replacements['playerrelationpos'] = playerRelationPossessive.strip()
     
@@ -240,7 +241,7 @@ def generateGodPowerDescriptions():
         vulnStrings = common.commaSeparatedList([f"{common.commaSeparatedList(types)} Vulnerability by {100*delta:0.3g}%" for delta, types in typesByValue.items()])
         return f"Reduces {vulnStrings}"
     bronzeArmorItems = [f" {icon.BULLET_POINT} {common.getDisplayNameForProtoOrClass(elem.find('abstracttype').text, plural=True)}: {bronzeArmorItemVulnList(elem)}." for elem in bronze.findall("armor")]
-    bronzeItems = [f"Temporarily increases the armor of friendly units in the area at the time of casting.", *bronzeArmorItems, "{radius}", "{duration}"]
+    bronzeItems = [f"Temporarily increases the armor of {{playerrelationpos}} units in the area at the time of casting.", *bronzeArmorItems, "{radius}", "{duration}"]
     godPowerProcessingParams["Bronze"] = GodPowerParams(bronzeItems)
 
     curse = findGodPowerByName("Curse")
