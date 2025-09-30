@@ -154,3 +154,67 @@ def generateMajorGodDescriptions():
             cost += shennongResourceMults.get(elem.attrib['resourcetype'], 0.0) * float(elem.text)
         shennongspawningText += f"\\n{common.getDisplayNameForProtoOrClass(proto)}: {icon.resourceIcon('favor')} {cost:0.3g}"
     globals.stringMap[common.findGodPowerByName("SpawnRewardTechree").find("rolloverid").text] = shennongspawningText
+
+    amaterasuContent = globals.dataCollection["string_table.txt"]["STR_CIV_AMATERASU_LR"]
+    amaterasuTech = common.techFromName("ArchaicAgeAmaterasu")
+    amaterasuRegenRate = float(amaterasuTech.find("effects/effect[@subtype='UnitRegenRate']").attrib['amount'])
+    amaterasuContent = amaterasuContent.replace("regenerate hitpoints", f"regenerate {amaterasuRegenRate:0.3g} hitpoints/second")
+
+    amaterasuInventoryAura = action.findActionByName("ShrineJapanese", "ResourceInventoryAura")
+    amaterasuInventoryBaseRate = common.findAndFetchText(amaterasuInventoryAura, "modifyamount", None, float)
+    amaterasuInventoryTargets = amaterasuInventoryAura.findall("rate")
+    amaterasuInventoryItems = []
+    
+    for target in amaterasuInventoryTargets:
+        # Dwarven Mine GP always spawns the large variety of mine
+        protoTarget = target.attrib['type']
+        if protoTarget.startswith("MineDwarven") and "Large" not in protoTarget:
+            continue
+
+        protoTargetName = common.getDisplayNameForProtoOrClassPlural(protoTarget)
+        if protoTargetName == "Resources":
+            protoTargetName = "Other Resources"
+
+        targetRate = float(target.text)
+        amaterasuInventoryItems.append(f"   {icon.BULLET_POINT_ALT} {protoTargetName}: +{amaterasuInventoryBaseRate*targetRate:0.3g}/s")
+
+    amaterasuContent = amaterasuContent.replace("${AMATERASU_RESOURCE_INVENTORY_CAP}%.", "${AMATERASU_RESOURCE_INVENTORY_CAP}%:\n" + f'{"\n".join(amaterasuInventoryItems)}')
+    amaterasuContent = amaterasuContent.replace("content of nearby resources", "content of nearby resources (including dead animals)")
+    globals.stringMap["STR_CIV_AMATERASU_LR"] = amaterasuContent
+
+    tsukuyomiContent = globals.dataCollection["string_table.txt"]["STR_CIV_TSUKUYOMI_LR"]
+    tsukuyomiResearchElems = globals.dataCollection["major_gods.xml"].findall("civ[name='Tsukuyomi']/bountyresourceearning/researchcostmultiplier")
+    if tsukuyomiResearchElems is not None:
+        ratesToResourceLabels = {}
+        for elem in tsukuyomiResearchElems:
+            rate = float(elem.text)
+            if rate not in ratesToResourceLabels:
+                ratesToResourceLabels[rate] = []
+            ratesToResourceLabels[rate].append(elem.attrib['resourcetype'])
+        rateTexts = []
+        for rate, resources in ratesToResourceLabels.items():
+            resourceIcons = [icon.resourceIcon(res) for res in resources]
+            rateTexts.append(f"{icon.resourceIcon('combatxp')} {rate:0.3g} per {' '.join(resourceIcons)} cost")
+        replacement = f"researched grants {common.commaSeparatedList(rateTexts)}."
+    tsukuyomiContent = tsukuyomiContent.replace("researched grants Bushidō XP.", replacement)
+
+    globals.stringMap["STR_CIV_TSUKUYOMI_LR"] = tsukuyomiContent
+
+    susanooContent = globals.dataCollection["string_table.txt"]["STR_CIV_SUSANOO_LR"]
+    susanooMythRate = globals.dataCollection["major_gods.xml"].find("civ[name='Susanoo']/bountyresourceearning/bountyreward[@unittype='MythUnit']")
+    bushidoExcludedTargets = globals.dataCollection["major_gods.xml"].findall("civ[name='Susanoo']/bountyresourceearning/excludedtarget")
+    bushidoExcludedTargetText = action.targetListToString([], [elem.text for elem in bushidoExcludedTargets])
+    susanooTrickleBullets = []
+    susanooTech = common.techFromName("ArchaicAgeSusanoo")
+    for age in ("Archaic", "Classical", "Heroic", "Mythic"):
+        targetType = f"LogicalType{age}MythUnit"
+        effect = susanooTech.find(f"effects/effect[target='{targetType}']")
+        rate = float(effect.attrib['amount'])
+        susanooTrickleBullets.append(f"   {icon.BULLET_POINT_ALT} {age}: {icon.resourceIcon('combatxp')} {rate:0.3g}/s")
+
+    susanooBadline = "Myth units earn.*"
+    
+    susanooReplacement = f"Myth Units generate {icon.resourceIcon('combatxp')} {float(susanooMythRate.text):0.3g} per damage dealt to {bushidoExcludedTargetText}.\n{icon.BULLET_POINT} Myth Units passively produce Bushidō XP depending on the age they become available:\n{"\n".join(susanooTrickleBullets)}"
+    susanooContent = re.sub(susanooBadline, susanooReplacement, susanooContent)
+
+    globals.stringMap["STR_CIV_SUSANOO_LR"] = susanooContent

@@ -36,6 +36,7 @@ BANNED_STRINGS = (
 "STR_ABILITY_EMPOWER_LR",
 "STR_ABILITY_HEAL_LR",
 "STR_ABILITY_GULLINBURSTI_LR",
+"STR_ABILITY_CONVERT_ANIMAL_LR",
 )
 
 # Ignore these units, typically because they share rollover text string ids and that makes generating tooltips for them squash something more important
@@ -81,6 +82,9 @@ IGNORE_UNITS = (
 "MilitaryCampTower",
 "MachineWorkshopTrainingYard",
 "MilitaryCampTrainingYard",
+"DaimyoBlessed",
+"GauntletChaosNidhogg",
+"TitanPredator",
 )
 
 
@@ -289,7 +293,6 @@ UNIT_CLASS_PREDICTIONS: Tuple[Tuple[str, str, Callable[[ET.Element], bool], Call
 
     ("Targeted by Meteor", "Not Targeted by Meteor", lambda x: not checkProtoFlag(x, "flag", "FlyingUnit") and not checkProtoFlag(x, "flag", "Invulnerable"), lambda x: checkProtoFlag(x, "unittype", "LogicalTypeValidMeteorTarget")),
     ("Valid Forest Protection/Earth Wall target", "Cannot be targeted for Forest Protection/Earth Wall", lambda x: checkProtoFlag(x, "unittype", "Building"), lambda x: checkProtoFlag(x, "unittype", "LogicalTypeValidForestProtectionPlacement")),
-    # This one picks up a LOT of anomalies.
     #("+LogicalTypeBuildingNotWonderOrTitan bug?", "-LogicalTypeBuildingNotWonderOrTitan bug?", lambda x: x.attrib['name'] not in ('Wonder', 'TitanGate') and checkProtoFlag(x, "unittype", "Building"),  lambda x: checkProtoFlag(x, "unittype", "LogicalTypeBuildingNotWonderOrTitan")),
     #("+cUnitTypeAbstractWarship bug?", "-cUnitTypeAbstractWarship bug?", lambda x: checkProtoFlag(x, "unittype", "Ship") and (checkProtoFlag(x, "unittype", "AbstractArcherShip") or checkProtoFlag(x, "unittype", "AbstractSiegeShip") or checkProtoFlag(x, "unittype", "AbstractCloseCombatShip")), lambda x: checkProtoFlag(x, "unittype", "AbstractWarship")),
     #("+cUnitTypeAbstractWarshipHero bug?", "-cUnitTypeAbstractWarshipHero bug?", lambda x: checkProtoFlag(x, "unittype", "AbstractWarship") and checkProtoFlag(x, "unittype", "Hero"), lambda x: checkProtoFlag(x, "unittype", "AbstractWarshipHero")),
@@ -298,6 +301,7 @@ UNIT_CLASS_PREDICTIONS: Tuple[Tuple[str, str, Callable[[ET.Element], bool], Call
     #("+LogicalTypeMythUnitNotFlying bug?", "-LogicalTypeMythUnitNotFlying bug?", lambda x: checkProtoFlag(x, "unittype", "MythUnit") and not checkProtoFlag(x, "flag", "FlyingUnit"), lambda x: checkProtoFlag(x, "unittype", "LogicalTypeMythUnitNotFlying")),
     #("+cUnitTypeLogicalTypeVillagerNotHero bug?", "-cUnitTypeLogicalTypeVillagerNotHero bug?", lambda x: checkProtoFlag(x, "unittype", "AbstractVillager") and not checkProtoFlag(x, "unittype", "Hero"), lambda x: checkProtoFlag(x, "unittype", "LogicalTypeVillagerNotHero")),
     #("+AbstractFlyingUnit bug?", "-AbstractFlyingUnit bug?", lambda x: checkProtoFlag(x, "flag", "FlyingUnit"), lambda x: checkProtoFlag(x, "unittype", "AbstractFlyingUnit")),
+    #("+LogicalTypeHealableHeroBug?", "-LogicalTypeHealableHeroBug?", lambda x: checkProtoFlag(x, "unittype", "Hero") and checkProtoFlag(x, 'unittype', 'LogicalTypeHealed'), lambda x: checkProtoFlag(x, 'unittype', 'LogicalTypeHealableHero'))
 )
 
 # (nodename, nice looking label, datatype)
@@ -306,6 +310,54 @@ HISTORY_STRING_TAGS: Tuple[Tuple[str, str, type]] = (
     ("weightclass", "Weight Class", int),
     #("formationorder", "Formation Order", int),
 )
+
+def handleRespawnTrainData(protoUnit: ET.Element, ignoreActiveState: bool = False) -> Union[None, str]:
+    data = protoUnit.find("respawntraindata")
+    if data is None:
+        return None
+    active = findAndFetchText(data, "active", 1, int)
+    if not active and not ignoreActiveState:
+        return None
+    
+    targettype = findAndFetchText(data, "targettype", None, str)
+    trainproto = findAndFetchText(data, "trainproto", None, str)
+    respawntime = findAndFetchText(data, "respawntime", None, float)
+    if targettype is not None and trainproto is not None:
+        text = f"When killed (not deleted), respawns as a {common.getDisplayNameForProtoOrClass(trainproto)} at your nearest {common.getDisplayNameForProtoOrClass(targettype)}"
+        if respawntime is not None:
+            text += f" in {respawntime:0.3g}s"
+        text += "."
+        return text
+    respawntypes = [x.text for x in data.findall("respawntypes/unittype")]
+    excludetypes = [x.text for x in data.findall("excludetypes/unittype")]
+    respawnrates = data.find("respawnrates")
+    respawnlimit = findAndFetchText(data, "respawnlimit", None, int)
+    if len(respawntypes):
+        text = f"Whenever a {common.commaSeparatedList(common.getListOfDisplayNamesForProtoOrClass(respawntypes), 'or')}"
+        if len(excludetypes):
+            text += f" (except {common.commaSeparatedList(common.getListOfDisplayNamesForProtoOrClass(excludetypes, plural=True), 'and')})"
+        text += " is killed (not deleted), it comes here to respawn."
+        if respawnlimit is not None:
+            text += f" Up to {respawnlimit} dead units may be queued here at a time, any more that die while the queue is full are lost."
+        if respawnrates is not None:
+            ratesToResourceLabels: dict[float, List[str]] = {}
+            for elem in respawnrates:
+                rate = float(elem.text)
+                if rate not in ratesToResourceLabels:
+                    ratesToResourceLabels[rate] = []
+                ratesToResourceLabels[rate].append(elem.tag)
+            rateTexts = []
+            for rate, resources in ratesToResourceLabels.items():
+                resourceIcons = [icon.resourceIcon(res) for res in resources]
+                rateTexts.append(f"{rate:0.3g}s per {' '.join(resourceIcons)} cost")
+            text += f" Respawning takes {common.commaSeparatedList(rateTexts)}."
+        return text
+
+    else:
+        common.warn_data(f"respawntraindata for {protoUnit.attrib['name']} has an unhandled format, ignored")
+        return None
+    
+
 
 @dataclasses.dataclass
 class UnitDescription:
@@ -394,7 +446,11 @@ class UnitDescription:
             orderedTypes = []
             for thisType in NOTABLE_UNIT_CLASSES:
                 if thisType in matchedTypes:
-                    orderedTypes.append(common.getDisplayNameForProtoOrClass(thisType))
+                    thisTypeText = common.getDisplayNameForProtoOrClass(thisType)
+                    # Combine the label for ranged myth unit into the others (for Bow of Artemis)
+                    if thisType in ("MythUnit", "LogicalTypeArchaicMythUnit", "LogicalTypeClassicalMythUnit", "LogicalTypeHeroicMythUnit") and checkProtoFlag(protoUnit, "unittype", "LogicalTypeRangedMythUnit"):
+                        thisTypeText = thisTypeText.replace("Myth Unit", "Ranged Myth Unit")
+                    orderedTypes.append(thisTypeText)
             if checkProtoFlag(protoUnit, "unittype", "LogicalTypeDivineImmunity"):
                 orderedTypes.append("Divine Immunity")
             if action.findActionByName(protoUnit, "Pickup"):
@@ -512,6 +568,7 @@ class UnitDescription:
         descriptions = list(descriptionsByActionName.values())
         if self.generaliseInfectionEffects:
             descriptions.append("Infection: " + action.UNIT_INFECTION_TEXT[protoName])
+       
 
         return descriptions
     
@@ -537,6 +594,17 @@ class UnitDescription:
             if obs is not None:
                 generalObservations.append(obs)
 
+        godpowercostfactor = protoUnit.find("godpowercostfactor")
+        if godpowercostfactor is not None and "godpowercostfactor" not in obsToIgnore:
+            rateMultiplier = float(godpowercostfactor.text)
+            obs = None
+            if rateMultiplier > 1.0:
+                obs = f"Controlling this causes God Powers to cost {100.0*(rateMultiplier-1.0):0.3g}% more. Stacks multiplicatively with other effects and multiple copies of itself."
+            elif rateMultiplier < 1.0:
+                obs = f"Controlling this causes God Powers to cost {100.0*(1.0-rateMultiplier):0.3g}% less. Stacks multiplicatively with other effects and multiple copies of itself."
+            if obs is not None:
+                generalObservations.append(obs)
+
         shieldRegenNode = protoUnit.find("unitshieldregen")
         if shieldRegenNode is not None and "unitshieldregen" not in obsToIgnore:
             regenRate = float(shieldRegenNode.text)
@@ -556,6 +624,11 @@ class UnitDescription:
                 if regenRate < 0.0 and "ratelimit" in regenerationNode.attrib:
                     regenText += f" This cannot drop the unit below {100*float(regenerationNode.attrib['ratelimit']):0.3g}% of its maximum hitpoints."
                 generalObservations.append(regenText)
+
+        respawntraindata = protoUnit.find("respawntraindata")
+        if respawntraindata is not None and "respawntraindata" not in obsToIgnore:
+            generalObservations.append(handleRespawnTrainData(protoUnit))
+
         # Set priest conversion
         priestConversion = action.findActionByName("Priest", "Convert")
         matchingNode = priestConversion.find(f"./*[@type='{protoName}']")
@@ -588,9 +661,9 @@ class UnitDescription:
             if len(containedTypes) > 0:
                 notContainedTypes = [x.text for x in protoUnit.findall("notcontain")]
                 if len(notContainedTypes) == 0:
-                    garrisonText = f"Garrisons up to {float(maxcontainedNode.text):0.3g} {action.targetListToString(containedTypes)}."
+                    garrisonText = f"Garrisons up to {float(maxcontainedNode.text):0.5g} {action.targetListToString(containedTypes)}."
                 else:
-                    garrisonText = f"Garrisons up to {float(maxcontainedNode.text):0.3g} {action.targetListToString(containedTypes)}, but not {action.targetListToString(notContainedTypes)}."
+                    garrisonText = f"Garrisons up to {float(maxcontainedNode.text):0.5g} {action.targetListToString(containedTypes)}, but not {action.targetListToString(notContainedTypes)}."
 
                 if checkProtoFlag(protoUnit, "flag", "DoNotAllowAlliedGarrison"):
                     garrisonText += " Allied units cannot garrison inside."
@@ -661,12 +734,66 @@ class UnitDescription:
         if obstructionX is not None and obstructionZ is not None:
             items.append(f"Collision size: {2*obstructionX:0.3g}x{2*obstructionZ:0.3g}m")
 
+        # Attack animation points
+        protoActions = [elem.text for elem in protoUnit.findall("protoaction/name")]
+        protoTacticsFile = common.findAndFetchText(protoUnit, "tactics", None, str)
+        protoTactics = None
+        if protoTacticsFile is not None:
+            protoTactics = globals.dataCollection['tactics'][protoTacticsFile]
+            protoActions += [elem.text for elem in protoTactics.findall("action/name")]
+        protoActions = set(protoActions)
+        
+        attackAnimationPoints = []
+        for actionName in protoActions:
+            attackData = action.getActionAttackPointTimesInAnimation(protoUnit, actionName)
+            if len(attackData) == 0:
+                continue
+            attacksForThisAction = []
+            actionElem = action.findActionByName(protoUnit, actionName)
+            tactics = action.actionTactics(protoUnit, actionName)
+            realRof = action.findFromActionOrTactics(actionElem, tactics, "rof", None, float)
+            # Intended display: Melee attack 25% (0.3/1.2s)
+            for data in attackData:
+                thisAnim = []
+                for time in data.attackPositions:
+                    percentage = 100.0*time/data.length
+                    actualLength = realRof or data.length
+                    actualTime = time * (actualLength/data.length)
+                    thisAnim.append(f"{percentage:0.3g}% ({actualTime:0.3g}/{actualLength:0.3g}s)")
+                if len(thisAnim) > 0:
+                    attacksForThisAction.append("; ".join(thisAnim))
+            unique = list(set(attacksForThisAction))
+            if len(unique) == 0:
+                continue
+
+            if len(unique) > 1:
+                attacksForThisAction.insert(0, "")
+                attackAnimationPoints.append(f"{action.getActionDisplayName(protoUnit, actionElem, nameNonChargeActions=True)} (multiple possibilities, equal odds):{"    \n".join(attacksForThisAction)}")
+            else:
+                attackAnimationPoints.append(f"{action.getActionDisplayName(protoUnit, actionElem, nameNonChargeActions=True)}: {attacksForThisAction[0]}")
+
+        if len(attackAnimationPoints) > 0:
+            items.append("Position of attacks within animations:\n" + "\n".join(attackAnimationPoints))
+
+
 
         # Faster to work out if we have anything to write before doing file ops for the string id
         if len(items) == 0:
             return
 
-        common.prependTextToHistoryFile(protoName, "units", items)       
+        common.prependTextToHistoryFile(protoName, "units", items)      
+
+    def appendAdditionalText(self, addition: Union[List[str], str]):
+        if self.additionalText == "":
+            self.additionalText = addition
+            return
+        additionIsStr = isinstance(addition, str)
+        if isinstance(self.additionalText, str):
+            self.additionalText = [self.additionalText]
+        if additionIsStr:
+            self.additionalText.append(addition)
+        else:
+            self.additionalText += addition
         
 
     def generate(self, protoUnit):
@@ -689,7 +816,7 @@ class UnitDescription:
             components += [item.strip() for item in self.additionalText]
         else:
             components.append(self.additionalText.strip())
-        components = [component for component in components if len(component) > 0]
+        components = [component for component in components if component is not None and len(component) > 0]
         components = self.textPostprocessor(components)
         self.writeHistoryString(protoUnit)
         return f"\\n {icon.BULLET_POINT} ".join(components)
@@ -942,6 +1069,25 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["ThePeachBlossomSpring"] = UnitDescription(hideNonActionObservations=["spawns"], includeVanillaDescription=False, ignoreActions=["AutoGatherFood", "AutoGatherWood", "AutoGatherGold"], overrideDescription=f"Starts with {peachBlossomInitialResourceAmount:0.3g} resources. Accumulates resources at {peachBlossomSpringGatherRate[0]:0.3g} per second. The type of resource can be freely swapped at any time. Once gathered from, the spring stops accumulating resources.", additionalText="The base gather rate from the spring is the same as the villager normally gathers its chosen resource. Food uses the base huntable rate.")
     unitDescriptionOverrides["FarmShennong"] = UnitDescription(overrideDescription="Friendly units standing on the farm are invisible.")
 
+
+    # Japanese
+
+    unitDescriptionOverrides["Miko"] = UnitDescription(additionalText="Sacred Custodians (in Shrine) is required to pick up relics.")
+    shinigamiHandler = UnitDescription(hideNonActionObservations=["respawntraindata"], additionalText=["When killed, respawns at a Temple in its next form. Does not respawn once killed in its final form. Vengeful Shinigami requires the Eternal Haunting tech.", "Shinigami: " + handleRespawnTrainData(protoFromName("Shinigami"))])
+    unitDescriptionOverrides["Shinigami"] = shinigamiHandler
+    unitDescriptionOverrides["ShinigamiRevenant"] = shinigamiHandler
+    unitDescriptionOverrides["ShinigamiVengeful"] = shinigamiHandler
+    unitDescriptionOverrides["ShrineJapanese"] = UnitDescription(preActionInfoText={"ShrineGatherRateBoost":f"Miko must work on shrines to generate Favor. Favor rate is increased by natural resources within {findAndFetchText(action.findActionByName('ShrineJapanese', 'ShrineGatherRateBoost'), 'maxrange', 0.0, float):0.3g}m."})
+    unitDescriptionOverrides["Onmoraki"] = UnitDescription(postActionInfoText={"ChargedRangedAttack":f"Each projectile spawns one Wretch:\n{describeUnit('Wretch')}"})
+    if checkProtoFlag(common.protoFromName("Shogun"), "unittype", "AbstractCavalry") == False:
+        unitDescriptionOverrides["Shogun"] = UnitDescription(additionalText="This unit is not classified as cavalry.")
+    unitDescriptionOverrides["SacredGate"] = UnitDescription(includeVanillaDescription=False)
+
+    unitDescriptionOverrides["Wasen"] = UnitDescription(preActionInfoText={"RangedAttack":"Archer ship, good against close combat ships."})
+    unitDescriptionOverrides["Junkozosen"] = UnitDescription(preActionInfoText={"RangedAttack":"Siege ship, good against archer ships."})
+    unitDescriptionOverrides["RammingWasen"] = UnitDescription(preActionInfoText={"HandAttack":"Close combat ship, good against siege ships."})
+
+
     # Common/Similar
     unitDescriptionOverrides["SentryTower"] = UnitDescription(showActionsIfDisabled=["RangedAttack"])
     unitDescriptionOverrides["VillageCenter"] = UnitDescription(additionalText=f"Produces units {100.0-100*float(protoFromName('VillageCenter').find('trainingrate').text):0.3g}% slower than a Town Center. Research speed is unaffected.")
@@ -966,15 +1112,23 @@ def generateUnitDescriptions():
     # Stop the pig spawn relic saying these respawn
     unitDescriptionOverrides["Pig"] = UnitDescription(hideNonActionObservations=True)
 
+
+    # Archaic age weakened units
     archaicAgeWeakenedUnits: Dict[str, ET.Element] = dict([(effect.find("target").text, effect) for effect in globals.dataCollection['techtree.xml'].find("tech[@name='ArchaicAgeWeakenUnits']/effects")])
     for unitName, effectElement in archaicAgeWeakenedUnits.items():
         override = copy.copy(unitDescriptionOverrides.get(unitName, UnitDescription()))
-        actionName = effectElement.attrib["action"]
-        existingText = override.postActionInfoText.get(actionName, "")
-        existingText += f" Deals {1.0-float(effectElement.attrib['amount']):0.0%} less damage in the Archaic Age."
-        override.postActionInfoText[actionName] = existingText
-        unitDescriptionOverrides[unitName] = override
+        actionName = effectElement.attrib.get("action", None)
+        newText = None
+        if actionName is not None:
+            newText = f" Deals {1.0-float(effectElement.attrib['amount']):0.0%} less damage in the Archaic Age."
+        elif effectElement.attrib.get("subtype") == "MaximumVelocity":
+            existingText += f" Moves {1.0-float(effectElement.attrib['amount']):0.0%} slower in the Archaic Age."
+        if newText is not None:
+            existingText = override.postActionInfoText.get(actionName, "")
+            override.postActionInfoText[actionName] = existingText + newText
+            unitDescriptionOverrides[unitName] = override
 
+    # Chinese favor rates
     buildingChain = globals.dataCollection['major_gods.xml'].find("civ/name[.='Fuxi']/../buildingchain")
     favoredLandConnectors = buildingChain.findall("chainablebuilding")
     favoredLandProtoToRadius = {}
@@ -1013,15 +1167,42 @@ def generateUnitDescriptions():
         items = [connectionText + f" Max potential {icon.resourceIcon('favor')} income/minute depending on current income: " + "; ".join(incomeItems)]
         # If not making a copy here, HideFlyingAttack gets this added, meaning the connection line shows up on the ranged greek heroes as well!
         override = copy.copy(unitDescriptionOverrides.get(unitName, UnitDescription()))
-        if isinstance(override.additionalText, str):
-            if override.additionalText == "":
-                override.additionalText = items
-            else:
-                override.additionalText = [override.additionalText] + items
-        else:
-            override.additionalText += items
+        override.appendAdditionalText(items)
         unitDescriptionOverrides[unitName] = override
 
+    # Japanese favor rates
+    mikoBaseRate = findAndFetchText(action.findActionByName("Miko", "GatherShrine"), "rate[@type='AbstractShrineJapanese']", 0.0, float)
+    shrineModifyRates = {elem.attrib['type']:float(elem.text) for elem in action.findActionByName("ShrineJapanese", "ShrineGatherRateBoost").findall("rate[@type]")}
+    additionalRatesFromAbstractTypes = {}
+    for currentRates in shrineModifyRates, additionalRatesFromAbstractTypes:
+        for target, rate in currentRates.items():
+            protoElem = common.protoFromName(target)
+            if protoElem is None:
+                for newTarget in globals.protosByUnitType[target]:
+                    additionalRatesFromAbstractTypes[newTarget] = rate
+                continue
+            override = copy.copy(unitDescriptionOverrides.get(target, UnitDescription()))
+            override.appendAdditionalText(f"Japanese Shrine {icon.resourceIcon('favor')} income/minute within radius: {rate*mikoBaseRate*60:0.3g}")
+            unitDescriptionOverrides[target] = override
+
+    # Japenese units with additional XP gain
+    amaterasu = globals.dataCollection["major_gods.xml"].find("civ[name='Amaterasu']")
+    baseRate = findAndFetchText(amaterasu, "bountyresourceearning/bountyreward[@unittype='HumanSoldier']", None, float)
+    others = amaterasu.findall("bountyresourceearning/bountyreward")
+    for other in others:
+        targetType = other.attrib['unittype']
+        amount = float(other.text)
+        if amount != 1.0:
+            if targetType in globals.protosByUnitType:
+                common.warn_unhandled(f"Japenese bushido xp: object class {targetType} has altered gain rate")
+                continue
+            override = copy.copy(unitDescriptionOverrides.get(targetType, UnitDescription()))
+            if amount > 1.0:
+                mod = f"+{100.0*(amount-1.0):0.3g}%"
+            else:
+                mod = f"-{100.0*(1.0-amount):0.3g}%"
+            override.appendAdditionalText(f"{icon.resourceIcon('CombatXP')} from inflicting damage: {mod}")
+            unitDescriptionOverrides[targetType] = override
 
     # Non action tied passives that we still want to write text for!
     nonActionPassiveAbilities: List[Union[str, Tuple[ET.Element, str]]] = []
@@ -1080,11 +1261,16 @@ def generateUnitDescriptions():
     healEffect = globals.dataCollection['terrain_unit_effects.xml'].find("terrainuniteffect[@name='GaiaCreepHealEffect']/effect")
     nonActionPassiveAbilities.append(('PassiveLush', f"Grows up to a {float(terrainCreep.attrib['maxradius']):0.3g}m circle of lush at {float(terrainCreep.attrib['growthrate']):0.3g}m per second. Your objects on lush heal {float(healEffect.attrib['amount']):0.3g} per second."))
 
+
+
     # Tech related
 
     nonActionPassiveAbilities.append(('PassiveAnastrophe', action.describeAction(protoFromName("Pentekonter"), action.findActionByName("Pentekonter", "ChargedHandAttack"), chargeType=action.ActionChargeType.REGULAR, tech=techtree.find("tech[@name='Anastrophe']"))))
     shaftsOfPlagueText = "\n".join(tech.handlerResponseListToStrings(tech.processEffect(common.techFromName("ShaftsOfPlague"), techtree.find("tech[@name='ShaftsOfPlague']/effects/effect[@effecttype='DamageOverTime']")), skipAffectedObjects=True))
     nonActionPassiveAbilities.append(('PassiveVenomous', (techtree.find("tech[@name='ShaftsOfPlague']"), shaftsOfPlagueText)))
+
+    serpentSpearText = "\n".join(tech.handlerResponseListToStrings(tech.processEffect(common.techFromName("SerpentSpear"), techtree.find("tech[@name='SerpentSpear']/effects/effect[@effecttype='DamageOverTime']")), skipAffectedObjects=True))
+    nonActionPassiveAbilities.append(('PassiveVenomous', (techtree.find("tech[@name='SerpentSpear']"), serpentSpearText)))
 
     nonActionPassiveAbilities.append(('PassiveFuneralBarge', tech.processTech(techtree.find("tech[@name='FuneralBarge']"), skipAffectedObjects=True)))
     nonActionPassiveAbilities.append(('PassiveDeathlyDonative', tech.processTech(techtree.find("tech[@name='FuneralRites']"), skipAffectedObjects=True)))
@@ -1096,6 +1282,7 @@ def generateUnitDescriptions():
     nonActionPassiveAbilities.append(('PassiveViking', tech.processTech(techtree.find("tech[@name='Vikings']"), skipAffectedObjects=True)))
     nonActionPassiveAbilities.append(('PassiveSkadisBreath', tech.processTech(techtree.find("tech[@name='ArcticWinds']"), skipAffectedObjects=True)))
     nonActionPassiveAbilities.append(('PassiveSkaldicInspiration', tech.processTech(techtree.find("tech[@name='LongSerpent']"), skipAffectedObjects=True)))
+
 
 
     biteOfTheSharkText = "\n".join(tech.handlerResponseListToStrings(tech.processEffect(common.techFromName("BiteOfTheShark"), techtree.find("tech[@name='BiteOfTheShark']/effects/effect[@effecttype='DamageOverTime']")), skipAffectedObjects=True))
@@ -1156,7 +1343,11 @@ def generateUnitDescriptions():
         if strid is None:
             continue
         strid = strid.text
-        value = describeUnit(unit)
+        #print(f"Processing unit {unit.attrib['name']}")
+        try:
+            value = describeUnit(unit)
+        except Exception:
+            raise ValueError(f"Error while processing unit {unit.attrib['name']}")
         if value is not None:
             if strid not in stringIdsByOverwriters:
                 stringIdsByOverwriters[strid] = {}
@@ -1207,7 +1398,10 @@ def generateUnitDescriptions():
     for unitNode in globals.dataCollection["abilities"]["abilities.xml"]:
         for abilityNode in unitNode:
             techNode = abilityNode.find("tech")
-            abilityInfo = globals.dataCollection["abilities_combined"].find(f"power[@name='{abilityNode.text}']")
+            abilityInfo = action.getCommonAbilitiesNodeForPowerName(abilityNode.text)
+            if abilityInfo is None:
+                common.warn_data(f"{proto.attrib['name']}'s {common.findAndFetchText(action, "name", "???", str)} has an abilities.xml entry but couldn't find a corresponding civ.abilities")
+                continue
             if abilityInfo.attrib.get("type", "") == "GeneralEffect":
                 if techNode is not None and abilityNode.text not in abilitiesWithNoTechNode:
                     techInternalName = techNode.text

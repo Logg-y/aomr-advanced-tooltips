@@ -150,7 +150,7 @@ def main():
     possibleMythUnitNotTitanExceptions = ("Nidhogg", "YingLong")
     for exception in possibleMythUnitNotTitanExceptions:
         if common.protoFromName(exception).find("unittype[.='LogicalTypeMythUnitNotTitan']") is None:
-            mythUnitNotTitanExceptions.append(exception)
+            mythUnitNotTitanExceptions.append(common.getDisplayNameForProtoOrClass(exception))
     replacement = f"(except {common.commaSeparatedList(mythUnitNotTitanExceptions)})"
     common._UNIT_CLASS_LABELS["LogicalTypeMythUnitNotTitan"] = common._UNIT_CLASS_LABELS["LogicalTypeMythUnitNotTitan"].replace("LOGICAL_TYPE_MYTH_UNIT_NOT_TITAN_EXCEPTION", replacement)
     common._UNIT_CLASS_LABELS_PLURAL["LogicalTypeMythUnitNotTitan"] = common._UNIT_CLASS_LABELS_PLURAL["LogicalTypeMythUnitNotTitan"].replace("LOGICAL_TYPE_MYTH_UNIT_NOT_TITAN_EXCEPTION", replacement)
@@ -165,7 +165,7 @@ def main():
     
     additionalCompendium = f"\\n\\nAdvanced Tooltips is active for (hopefully correct) additional information!\\nThis version was built on {datetime.datetime.now().strftime('%d %b %y')}. Game updates or data mods will make displayed values incorrect."
     additionalCompendium += "\\n\\nAll stats shown in tooltips are for the unit's base data - any techs that apply will NOT be included, including 'hidden' effects such as the bonuses from age advancement given to heroes and myth units.\\n\\n"
-    additionalCompendium += f"\'Snares\' is used as a shorthand for the 'standard' slowing effect ({100*(1.0-action.STANDARD_SNARE['rate']):0.3g}% for {action.STANDARD_SNARE['duration']:0.3g} seconds) caused primarily by nearly every melee attack in the game. Effects that slow movement by any other amount or duration will list their true numbers."
+    additionalCompendium += f"\'Snares\' is used as a shorthand for the 'standard' slowing effect ({100*(1.0-action.STANDARD_SNARE['rate']):0.3g}% for {action.STANDARD_SNARE['duration']:0.3g} seconds) caused by nearly every melee attack in the game. Effects that slow movement by any other amount or duration will list their true numbers."
     globals.stringMap["STR_HISTORY_HISTORY"] = globals.dataCollection["string_table.txt"]["STR_HISTORY_HISTORY"] + additionalCompendium
     
     

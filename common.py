@@ -6,6 +6,8 @@ import os
 import re
 import itertools
 import dataclasses
+import warnings
+import functools
 
 def commaSeparatedList(words: List[str], joiner="and"):
     if isinstance(words, str):
@@ -41,9 +43,8 @@ PROTOS_TO_IGNORE_FOR_ABILITY_TOOLTIPS = (
 )
 
 _OVERRIDE_DISPLAY_NAMES = {
-    # Once upon a time, these were not functionally identical to each other
-    #"MinionReincarnated":"Minion (Mummy)",
-    #"Minion":"Minion (Ancestors)",
+    "MinionReincarnated":"Minion (Mummy)",
+    "Minion":"Minion (Ancestors)",
     "HeroOfRagnarok":"Hero of Ragnarok (Gatherer)",
     "HeroOfRagnarokDwarf":"Hero of Ragnarok (Dwarf)",
     "ProjectileSatyrSpearSpecialAttack": "Satyr Piercing Throw Spear",
@@ -74,6 +75,14 @@ _OVERRIDE_DISPLAY_NAMES = {
 
     # Parched Land (exploding fishing ship tech) is normally "A Thousand Li of Parched Land" which isn't very clear
     "AbilityFishingShipChinese":"Demolition",
+
+    "AbilityTaotieDevour":"Eat", # Normally Fuel Consumption, makes the tooltip harder to understand
+    "AbilityTaotieExpel":"Spit", # Normally Fuel Expulsion
+
+    # These are for Amaterasu's Shrine resource inventory increase, need to distinguish the different mine sizes
+    "MineGoldLarge":"Gold Mine (6000)",
+    "MineGoldMedium":"Gold Mine (3000)",
+    "MineGoldSmall":"Gold Mine (1500)",
 }
 
 _UNIT_CLASS_LABELS = {
@@ -164,6 +173,10 @@ _UNIT_CLASS_LABELS = {
     "AbstractMilitaryCamp":"Military Camp",
     "LogicalTypeDivineImmunity":"targets with Divine Immunity",
     "LogicalTypeBuildingThatConvertsConvertibles":"Building that protect convertible structures",
+    "AbstractAsura":"Asura and Fireballs",
+    "AbstractSamurai":"Samurai",
+    "LogicalTypeHealableHero":"Healable Hero",
+    "LogicalTypeTrainableMythUnit":"Trainable Myth Unit",
 
     # Partial Lies
     "EconomicUpgraded":"Villager",
@@ -246,6 +259,8 @@ _UNIT_CLASS_LABELS_PLURAL = {
     "All":"all objects",
     "LogicalTypeDivineImmunity":"targets with Divine Immunity",
     "LogicalTypeBuildingThatConvertsConvertibles":"Buildings that protect convertible structures",
+    "LogicalTypeHealableHero":"Healable Heroes",
+    "LogicalTypeTrainableMythUnit":"Trainable Myth Units",
 
 
     # Partial lies for clarity:
@@ -314,6 +329,8 @@ _PLURAL_UNIT_NAMES = {
     "TentSPC":"Tents",
     "VillagerChinese":"Peasants",
     "HillFort":"Hill Forts",
+    "TreeCherryShrine":"Cherry Trees",
+    "WolfShrineOfTheHunt":"Wolves",
 
 
     # Named characters or one-of-a-kinds that don't make sense to pluralise where "regular" objects would
@@ -357,11 +374,11 @@ def _getDisplayNamesFromAbstractClass(abstract: str, plural=False) -> List[str]:
             return sorted(list(dict.fromkeys(map(lambda x: getDisplayNameForProtoOrClass(x, plural=plural), targetsList))))
     if plural:
         if abstract not in _UNIT_CLASS_LABELS_PLURAL:
-            print(f"Warning: No plural label for unit class {abstract}")
+            warn_unhandled(f"No plural label for unit class {abstract}")
             return [abstract]
         return [_UNIT_CLASS_LABELS_PLURAL[abstract]] # KeyError means a label needs adding to the dictionary manually
     if abstract not in _UNIT_CLASS_LABELS:
-        print(f"Warning: no singular label for unit class {abstract}")
+        warn_unhandled(f"No singular label for unit class {abstract}")
         return [abstract]
     return [_UNIT_CLASS_LABELS[abstract]] # KeyError means a label needs adding to the dictionary manually
 
@@ -390,7 +407,7 @@ def getObjectDisplayName(object: ET.Element, plural: bool = False) -> str:
     if plural:
         if internalObjectName in _PLURAL_UNIT_NAMES:
             return _PLURAL_UNIT_NAMES[internalObjectName]
-        print(f"Warning: No plural defined for object {internalObjectName}, assuming singular")
+        warn_unhandled(f"No plural defined for object {internalObjectName}, assuming singular")
         
     override = _OVERRIDE_DISPLAY_NAMES.get(object.attrib.get("name", None), None)
     if override is not None:
@@ -491,7 +508,6 @@ def prependTextToHistoryFile(objectName: str, objectType: str, text: Union[str, 
 
     historyFile = os.path.join(globals.historyPath, objectType, f"{objectName}.txt")
     if not os.path.isfile(historyFile):
-        #print(f"Warning: {protoName} has no history file!")
         return
     # Most of these are utf16, WITH BOM unlike some other places in the game.
     # But not all...
@@ -507,7 +523,7 @@ def prependTextToHistoryFile(objectName: str, objectType: str, text: Union[str, 
             break
     if strid not in globals.dataCollection["string_table.txt"]:
         # These cases are PROBABLY on the devs, but my attempts at parsing the string table might need some help too
-        print(f"Warning: History file for {objectType}/{objectName} has nonexistent string id {strid}, couldn't write its entry")
+        warn_data(f"History file for {objectType}/{objectName} has nonexistent string id {strid}, couldn't write its entry")
         return
     
     if not isinstance(text, str):
@@ -656,3 +672,22 @@ def wordwiseTextMerger(strings: List[str], outputIdentifier: Union[str, None]=No
             outputWords.append(thisWords[0])
     return " ".join(outputWords)
         
+class DataWarning(UserWarning):
+    "Warning for issues where the passed data files seem to be clearly at fault."
+    pass
+
+class UnhandledImplementationWarning(UserWarning):
+    "Warning for unhandled cases of data which is quite possibly valid - eg new kinds of tech subtypes, or attributes on things for which there was no reason to write handling before."
+    pass
+
+def warn_data(msg: str):
+    "Warning for when something in the data files seems to be clearly at fault."
+    warnings.warn(msg, DataWarning, stacklevel=2)
+
+def warn(msg: str):
+    "Generic warning."
+    warnings.warn(msg, stacklevel=2)
+
+def warn_unhandled(msg: str):
+    "Warning for unhandled cases of data which is quite possibly valid - eg new kinds of tech subtypes, or attributes on things for which there was no reason to write handling before."
+    warnings.warn(msg, UnhandledImplementationWarning, stacklevel=2)

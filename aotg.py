@@ -19,6 +19,19 @@ RARITY_COLOURS: Dict[int, Callable[[str], str]] = {
     5: lambda s: "<color=0.93,0.31,0.31>" + s + "</color>", # eternal, red
 }
 
+# I wanted to colour the rarities with the normal colours so the gauntlet chat messages would get them
+# Eg you got a blessing rarity Heroic -> heroic is blue
+# But unfortunately this makes the blessing select screen look horrible because they are overlaying the coloured text
+# and using the normal word underneath it for a sort of shadowed effect
+# So I darkened them a bit in an attempt to get the message across still
+RARITY_COLOURS_FOR_GAUNTLET: Dict[int, Callable[[str], str]] = {
+    0: lambda s: "<color=0.70,0.70,0.70>" + s + "</color>", # simple, grey
+    1: lambda s: "<color=0.40,0.74,0.26>" + s + "</color>", # fine, green
+    2: lambda s: "<color=0.13,0.45,1.00>" + s + "</color>", # heroic, blue
+    3: lambda s: "<color=0.71,0.09,0.97>" + s + "</color>", # mythical, purple
+    4: lambda s: "<color=0.92,0.35,0.00>" + s + "</color>", # divine, orange
+}
+
 # problematic aotg_effects.xml named items to ignore
 IGNORE_AOTG_EFFECTS = [
     "BossNidhoggSpawn"      # AI only version (spawns on fort death) which overrides the player version if not ignored
@@ -173,7 +186,7 @@ def generateBlessingDescriptions():
         if techElem is None:
             continue
         if rarity not in RARITY_COLOURS:
-            #print(f"Warning: {techElem.attrib['name']} has unknown rarity {rarity}, ignoring")
+            #common.warn_unhandled(f"Warning: {techElem.attrib['name']} has unknown rarity {rarity}, ignoring")
             continue
         
         if stringId not in stringIdsToTechUsers:
@@ -245,4 +258,8 @@ def otherAotgStrings():
     globals.stringMap["STR_AOTG_WT_HARSHSEASONS_WINTER_BONUS_3"] = "Myth units +50% base speed, Human Soldiers -30% base speed"
     globals.stringMap["STR_AOTG_WT_HARSHSEASONS_WINTER_BONUS_4"] = "Casts Fimbulwinter (halved wolf spawns) after 45s"
 
-    
+    # Colours the rarities for the gauntlet chat messages
+    rarities = ("Simple", "Fine", "Heroic", "Mythical", "Divine")
+    for index, rarityName in enumerate(rarities):
+        strid = f"STR_AOTG_BLESSINGS_NAME_{rarityName.upper()}"
+        globals.stringMap[strid] = RARITY_COLOURS_FOR_GAUNTLET[index](globals.dataCollection["string_table.txt"][strid])

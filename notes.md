@@ -39,8 +39,11 @@ Unfortunately playing with the advanced tooltips game setting off hides the cost
 
 
 # TODO
-    
+
+ship counter triangle may not be obvious
+oracles seem to actually count off-map tiles?
 godpowerblockradius on great flood protounit
+hunt: max norse favor
 
 Isis monument shield should get bigger with empower
 Promethean offspring don't refund res for kronos

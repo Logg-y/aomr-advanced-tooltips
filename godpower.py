@@ -18,6 +18,21 @@ IGNORE_POWERS = (
     "WalkingWoodsSingleTarget",
     "WalkingBerryBushes",
     "CeaseFire3Minutes",
+    "AOTGGaiaForest",
+    "AOTGBolt",
+    "AOTGFrost",
+    "AOTGFimbulwinter",
+    "AOTGForestFire",
+    "AOTGMeteor",
+    "GauntletChaosMeteor",
+    "GauntletChaosTornado",
+    "GauntletChaosEarthquake",
+    "GauntletChaosThunderBurst",
+    "GauntletChaosNidhogg",
+    "GauntletChaosLightningStorm",
+    "Ame-no-Ukihashi",
+    "RepairPillarSPC",
+    "GreatFloodSPC",
     )
 
 @dataclasses.dataclass
@@ -52,7 +67,7 @@ def protoGodPowerDamage(proto: str, actionName: str, damageMultiplier: float=1.0
     protoElem = common.protoFromName(proto)
     actionElem = action.findActionByName(protoElem, actionName)
     if damageOnly:
-        return action.actionDamageOnly(protoElem, actionElem, hideRof=True, damageMultiplier=damageMultiplier)
+        return action.actionDamageOnly(protoElem, actionElem, damageMultiplier=damageMultiplier)
     return action.actionDamageFull(protoElem, actionElem, hideRof=True, hideRange=True, ignoreActive=True, damageMultiplier=damageMultiplier, hideDamageBonuses=hideDamageBonuses)
 
 def processGodPower(godpower: ET.Element) -> Union[None, str]:
@@ -61,9 +76,16 @@ def processGodPower(godpower: ET.Element) -> Union[None, str]:
         return None
     params = godPowerProcessingParams.get(powerName, None)
     if params is None:
-        print(f"Warning: No godpower params for {powerName}, returning vanilla text")
-        return None
+        
+        strid = common.findAndFetchText(godpower, "rolloverid", None)
+        defaultText = globals.dataCollection["string_table.txt"].get(strid, None)
+        if defaultText is None:
+            common.warn(f"No manually defined godpower params for {powerName} and no valid vanilla text, ignoring")
+            return None
+        common.warn(f"No manually defined godpower params for {powerName}, recycling vanilla text")
+        params = GodPowerParams(text=defaultText)
     topLineItems = ["Recast:"]
+    items = []
     rechargeString = params.overrideRecharge
     if rechargeString is None and powerName in globals.godPowerRecharges:
         rechargeString = f"{globals.godPowerRecharges[powerName]:0.3g}"
@@ -71,11 +93,15 @@ def processGodPower(godpower: ET.Element) -> Union[None, str]:
         topLineItems.append(f"{icon.iconTime()} {rechargeString}")
     costString = params.overrideCost
     if costString is None:
-        costString = f"{common.findAndFetchText(godpower, 'cost', 0.0, float):0.3g} + {common.findAndFetchText(godpower, 'repeatcost', 0.0, float):0.3g} each recast"
+        base = common.findAndFetchText(godpower, 'cost', 0.0, float)
+        increase = common.findAndFetchText(godpower, 'repeatcost', 0.0, float)
+        # Avoid generating useless cost/recast text for things that aren't clearly god powers, eg the Chinese major god blessings
+        if base != 0.0 or increase != 0.0:
+            costString = f"{base:0.3g} + {increase:0.3g} each recast"
     if costString:
         topLineItems.append(f"{icon.resourceIcon('favor')} {costString}")
     if len(topLineItems) > 1:
-        items = [" ".join(topLineItems)]
+        items.append(" ".join(topLineItems))
 
     replacements = {}
     radiusValue = common.findAndFetchText(godpower, "radius", 0.0, float)
@@ -128,7 +154,7 @@ def processGodPower(godpower: ET.Element) -> Union[None, str]:
         playerRelationPossessive = "your or your allies' "
         playerRelation = "you and your allies"
     else:
-        print(f"Warning: {powerName} has unhandled powerplayerrelation {playerRelation.text}")
+        common.warn_data(f"Warning: {powerName} has unhandled powerplayerrelation {playerRelation.text}")
         playerRelation = "all players?"
         playerRelationPossessive = "all players'? "
     replacements['playerrelation'] = playerRelation.strip()
@@ -660,6 +686,84 @@ def generateGodPowerDescriptions():
     yinglongItems = [f"Summons Yinglong at a location of your choice.", unitdescription.describeUnit("YingLong")]
     godPowerProcessingParams["YinglongsWrath"] = GodPowerParams(yinglongItems)
 
+
+    solarshield = findGodPowerByName("SolarShield")
+    solarshieldPoints = float(solarshield.find("unitmodify[.='MaxShieldPoints']").attrib['amount'])
+    solarshieldShieldRegen = float(solarshield.find("unitmodify[.='ShieldRegenRate']").attrib['amount'])
+    solarshieldHealRate = float(solarshield.find("unitmodify[.='HealRate']").attrib['amount'])
+    solarshieldHealExcludes = solarshield.find("unitmodify[.='HealRate']").attrib['excludetypes'].split("|")
+    solarshieldItems = [f"Surrounds a single unit with a shield, making it very difficult to kill. {{duration}} Targets {{playerrelationpos}} {{attacktargets}}. The recipient gains {solarshieldPoints:0.4g} hitpoints of shield immediately, which restores at {solarshieldShieldRegen:0.3g} points/second. Additionally, it is healed for {solarshieldHealRate:0.3g} hitpoints/second unless it is a {common.commaSeparatedList(common.getListOfDisplayNamesForProtoOrClass(solarshieldHealExcludes), 'or')}."]
+    godPowerProcessingParams["SolarShield"] = GodPowerParams(solarshieldItems)
+
+    kusanagi = findGodPowerByName("Kusanagi")
+    kusanagiWaterDelay =float(kusanagi.find("createunit[.='VFXKusanagiWaterAttack']").attrib['delay'])
+    kusanagiItems = [f"Places a sword at a location of your choice. Immediately strikes: {action.describeAction('KusanagiSword', 'BirthAttack')} {action.actionDamageOverTimeArea('KusanagiSword')} {kusanagiWaterDelay:0.3g} seconds after the power is invoked, water bursts out: {action.describeAction('VFXKusanagiWaterAttack', 'BirthAttack')}"]
+    godPowerProcessingParams["Kusanagi"] = GodPowerParams(kusanagiItems)
+
+    newmoon = findGodPowerByName("NewMoon")
+    newmoonResearchSpeed = common.findAndFetchText(newmoon, "freeresearchrate", 1, float)
+    newmoonTrainSpeed = float(newmoon.find("unitmodify[.='MilitaryTrainingRate']").attrib['amount'])
+    newmoonItems = [f"Targets one of {{playerrelationpos}} {{attacktargets}}. Queues all technologies that are currently available in this building for free, which are researched at {newmoonResearchSpeed:0.3g}x speed. This does not include upgrades which are locked behind earlier incomplete upgrades (eg Armory) or are not available until later Ages. Age advances, Secrets of the Titans, and Omniscience cannot be researched by this power.", f"Additionally, this building produces military units {newmoonTrainSpeed:0.3g}x faster for the duration.", "{duration}"]
+    godPowerProcessingParams["NewMoon"] = GodPowerParams(newmoonItems)
+
+    shrineofthehunt = findGodPowerByName("ShrineOfTheHunt")
+    shrineofthehuntDeerFood = common.findAndFetchText(common.protoFromName("DeerShrineOfTheHunt"), "initialresource[@resourcetype='Food']", 0, float)
+    shrineofthehuntItems = [f"Targets one of {{playerrelationpos}} {{attacktargets}}, transforming it into a Shrine of the Hunt.", unitdescription.describeUnit("ShrineOfTheHunt"), f"These deer contain {icon.resourceIcon('food')} {shrineofthehuntDeerFood:0.3g} and cannot be converted by Set.", "Wolf:", unitdescription.describeUnit("WolfShrineOfTheHunt")]
+    godPowerProcessingParams["ShrineOfTheHunt"] = GodPowerParams(shrineofthehuntItems)
+
+    goshinboku = findGodPowerByName("Goshinboku")
+    goshinbokuItems = [f"Places a Goshihnboku at a location of your choosing.", unitdescription.describeUnit("Goshinboku")]
+    godPowerProcessingParams["Goshinboku"] = GodPowerParams(goshinbokuItems)
+
+    swampland = findGodPowerByName("Swampland")
+    swamplandItems = [f"Temporarily creates a swampland in the targeted area. The swamp typically contains 10-18 Kappa, which attack enemies close to them.", action.describeAction("KappaSwampland", "Throw"), "{radius}", "{duration}"]
+    godPowerProcessingParams["Swampland"] = GodPowerParams(swamplandItems)
+
+    shogun = findGodPowerByName("Shogun")
+    shogunItems = [f"Converts one of {{playerrelationpos}} {{attacktargets}}, transforming it into a Shogun. The new form cannot be healed, and the transformation does not heal him.", unitdescription.describeUnit("Shogun")]
+    godPowerProcessingParams["Shogun"] = GodPowerParams(shogunItems)
+
+    smitinggust = findGodPowerByName("SmitingGust")
+    smitinggustWidth = common.findAndFetchText(smitinggust, "gustlength", None, float)
+    smitinggustTime = common.findAndFetchText(smitinggust, "blowtime", None, float)
+    smitinggustProto = common.findAndFetchText(smitinggust, "damagingproto", None, str)
+    smitinggustProtoAction = common.findAndFetchText(smitinggust, "damagingprotoaction", None, str)
+    smitinggustItems = [f"Select a location and direction to produce a {smitinggustWidth:0.3g}m wide gust of wind which travels at about 15m/s that lasts {smitinggustTime:0.3g} seconds, violently launching {{playerrelationpos}} {{attacktargets}} when it comes into contact with them. Units can be blown over obstacles, but will stop moving if they would land inside an obstacle and get stuck.", f"Upon landing, enemy units are hit with an attack: {protoGodPowerDamage(smitinggustProto, smitinggustProtoAction)}", "Friendly units are not damaged at all."]
+    godPowerProcessingParams["SmitingGust"] = GodPowerParams(smitinggustItems)
+
+
+    thunderburst = findGodPowerByName("ThunderBurst")
+    thunderburstDuration = common.findAndFetchText(thunderburst, "activetime", None, float)
+    thunderburstInterval = common.findAndFetchText(thunderburst, "delay", None, float)
+    thunderburstProto = common.findAndFetchText(thunderburst, "burstvfx", None, str)
+    thunderburstCount = 1 + math.floor(thunderburstDuration/thunderburstInterval)
+    thunderburstRadius = common.findAndFetchText(thunderburst, "radius", None, float)
+    thunderburstRadiusIncrease = common.findAndFetchText(thunderburst, "radiusincreasestep", None, float)
+    thunderburstStunDuration = common.findAndFetchText(thunderburst, "stunduration", None, float)
+    thunderburstHitEffects = "Hit Units are briefly sent flying"
+    if thunderburstStunDuration > 0.0:
+        thunderburstHitEffects += f" and are stunned for {thunderburstStunDuration:0.3g}s."
+    thunderburstHitEffects += "."
+    thunderburstItems = [f"Select a location to produce a series of {thunderburstCount:0.3g} Thunder bursts. The first is immediate and has a {thunderburstRadius:0.3g}m radius. Later ones occur {thunderburstInterval:0.3g}s apart, with the radius increasing by {thunderburstRadiusIncrease:0.3g} each time.", f"Each burst hits {{playerrelationpos}} {{attacktargets}}: {protoGodPowerDamage(thunderburstProto, 'HandAttack')} {thunderburstHitEffects}", "{radius}"]
+    godPowerProcessingParams["ThunderBurst"] = GodPowerParams(thunderburstItems)
+
+    sacredgate = findGodPowerByName("SacredGate")
+    sacredgateItems = [f"Places a Sacred Gate at a location of your choosing. Also immediately cancels any cooldowns on your other god powers and allows them all to be used once for free. This does not recharge Titan Gate or give a free usage.", unitdescription.describeUnit("SacredGate")]
+    godPowerProcessingParams["SacredGate"] = GodPowerParams(sacredgateItems)
+
+    dragontyphoon = findGodPowerByName("DragonTyphoon")
+    dragontyphoonSpawnDelay = common.findAndFetchText(dragontyphoon, "typhoonattackdelayseconds", None, float)
+    dragontyphoonRadius = common.findAndFetchText(dragontyphoon, "typhoonradiusend", None, float)
+    dragontyphoonSpeed = common.findAndFetchText(common.protoFromName("Typhoon"), "maxvelocity", None, float)
+    dragontyphoonItems = [f"The dragon Watatsumi appears on the map, creates a typhoon, and releases it in the direction of your choosing.", f"Watatsumi himself appears and circles around the origin of the typhoon for 4 seconds before flying off. Those close enough to him as he flies are damaged continuously. DPS: {protoGodPowerDamage('TyphoonDragon', 'HandAttack', 20.0)}", f"The typhoon appears after {dragontyphoonSpawnDelay:0.3g} seconds and begins moving at {dragontyphoonSpeed:0.3g}m/s, damaging those within about 60m. DPS: {protoGodPowerDamage('Typhoon', 'HandAttack', 2.0)}", "This power will damage everything that is affected by Tornado.", "Both sources of damage have no distance falloff. Once the power's time expires, the typhoon subsides.", "{radius}", "{duration}"]
+    godPowerProcessingParams["DragonTyphoon"] = GodPowerParams(dragontyphoonItems)
+
+    divineslash = findGodPowerByName("DivineSlash")
+    divineslashWidth = common.findAndFetchText(divineslash, "damagewidth", None, float)
+    divineslashDepth = common.findAndFetchText(divineslash, "damagedepth", None, float)
+    divineslashDelay = common.findAndFetchText(divineslash, "attackdelay", None, float)
+    divineslashItems = [f"A gigantic katana strikes a location in a direction of your choosing. It takes {divineslashDelay:0.3g} seconds for the katana to strike, giving victims a chance to move out of the way. It hits a {divineslashWidth:0.3g}x{divineslashDepth:0.3g}m area: {protoGodPowerDamage('DivineSlashDamage', 'HandAttack')}", "Friendly targets are still sent flying, but are not stunned."]
+    godPowerProcessingParams["DivineSlash"] = GodPowerParams(divineslashItems)
 
     titangate = findGodPowerByName("TitanGate")
     titangateRecharge = "{:0.3g}".format(float(techtree.find("tech[@name='WonderAgeTitan']/effects/effect[@subtype='PowerROF']").attrib['amount']))
