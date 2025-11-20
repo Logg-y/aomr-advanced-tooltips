@@ -28,10 +28,10 @@ def generateMajorGodDescriptions():
         raise ValueError(f"Bad thor dwarf buff magnitudes: {thorDwarfBuffMagnitude}")
     
     
-    thorDwarfBuffText = f"Dwarves have +{100*(thorDwarfBuffMagnitude[0]-1):0.3g}% base gather rates for resources except Gold. This makes them close to Gatherers initially, but they will fall behind with economic upgrades. Relative unupgraded gather rates:\n"
+    thorDwarfBuffText = f"Dwarves have +{100*(thorDwarfBuffMagnitude[0]-1):0.3g}% base gather rates for resources except Gold. This makes them close to Gatherers initially, but they will fall further behind with economic upgrades. Relative unupgraded gather rates:\n"
     thorDwarfBuffText += ''.join([f"   {icon.BULLET_POINT_ALT} {common.getDisplayNameForProtoOrClass(restype)}: {unitdescription.compareGatherRates('VillagerDwarf', 'VillagerNorse', restype, protoOneMult=thorDwarfBuffMagnitude[0])}\\n" for restype in thorDwarfBuffRestypes])
 
-    thorContent = re.sub("-10 Gold.*", f"-10 Gold.\n{icon.BULLET_POINT} {thorDwarfBuffText}", thorContent)
+    thorContent = re.sub("Gold, and gather.*", f"Gold.\n{icon.BULLET_POINT} {thorDwarfBuffText}", thorContent)
     globals.stringMap["STR_CIV_THOR_LR"] = thorContent
 
     odinContent = globals.dataCollection['string_table.txt']["STR_CIV_ODIN_LR"]

@@ -989,7 +989,22 @@ def handleAutoGatherAction(proto: ET.Element, action: ET.Element, tactics: Union
     if len(rateNodes) == 0: return ""
     rates = []
     for rateNode in rateNodes:
-        rates.append(f"{icon.resourceIcon(rateNode.attrib['type'])} {float(rateNode.text):0.3g}")
+        rate = float(rateNode.text)
+        stringForm = format(rate, "0.3g")
+        # This is a horrible fudge which hopefully handles very small numbers without displaying standard form
+        # if the 3sf rounded form has no accurate floating point representation this will need more work though
+        if rate < 0.01:
+            stringForm = format(float(format(rate, "0.3g")), "10f").rstrip("0")
+        rates.append(f"{icon.resourceIcon(rateNode.attrib['type'])} {stringForm}")
+
+    if findFromActionOrTactics(action, tactics, "autogatherscalebygatherrate", 0, int):
+        targetTypeElems = findAllFromActionOrTactics(action, tactics, "donotautogatherunlessgatheringtypes/unittype")
+        targetTypes = [elem.text for elem in targetTypeElems]
+        if len(targetTypes) == 0:
+            return f"Generates {' '.join(rates)} per resource gathered."
+        
+        return f"Generates {' '.join(rates)} per resource gathered while gathering from {common.getDisplayNameForProtoOrClassPlural(targetTypes)}."
+    
     text = f"Generates {' '.join(rates)} per second."
     if findFromActionOrTactics(action, tactics, "addresourcestoinventory", 0, int) > 0:
         text = f"Adds {' '.join(rates)} to its inventory per second."
@@ -1045,7 +1060,8 @@ def handleConvertAction(proto: ET.Element, action: ET.Element, tactics: Union[No
         if findFromActionOrTactics(action, tactics, "exclusive", 0, int):
             exclusive = "A target cannot be affected by this action until previous conversions expire. "
         duration = findFromActionOrTactics(action, tactics, "typedduration", 0.0, float)/1000.0
-        return f"{actionName} {rechargeRate(proto, action, chargeType, tech)}: {actionTargetTypeText(proto, action)} Stuns targets for {duration:0.3g}s, creating a copy under your control next to them that lasts for the same duration. This copy inherits any upgrades on the original, and appears at full health with special attacks ready to use. {exclusive}{actionRange(proto, action, True)} {actionRof(action)}"
+        stunDuration = findFromActionOrTactics(action, tactics, "typedstunduration", 0.0, float)/1000.0
+        return f"{actionName} {rechargeRate(proto, action, chargeType, tech)}: {actionTargetTypeText(proto, action)} Stuns targets for {stunDuration:0.3g}s, creating a copy under your control next to the user that lasts for the {duration:0.3g}s. This copy inherits any upgrades on the original, and appears at full health with special attacks ready to use. {exclusive}{actionRange(proto, action, True)} {actionRof(action)}"
 
     common.warn(f"Non charmedconvert convert on {proto.attrib['name']}, ignored")
     return ""
@@ -1507,7 +1523,7 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
             slowHealMultiplier = findFromActionOrTactics(action, tactics, "slowhealmultiplier", 1.0, float)
             if modifyTargetLimit is not None:
                 lateComponents.append(f"Heals up to {modifyTargetLimit} targets at once.")
-            if slowHealMultiplier < 1.0:
+            if slowHealMultiplier != 1.0:
                 lateComponents.append(f"Targets that have moved or been involved in combat in the last 3 seconds are healed at {slowHealMultiplier*100:0.3g}% speed.")
     elif modifyType in ("Damage", "Armor", "MaxHP", "Speed", "BuildRate", "MilitaryTrainingCost"):
         multiplier = findFromActionOrTactics(action, tactics, "modifymultiplier", None, float)

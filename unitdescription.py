@@ -85,6 +85,8 @@ IGNORE_UNITS = (
 "DaimyoBlessed",
 "GauntletChaosNidhogg",
 "TitanPredator",
+"ShinigamiRevenant",
+"ShinigamiVengeful",
 )
 
 
@@ -620,7 +622,7 @@ class UnitDescription:
         if regenerationNode is not None and "unitregen" not in obsToIgnore:
             regenRate = float(regenerationNode.text)
             if regenRate != 0.0:
-                regenText = f"{'Regenerates' if regenRate > 0 else 'Loses'} {abs(regenRate):0.3g} hitpoints/second."
+                regenText = f"{'Regenerates' if regenRate > 0 else 'Loses'} {abs(regenRate):0.3g} {'hitpoint' if abs(regenRate) == 1.0 else 'hitpoints'}/second."
                 if regenRate < 0.0 and "ratelimit" in regenerationNode.attrib:
                     regenText += f" This cannot drop the unit below {100*float(regenerationNode.attrib['ratelimit']):0.3g}% of its maximum hitpoints."
                 generalObservations.append(regenText)
@@ -1073,11 +1075,17 @@ def generateUnitDescriptions():
     # Japanese
 
     unitDescriptionOverrides["Miko"] = UnitDescription(additionalText="Sacred Custodians (in Shrine) is required to pick up relics.")
-    shinigamiHandler = UnitDescription(hideNonActionObservations=["respawntraindata"], additionalText=["When killed, respawns at a Temple in its next form. Does not respawn once killed in its final form. Vengeful Shinigami requires the Eternal Haunting tech.", "Shinigami: " + handleRespawnTrainData(protoFromName("Shinigami"))])
+    shinigamiVariants = ("Revenant", "Vengeful",)
+    shinigamiHitpointMultipliers = [findAndFetchText(protoFromName(f"Shinigami{variant}"), "maxhitpoints", 1.0, float)/findAndFetchText(protoFromName(f"Shinigami"), "maxhitpoints", 1.0, float) for variant in shinigamiVariants]
+    shinigamiDamageMultipliers = [findAndFetchText(action.findActionByName(f"Shinigami{variant}", "LightningAttack"), "damage", 1.0, float)/findAndFetchText(action.findActionByName(f"Shinigami{variant}", "LightningAttack"), "damage", 1.0, float) for variant in shinigamiVariants]
+    shinigamiExtraElements = []
+    for index, variant in enumerate(shinigamiVariants):
+        shinigamiExtraElements.append(f"{variant} Shinigami: +{shinigamiHitpointMultipliers[index]*100:0.3g}% hitpoints, +{shinigamiDamageMultipliers[index]*100:0.3g}% damage")
+    shinigamiHandler = UnitDescription(hideNonActionObservations=["respawntraindata"], additionalText=["When killed, respawns at a Temple in its next form (Regular, Revenant, Vengeful). Does not respawn once killed in its final form. Vengeful Shinigami requires the Eternal Haunting tech.", *shinigamiExtraElements])
     unitDescriptionOverrides["Shinigami"] = shinigamiHandler
     unitDescriptionOverrides["ShinigamiRevenant"] = shinigamiHandler
     unitDescriptionOverrides["ShinigamiVengeful"] = shinigamiHandler
-    unitDescriptionOverrides["ShrineJapanese"] = UnitDescription(preActionInfoText={"ShrineGatherRateBoost":f"Miko must work on shrines to generate Favor. Favor rate is increased by natural resources within {findAndFetchText(action.findActionByName('ShrineJapanese', 'ShrineGatherRateBoost'), 'maxrange', 0.0, float):0.3g}m."})
+    unitDescriptionOverrides["ShrineJapanese"] = UnitDescription(preActionInfoText={"ShrineGatherRateBoost":f"Miko must work on shrines to generate Favor. Favor rate is increased by natural resources within {findAndFetchText(action.findActionByName('ShrineJapanese', 'ShrineGatherRateBoost'), 'maxrange', 0.0, float):0.3g}m. Favor contribution of objects decreases linearly to zero as their resource inventory is depleted. Amaterasu: Contribution of objects increases correspondingly as their resource inventory grows."})
     unitDescriptionOverrides["Onmoraki"] = UnitDescription(postActionInfoText={"ChargedRangedAttack":f"Each projectile spawns one Wretch:\n{describeUnit('Wretch')}"})
     if checkProtoFlag(common.protoFromName("Shogun"), "unittype", "AbstractCavalry") == False:
         unitDescriptionOverrides["Shogun"] = UnitDescription(additionalText="This unit is not classified as cavalry.")

@@ -40,10 +40,13 @@ Unfortunately playing with the advanced tooltips game setting off hides the cost
 
 # TODO
 
-ship counter triangle may not be obvious
+
+age upgrades for myth specs might be weird in places
+
 oracles seem to actually count off-map tiles?
 godpowerblockradius on great flood protounit
 hunt: max norse favor
+Susanoo's bushido favor amounts are wrong
 
 Isis monument shield should get bigger with empower
 Promethean offspring don't refund res for kronos
@@ -52,8 +55,6 @@ Can I get priest empowerment numbers ingame somehow
 
 Is loki's MU spawn text obtuse?
 Animal favor yield for norse?
-Einheri horn blast - knowing the attack point (and how long he's stuck recovering before he can attack) is technically useful
-    Arguably same for shoot/scooters
 How long does promethean offspring birth anim last? If they're stuck in it and targetable this matters
 how many vill shots kill an animal?
 

@@ -9,6 +9,7 @@ import dataclasses
 import action
 import unitdescription
 import icon
+import collections
 
 RARITY_COLOURS: Dict[int, Callable[[str], str]] = {
     0: lambda s: "<color=0.80,0.80,0.80>" + s + "</color>", # simple, grey
@@ -22,14 +23,14 @@ RARITY_COLOURS: Dict[int, Callable[[str], str]] = {
 # I wanted to colour the rarities with the normal colours so the gauntlet chat messages would get them
 # Eg you got a blessing rarity Heroic -> heroic is blue
 # But unfortunately this makes the blessing select screen look horrible because they are overlaying the coloured text
-# and using the normal word underneath it for a sort of shadowed effect
-# So I darkened them a bit in an attempt to get the message across still
+# and using the normal word underneath it for a sort of shadowed effect, but the shadow becomes the same colour as the text!
+# This gives them all a black border which makes them much more readable but unfortunately it still looks a little bit tacky
 RARITY_COLOURS_FOR_GAUNTLET: Dict[int, Callable[[str], str]] = {
-    0: lambda s: "<color=0.70,0.70,0.70>" + s + "</color>", # simple, grey
-    1: lambda s: "<color=0.40,0.74,0.26>" + s + "</color>", # fine, green
-    2: lambda s: "<color=0.13,0.45,1.00>" + s + "</color>", # heroic, blue
-    3: lambda s: "<color=0.71,0.09,0.97>" + s + "</color>", # mythical, purple
-    4: lambda s: "<color=0.92,0.35,0.00>" + s + "</color>", # divine, orange
+    0: lambda s: "<color=0.80,0.80,0.80,0.0,0.0,0.0>" + s + "</color>", # simple, grey
+    1: lambda s: "<color=0.55,0.82,0.42,0.0,0.0,0.0>" + s + "</color>", # fine, green
+    2: lambda s: "<color=0.36,0.60,1.00,0.0,0.0,0.0>" + s + "</color>", # heroic, blue
+    3: lambda s: "<color=0.81,0.42,0.98,0.0,0.0,0.0>" + s + "</color>", # mythical, purple
+    4: lambda s: "<color=0.93,0.31,0.31,0.0,0.0,0.0>" + s + "</color>", # divine, orange
 }
 
 # problematic aotg_effects.xml named items to ignore
@@ -171,6 +172,8 @@ def generateBlessingDescriptions():
     aotgBlessingHandlers["STR_AOTG_EFF_DWARF_ON_AGE_UP_DESC"] = AotgBlessingHandler(handlerFunction=ageProgressionBlessingHandler)
     aotgBlessingHandlers["STR_BLESS_EFF_AGE_UP_MYTH_UNIT_DESC"] = AotgBlessingHandler(handlerFunction=ageProgressionBlessingHandler)
 
+    aotgBlessingHandlers["STR_AOTG_EFF_DWARF_GENERATE_FAVOR_DESC"] = AotgBlessingHandler(postHandlerProcess=lambda s: s.replace("Trickle rate for Favor", "Favor produced per Wood gathered").replace(" per second", ""))
+
     # stringid: {rarity: techtree element}
     stringIdsToTechUsers: Dict[str, Dict[int, ET.Element]] = {}
 
@@ -263,3 +266,66 @@ def otherAotgStrings():
     for index, rarityName in enumerate(rarities):
         strid = f"STR_AOTG_BLESSINGS_NAME_{rarityName.upper()}"
         globals.stringMap[strid] = RARITY_COLOURS_FOR_GAUNTLET[index](globals.dataCollection["string_table.txt"][strid])
+
+    favorstashItems()
+
+def favorstashItems():
+    stashxml = globals.dataCollection["aotg_favorstash.xml"]
+
+    additions = {}
+
+    fortifiedperimeterItems = []
+    fortifiedPerimeterPowerName = stashxml.find("favorstashitem[name='FortifiedPerimeter']/activatepower").text
+    fortifiedPerimeterPower = common.findGodPowerByName(fortifiedPerimeterPowerName)
+    fortifiedPerimeterCreateElem = fortifiedPerimeterPower.find("createunit")
+    fortifiedperimeterItems = [f"Spawns {fortifiedPerimeterCreateElem.attrib['quantity']} Sentinels with altered stats around each of your Town Centers.", *unitdescription.describeUnit(fortifiedPerimeterCreateElem.text).split("\\n")]
+    additions["FortifiedPerimeter"] = fortifiedperimeterItems
+
+    
+    mythicrejuvenationProto = stashxml.find("favorstashitem[name='MythicRejuvenation']/spawnprotos/proto").text
+    mythicrejuvenationItems = action.describeAction(mythicrejuvenationProto, "FavorStashMassHeal").split("\\n")
+    additions["MythicRejuvenation"] = mythicrejuvenationItems
+
+
+    for item in stashxml:
+        itemName = common.findAndFetchText(item, "name", "", str)
+        newDescription = []
+        activateTechEffect = item.find("activatetecheffect")
+        if activateTechEffect is not None:
+            durationSeconds = float(activateTechEffect.attrib['duration'])/1000.0
+            targetTech = activateTechEffect.text
+            newDescription += tech.processTech(common.techFromName(targetTech)).split("\\n")
+            newDescription += [f"Lasts {int(durationSeconds)} seconds."]
+        
+        spawnprotos = item.find("spawnprotos")
+        if spawnprotos is not None:
+            spawntype = spawnprotos.attrib["protospawnmode"]
+            spawnFrequencies = collections.OrderedDict()
+            if spawntype in ("RandomlyAroundMapAsNature", "RandomFromListAtMarket", "AtEveryPlayerTownCenterIgnorePlacement", "RandomFromListNearMarket"):
+                for protoElem in spawnprotos.findall("proto"):
+                    count = int(protoElem.attrib['counttospawn'])
+                    protoDisplayName = common.getDisplayNameForProtoOrClass(protoElem.text, plural=count > 1)
+                    key = f"{count}x {protoDisplayName}"
+                    spawnFrequencies[key] = spawnFrequencies.get(key, 0) + 1
+            
+                if spawntype == "RandomlyAroundMapAsNature":
+                    newDescription.append("Places all of the following randomly somewhere on the map:")
+                elif spawntype in ("RandomFromListAtMarket", "RandomFromListNearMarket"):
+                    newDescription.append("Spawns a random one of the following at the Market:")
+                elif spawntype == "AtEveryPlayerTownCenterIgnorePlacement":
+                    newDescription.append(f"Spawns at each of your Town Centers, lasting {float(spawnprotos.attrib['timetolive'])/1000.0:n} seconds:")
+                spawnlistItems = []
+                for key, freq in spawnFrequencies.items():
+                    for x in range(0, freq):
+                        spawnlistItems.append(f"{key}")
+                # If the spawn list is very long, don't separate each item with newlines
+                if len(spawnlistItems) > 8:
+                    newDescription.append(f"{icon.BULLET_POINT} {', '.join(spawnlistItems)}")
+                else:
+                    newDescription += [f"{icon.BULLET_POINT} {key}" for key in spawnlistItems]
+                
+        newDescription += additions.get(itemName, [])
+
+        if len(newDescription) > 0:
+            strid = common.findAndFetchText(item, "descriptionid", "", str)
+            globals.stringMap[strid] = "\\n".join(newDescription)

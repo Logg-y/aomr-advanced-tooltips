@@ -30,7 +30,11 @@ IGNORE_POWERS = (
     "GauntletChaosThunderBurst",
     "GauntletChaosNidhogg",
     "GauntletChaosLightningStorm",
+    "GauntletChaosSwampland",
+    "GauntletChaosPestilence",
+    "FavorStashFortifiedPerimeter",
     "Ame-no-Ukihashi",
+    "AmeNoUkihashi",
     "RepairPillarSPC",
     "GreatFloodSPC",
     )
@@ -371,7 +375,7 @@ def generateGodPowerDescriptions():
     godPowerProcessingParams["Citadel"] = GodPowerParams(citadelItems)
 
     sonofosiris = findGodPowerByName("SonOfOsiris")
-    sonofosirisItems = ["Transforms one of {playerrelationpos} Pharoahs into a powerful Son of Osiris. Does not heal the Pharoah in the process, and his new form cannot be healed. Does not prevent the Pharaoh from respawning.", unitdescription.describeUnit("SonOfOsiris")]
+    sonofosirisItems = ["Transforms one of {playerrelationpos} Pharoahs into a powerful Son of Osiris. Fully heals the Pharoah in the process, but his new form cannot be healed. The replaced Pharaoh will begin respawning as if killed.", unitdescription.describeUnit("SonOfOsiris")]
     godPowerProcessingParams["SonOfOsiris"] = GodPowerParams(sonofosirisItems)
 
     meteor = findGodPowerByName("Meteor")
@@ -688,11 +692,17 @@ def generateGodPowerDescriptions():
 
 
     solarshield = findGodPowerByName("SolarShield")
-    solarshieldPoints = float(solarshield.find("unitmodify[.='MaxShieldPoints']").attrib['amount'])
     solarshieldShieldRegen = float(solarshield.find("unitmodify[.='ShieldRegenRate']").attrib['amount'])
     solarshieldHealRate = float(solarshield.find("unitmodify[.='HealRate']").attrib['amount'])
     solarshieldHealExcludes = solarshield.find("unitmodify[.='HealRate']").attrib['excludetypes'].split("|")
-    solarshieldItems = [f"Surrounds a single unit with a shield, making it very difficult to kill. {{duration}} Targets {{playerrelationpos}} {{attacktargets}}. The recipient gains {solarshieldPoints:0.4g} hitpoints of shield immediately, which restores at {solarshieldShieldRegen:0.3g} points/second. Additionally, it is healed for {solarshieldHealRate:0.3g} hitpoints/second unless it is a {common.commaSeparatedList(common.getListOfDisplayNamesForProtoOrClass(solarshieldHealExcludes), 'or')}."]
+
+    solarshieldPointsPerAge = [float(solarshield.find(f"unitmodify[@age='{thisAge}'][.='MaxShieldPoints']").attrib['amount']) for thisAge in ("ArchaicAge", "ClassicalAge", "HeroicAge", "MythicAge", "WonderAge")]
+    
+    solarshieldItems = [f"Surrounds a single unit with a shield, making it very difficult to kill. {{duration}} Targets {{playerrelationpos}} {{attacktargets}}. The recipient gains an age dependent amount of shield hitpoints immediately, which restores at {solarshieldShieldRegen:0.3g} points/second. Additionally, it is healed for {solarshieldHealRate:0.3g} hitpoints/second unless it is a {common.commaSeparatedList(common.getListOfDisplayNamesForProtoOrClass(solarshieldHealExcludes), 'or')}."]
+    solarshieldItems += ["Shield hitpoints granted:"]
+    for label, value in zip(common.AGE_LABELS, solarshieldPointsPerAge):
+        solarshieldItems.append(f"{icon.BULLET_POINT} {label}: {value:0.4g}")
+    
     godPowerProcessingParams["SolarShield"] = GodPowerParams(solarshieldItems)
 
     kusanagi = findGodPowerByName("Kusanagi")
@@ -720,7 +730,7 @@ def generateGodPowerDescriptions():
     godPowerProcessingParams["Swampland"] = GodPowerParams(swamplandItems)
 
     shogun = findGodPowerByName("Shogun")
-    shogunItems = [f"Converts one of {{playerrelationpos}} {{attacktargets}}, transforming it into a Shogun. The new form cannot be healed, and the transformation does not heal him.", unitdescription.describeUnit("Shogun")]
+    shogunItems = [f"Converts one of {{playerrelationpos}} {{attacktargets}}, transforming it into a Shogun and fully healing it in the process. The new form cannot be healed.", unitdescription.describeUnit("Shogun")]
     godPowerProcessingParams["Shogun"] = GodPowerParams(shogunItems)
 
     smitinggust = findGodPowerByName("SmitingGust")

@@ -893,8 +893,6 @@ def dataSubtypeWithAmountHelper(
                 combinableTarget = formatter(effect.attrib[combinableAttribute])
         else:
             raise ValueError("dataSubtypeWithAmountHelper passed no combinable item!")
-        if tech.attrib['name'] == "GoldenKite":
-            print("gk", effect.attrib, actionnameReplacement, actionofReplacement)
         formatted = textFormat.format(value=valueText, combinable="{combinable}", actionof=actionofReplacement, actionfor=actionforReplacement, actionname=actionnameReplacement)
         formatted = formatted .replace("  ", " ")
         return EffectHandlerResponse(getEffectTargets(tech, effect), formatted, combinableTargets=combinableTarget)
