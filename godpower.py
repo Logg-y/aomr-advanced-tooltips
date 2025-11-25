@@ -32,6 +32,8 @@ IGNORE_POWERS = (
     "GauntletChaosLightningStorm",
     "GauntletChaosSwampland",
     "GauntletChaosPestilence",
+    "GauntletChaosEclipse",
+    "GauntletChaosCeaseFire",
     "FavorStashFortifiedPerimeter",
     "Ame-no-Ukihashi",
     "AmeNoUkihashi",
