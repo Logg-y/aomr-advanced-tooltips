@@ -691,3 +691,27 @@ def warn(msg: str):
 def warn_unhandled(msg: str):
     "Warning for unhandled cases of data which is quite possibly valid - eg new kinds of tech subtypes, or attributes on things for which there was no reason to write handling before."
     warnings.warn(msg, UnhandledImplementationWarning, stacklevel=2)
+
+def groupElementListBySameTextValues[T](elements: List[ET.Element], targetAttribute: str, textConversionFunction: Callable[[str], T]) -> Dict[T, List[str]]:
+    """
+    When passed a list of ET elements, groups up identical .text values, and returns a dictionary of {the text value : the list of attribute values on elements with this text value}
+
+    For instance, this could be used to take the following elements:
+
+    <rewardpointcost resourcetype="Food">1.0</rewardpointcost>
+    <rewardpointcost resourcetype="Wood">1.0</rewardpointcost>
+    <rewardpointcost resourcetype="Gold">1.0</rewardpointcost>
+    <rewardpointcost resourcetype="Favor">10.0</rewardpointcost>
+
+    and return:
+
+    {1.0:["Food", "Wood", "Gold"],
+    10.0:["Favor"]}
+    """
+    output: Dict[T, List[str]] = {}
+    for elem in elements:
+        convertedText = textConversionFunction(elem.text)
+        if convertedText not in output:
+            output[convertedText] = []
+        output[convertedText].append(elem.attrib[targetAttribute])
+    return output

@@ -6,6 +6,7 @@ import re
 import unitdescription
 import godpower
 import tech
+from typing import Dict, List
 
 def generateMajorGodDescriptions():
     raContent = globals.dataCollection['string_table.txt']["STR_CIV_RA_LR"]
@@ -41,13 +42,34 @@ def generateMajorGodDescriptions():
 
     lokiContent = globals.dataCollection['string_table.txt']["STR_CIV_LOKI_LR"]
     lokiBonusUnitSpawning = globals.dataCollection['major_gods.xml'].find("civ[name='Loki']/bonusunitspawning/damagegoal")
-    lokiExcludedTargets = common.getListOfDisplayNamesForProtoOrClass([elem.text for elem in lokiBonusUnitSpawning.findall("excludedtarget")])
-    lokiSpawnerList = common.getListOfDisplayNamesForProtoOrClass([elem.attrib.get('unit', elem.attrib.get('type')) for elem in lokiBonusUnitSpawning.findall("contributor")])
+    lokiExcludedTargets = common.getListOfDisplayNamesForProtoOrClass([elem.text for elem in lokiBonusUnitSpawning.findall("excludedtarget")], plural=True)
+    lokiSpawnerList = common.getListOfDisplayNamesForProtoOrClass([elem.attrib.get('unit', elem.attrib.get('type')) for elem in lokiBonusUnitSpawning.findall("contributor")], plural=True)
     lokiMythSpawnNew = f"\n{icon.BULLET_POINT} {common.commaSeparatedList(lokiSpawnerList)} work towards summoning Myth Units while damaging enemy objects, except {common.commaSeparatedList(lokiExcludedTargets)}. This ability activates when reaching the Classical Age."
     lokiMythSpawnNew += f"\n {icon.BULLET_POINT_ALT} Picks a random Age up to your current Age (excluding Archaic) at equal odds. Then, picks a random Norse Myth unit that is trained from the Temple at equal odds, including from Norse minor gods not accessible to Loki."
-    lokiMythSpawnNew += f"\n {icon.BULLET_POINT_ALT} The damage required to spawn this unit is the 2x (the sum of its resource costs, with Favor multiplied by 10)."
-    lokiSpawnerList.remove("Hersir")
-    lokiMythSpawnNew += f"\n {icon.BULLET_POINT_ALT} Hersir contribute their full damage dealt to the count. {common.commaSeparatedList(lokiSpawnerList)} only contribute a fifth of their damage."
+
+    lokiSpawningCosts = lokiBonusUnitSpawning.findall("rewardpointcost")
+    rateTexts = []
+    ratesToResourceLabels = common.groupElementListBySameTextValues(lokiSpawningCosts, "resourcetype", float)
+    for rate, resources in ratesToResourceLabels.items():
+        resourceIcons = [icon.resourceIcon(res) for res in resources]
+        rateTexts.append(f"{rate:0.3g} per {' '.join(resourceIcons)} cost")
+
+    
+    lokiMythSpawnNew += f"\n {icon.BULLET_POINT_ALT} The damage required to spawn this unit is based on its total resource costs: {common.commaSeparatedList(rateTexts)}."
+    rateTexts = []
+    lokiUnitContributions = lokiBonusUnitSpawning.findall("contributor")
+    contributorToMultiplier: Dict[str: List[float]] = {}
+    for elem in lokiUnitContributions:
+        convertedText = float(elem.text)
+        if convertedText not in contributorToMultiplier:
+            contributorToMultiplier[convertedText] = []
+        targetAttrib = 'unit' if 'unit' in elem.attrib else 'type'
+        contributorToMultiplier[convertedText].append(common.getDisplayNameForProtoOrClassPlural(elem.attrib[targetAttrib]))
+
+    for rate, contributors in contributorToMultiplier.items():
+        rateTexts.append(f"{common.commaSeparatedList(contributors)} contribute {rate}x of their damage.")
+
+    lokiMythSpawnNew += f"\n {icon.BULLET_POINT_ALT} {' '.join(rateTexts)}"
     lokiMythSpawnNew += f"\n {icon.BULLET_POINT_ALT} Once the accumulated damage total is reached, the chosen Myth unit spawns next to the final unit to contribute damage, regardless of population availability, and this process repeats."
     lokiContent = re.sub("\n.*Damaging enemy.*", "", lokiContent)
     # Put this at the end. It's otherwise quite hard to tell where the subbullets start and end
@@ -184,13 +206,9 @@ def generateMajorGodDescriptions():
 
     tsukuyomiContent = globals.dataCollection["string_table.txt"]["STR_CIV_TSUKUYOMI_LR"]
     tsukuyomiResearchElems = globals.dataCollection["major_gods.xml"].findall("civ[name='Tsukuyomi']/bountyresourceearning/researchcostmultiplier")
+
     if tsukuyomiResearchElems is not None:
-        ratesToResourceLabels = {}
-        for elem in tsukuyomiResearchElems:
-            rate = float(elem.text)
-            if rate not in ratesToResourceLabels:
-                ratesToResourceLabels[rate] = []
-            ratesToResourceLabels[rate].append(elem.attrib['resourcetype'])
+        ratesToResourceLabels = common.groupElementListBySameTextValues(tsukuyomiResearchElems, "resourcetype", float)
         rateTexts = []
         for rate, resources in ratesToResourceLabels.items():
             resourceIcons = [icon.resourceIcon(res) for res in resources]
