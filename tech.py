@@ -999,9 +999,14 @@ DATA_SUBTYPE_HANDLERS: Dict[str, Callable[[ET.Element, ET.Element], Union[Effect
     "buildingchainresourcefactor":dataSubtypeBuildingChainResourceFactorHandler,
     "workrateall":dataSubtypeWithAmountHelper("All Action Work Rate: {value}", combinableString=""),
     "ondeathcombatxp":dataSubtypeWithAmountHelper("Bushido XP on death: {value}", combinableString=""),
-    "modifystacklimit":dataSubtypeWithAmountHelper("Max number {actionof}{combinable} that stack with each other: {value}", combinableAttribute="action"),
+    "modifystacklimit":dataSubtypeWithAmountHelper("Maximum number {actionof}{combinable} that stack with each other: {value}", combinableAttribute="action"),
     "onhiteffectstatmodify":dataSubtypeOnHitEffectStatModify,
     "respawntrainactive":dataSubtypeRespawnTrainActiveHandler,
+    "dropoffheal":dataSubtypeWithAmountHelper("Healing per full resource inventory dropped off: {value}", combinableString=""),
+    "numberbounces":dataSubtypeWithAmountHelper("Maximum number of bounce targets {actionof}{combinable}: {value}", combinableAttribute="action"),
+    "modifyduration":dataSubtypeWithAmountHelper("Duration {actionof}{combinable}: {value}", combinableAttribute="action"),
+    "targetedspeedmultiplier":dataSubtypeWithAmountHelper("Target speed {actionof}{combinable}: {value}", combinableAttribute="action"),
+    "researchrate":dataSubtypeWithAmountHelper("{combinable} speed: {value}", combinableString="Research"),
 }
 
 
@@ -1067,6 +1072,8 @@ def processTech(tech: ET.Element, skipAffectedObjects: bool=False, lineJoin: str
     additions = techManualAdditions.get(tech.attrib['name'], None)
 
     effects = tech.findall("effects/effect")
+    # Apparently the game accepts effects that are not in a <effects> element as well
+    effects += tech.findall("effect")
     responses: List[Union[None, EffectHandlerResponse]]= []
     for effect in effects:
         response = processEffect(tech, effect)
@@ -1148,6 +1155,29 @@ def generateTechDescriptions():
     eyesOnForestRevealerLifetime = eyesOnForestRevealerModifyRateCap/eyesOnForestRevealerActionModifyAmount + eyesOnForestRevealerModifyRateCap/eyesOnForestRevealerModifyDecay
 
     techManualAdditions["WingedMessenger"] = TechAddition(startEntry=f"Grants a Pegasus that respawns for free {float(globals.respawnTechs['PegasusWingedMessenger'].find('delay').text):0.3g} seconds after it is killed. This Pegasus does not have a population cost.")
+
+    def bounceHelper(additionalBounces: int, protoName: str, actionName="RangedAttack"):
+        actionElem = action.findActionByName(protoName, actionName)
+        tactics = action.actionTactics(protoName, actionElem)
+        projectilechainbounce = action.findFromActionOrTactics(actionElem, tactics, "projectilechainbounce", 0, int)
+        if projectilechainbounce > 0:
+            reduction = action.findFromActionOrTactics(actionElem, tactics, "projectilechainbouncereduction", 1.0, float)
+            bounceRange = action.findFromActionOrTactics(actionElem, tactics, "projectilechainbouncerange", 0.0, float)
+            mult = 1.0-reduction
+            totalBonus = 0.0
+            for x in range(projectilechainbounce-1, additionalBounces + projectilechainbounce - 1):
+                totalBonus += 100.0 * mult ** (1+x)
+            return f"{common.getDisplayNameForProtoOrClass(common.protoFromName(protoName))}: +{totalBonus:0.3g}% ({bounceRange:0.3g}m)"
+        
+    fatedArrowsBounces = int(float(common.techFromName("FatedArrows").find("effects/effect[@subtype='NumberBounces']").attrib['amount']))
+    fatedArrowsUnits = ("Toxotes", "Peltast")
+    techManualAdditions["FatedArrows"] = TechAddition(endEntry=["Damage increase if all bounces hit, and bounce ranges:"] + [bounceHelper(fatedArrowsBounces, x) for x in fatedArrowsUnits])
+
+    # Initial release had this little bug in...
+    if action.findActionByName("AttackSpeedBuffContainer", "AttackSpeedBuff").find("modifymultiplier") is None:
+        techManualAdditions["PiousSacrifice"] = TechAddition(endEntry="Nonfunctional due to implementation bug.")
+    else:
+        techManualAdditions["PiousSacrifice"] = TechAddition(endEntry=[f"Speed boosters persist for {float(common.protoFromName('AttackSpeedBuffContainer').find('lifespan').text):0.3g} seconds.", action.describeAction("AttackSpeedBuffContainer", "AttackSpeedBuff", nameOverride="Speed buff")])
 
     techManualAdditions["EyesInTheForest"] = TechAddition(endEntry=f"These revealers last for {eyesOnForestRevealerLifetime:0.3g} seconds. They have {eyesOnForestRevealerLOS:0.3g} LOS, which increases by {eyesOnForestRevealerActionModifyAmount:0.3g} per second to a maximum of {eyesOnForestRevealerMaxLOS:0.3g}. Then, the LOS starts to decay at {eyesOnForestRevealerModifyDecay:0.3g} per second until the revealer disappears.")
 

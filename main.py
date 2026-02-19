@@ -76,6 +76,49 @@ def mergeAbilities():
             abilities.insert(0, child)
     globals.dataCollection["god_powers_combined"] = abilities
 
+def clarifyImplicitTechAbilities():
+    """Some abilities (Demeter pack) aren't enabled with ActionEnable flags and are instead governed by the abilities xml making the button only appear with a researched tech
+
+    This adds enabled=0 to the corresponding protounit action data, and also the "missing" ActionEnable to the tech effects data.
+    """
+    for protoNameElem in globals.dataCollection["abilities"]["abilities.xml"]:
+        for ability in protoNameElem:
+            techElem = ability.find("tech")
+            if techElem is not None:
+                # Exclude passive abilities
+                if ability.find("alwaysdisabledingrid") is None:
+                    #print(f"{protoNameElem.tag} has tech controlled nonpassive {ability.text}")
+                    # Find the civ.abilities for this ability
+                    civability = globals.dataCollection['abilities_combined'].find(f"power[@name='{ability.text}']")
+                    actionName = civability.find("unitaction").text
+                    # See if the tech is enabling this already
+                    enableElem = common.techFromName(techElem.text).find(f"effects/effect[@action='{actionName}']")
+                    if enableElem is None:
+                        print(f"{techElem.text} doesn't seem to have an ActionEnable for this")
+                        # Find the protounit entry for this ability - these are all lowercased (there's some evidence that it's by the developers' own internal tooling) so xpath searching to get them isn't possible
+                        proto = None
+                        for testProto in globals.dataCollection['proto.xml']:
+                            if testProto.attrib['name'].lower() == protoNameElem.tag:
+                                proto = testProto
+                                break
+                        if proto is not None:
+                            print(f"{protoNameElem.tag} -> {proto.attrib['name']} has tech controlled nonpassive {ability.text} without ActionEnable")
+                            actionElem = action.findActionByName(proto, actionName)
+                            tactics = action.actionTactics(proto, actionElem)
+                            if action.findFromActionOrTactics(actionElem, tactics, "enabled", 1, int) != 0:
+                                activeElem = ET.Element("active")
+                                activeElem.text = "0"
+                                actionElem.insert(0, activeElem)
+                                print(f"-> added active=0 to {actionName} protoaction")
+                            enableEffect = ET.Element("effect", attrib={"type":"Data", "action":actionName, "subtype":"ActionEnable", "relativity":"Absolute", "amount":"1.0"})
+                            targetElement = ET.Element("target", attrib={"type":"ProtoUnit"})
+                            targetElement.text = proto.attrib['name']
+                            enableEffect.insert(0, targetElement)
+                            common.techFromName(techElem.text).find("effects").insert(0, enableEffect)
+                            print(f"-> added ActionEnable to {techElem.text} effects")
+
+
+
 def loadGameCfg():
     configData = {}
     with open(os.path.join(globals.config["paths"]["configPath"], "game.cfg")) as f:
@@ -132,6 +175,7 @@ def prepareData():
         globals.dataCollection["string_table.txt"]["STR_ABILITY_PETRIFIED_FRAME"] = "Petrified Frame"
     parseUnitTypeData()
     mergeAbilities()
+    clarifyImplicitTechAbilities()
     loadGameCfg()
     globals.historyPath = os.path.join(globals.config["paths"]["dataPath"], "game/data/strings", globals.config["paths"]["lang"], "history")
 

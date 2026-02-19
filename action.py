@@ -63,6 +63,8 @@ ACTION_TYPE_NAMES = {
     "SpeedBoost":"Speed Boost Aura",
     "IncreaseDamageWithLikeUnits":"Group Powerup",
     "ChopAttack":"Wood Chopping",
+    "ThornedWallsAttack":"Melee Retaliation Attack",
+    "AbductDrop":"Drop",
 }
 
 def findFromActionOrTactics(action: ET.Element, tactics: ET.Element, query: str, default: Any=None, conversion: Union[None, Type] = None):
@@ -833,6 +835,11 @@ def actionDamageOverTimeArea(damageProto: str, damageActionName: str="AreaDamage
         altDamageText = actionDamageOverTimeDamageFromAction(damageAction, includeDamageBonus)
     return f"Creates a damaging area lasting {lifespan} seconds with a radius of {radius}, dealing {altDamageText}. This damage has no falloff with distance. {lateText}".strip()
 
+def handleAbductAction(proto: ET.Element, action: ET.Element, tactics: ET.Element, actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
+    duration = findFromActionOrTactics(action, tactics, "modifyduration", 0, int)
+    return f"{actionName} {rechargeRate(proto, action, chargeType, tech)}: {actionTargetTypeText(proto, action)} Picks up and carries around the victim for {duration/1000:0.3g} seconds, disabling other actions in this time. They cannot be released manually. At the end of the duration, they are dropped: {actionDamageFull(proto, action, ignoreActive=tech is not None)} If dropped over impassable terrain, the victim will be moved to a walkable edge if one is close enough, otherwise they simply die.".replace("  ", " ")
+
+
         
 def handleGoreAction(proto: ET.Element, action: ET.Element, tactics: ET.Element, actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
     weightClassElement = action.find("maxsizeclass")
@@ -886,6 +893,14 @@ def handleBuckAttackAction(proto: ET.Element, action: ET.Element, tactics: ET.El
             stuntext = f"Affected targets are stunned for {stunduration:0.3g} seconds. "
     return f"{actionName} {rechargeRate(proto, action, chargeType, tech)}: {actionTargetTypeText(proto, action)} Knocks nearby {actionDamageFlagNames(action)} targets {sizeclass}away. {stuntext}{actionDamageFull(proto, action, ignoreActive=tech is not None)}".replace("  ", " ")
 
+def handleReflectAttackAction(proto: ET.Element, action: ET.Element, tactics: ET.Element, actionName: str, chargeType:ActionChargeType, tech: Union[None, ET.Element]=None):
+    items = [actionName, rechargeRate(proto, action, chargeType, tech), actionTargetTypeText(proto, action), "Damages when attacked in melee.", actionPreDamageInfoText(action), actionDamageFull(proto, action, isDPS=False, hideRof=True, ignoreActive=tech is not None)]
+    for index in (1, 0):
+        if len(items[index]):
+            items[index] += ":"
+            break
+    items = [x for x in items if len(x) > 0]
+    return f"{' '.join(items)}"
 
 def actionTargetTypeText(proto: ET.Element, action: ET.Element):
     tactics = actionTactics(proto, action)
@@ -912,14 +927,44 @@ def simpleActionHandler(additionalText=""):
     return inner
 
 def targetListToString(targetList: List[str], excludeTargets: List[str] = [], joiner="and"):
+    # Various logic ends up with repeated exclusions being listed - no point checking the same things multii
+    targetList = list(set(targetList))
+    excludeTargets = list(set(excludeTargets))
     if len(targetList) == 0 and len(excludeTargets) > 0:
         unitClassNames = common.getListOfDisplayNamesForProtoOrClass("All", plural=True)
     else:
         unitClassNames = common.getListOfDisplayNamesForProtoOrClass(targetList, plural=True)
     
     text = common.commaSeparatedList(unitClassNames, joiner)
-    if len(excludeTargets) > 0:
-        text += f" (except {common.commaSeparatedList(common.getListOfDisplayNamesForProtoOrClass(excludeTargets, plural=True), joiner)})"
+    
+    # Some things exclude things pointlessly that were never in the targeted unit types to begin with
+    # eg farms already lack the "affected by earthquake" flag, don't need to exclude them again
+    # This is especially common for autorangedmodify actions - an aura that damages buildings need not mention that it doesn't affect flying because there are no flying buildings
+    attackTargetsExpandedTypes = []
+    for target in targetList:
+        if target not in globals.protosByUnitType:
+            attackTargetsExpandedTypes.append(target)
+        else:
+            attackTargetsExpandedTypes += globals.protosByUnitType[target]
+
+    
+    restrictedTargetsRevised = []
+    for target in excludeTargets:
+        targetWouldBeHit = False
+        if target in attackTargetsExpandedTypes:
+            targetWouldBeHit = True
+        elif target in globals.protosByUnitType:
+            # Exclude if no members of this unit type are in the list of valid targets
+            for abstractTypeMember in globals.protosByUnitType[target]:
+                if abstractTypeMember in attackTargetsExpandedTypes:
+                    targetWouldBeHit = True
+                    break
+        if targetWouldBeHit:
+            restrictedTargetsRevised.append(target)
+
+    if len(restrictedTargetsRevised) > 0:
+        text += f" (except {common.commaSeparatedList(common.getListOfDisplayNamesForProtoOrClass(restrictedTargetsRevised, plural=True), joiner)})"
+
     return text
 
 def handleHealAction(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
@@ -1063,8 +1108,26 @@ def handleConvertAction(proto: ET.Element, action: ET.Element, tactics: Union[No
         stunDuration = findFromActionOrTactics(action, tactics, "typedstunduration", 0.0, float)/1000.0
         return f"{actionName} {rechargeRate(proto, action, chargeType, tech)}: {actionTargetTypeText(proto, action)} Stuns targets for {stunDuration:0.3g}s, creating a copy under your control next to the user that lasts for the {duration:0.3g}s. This copy inherits any upgrades on the original, and appears at full health with special attacks ready to use. {exclusive}{actionRange(proto, action, True)} {actionRof(action)}"
 
-    common.warn(f"Non charmedconvert convert on {proto.attrib['name']}, ignored")
-    return ""
+    converttargets = {}
+    forbiddenTargets = []
+    for elem in findAllFromActionOrTactics(action, tactics, "rate"):
+        dur = float(elem.text)
+        if dur == 0.0:
+            forbiddenTargets.append(elem.attrib['type'])
+        else:
+            converttargets[elem.attrib['type']] = dur
+    if len(converttargets) > 1:
+        common.warn_unhandled(f"Convert action on {proto.attrib['name']} has more than one target type or forbidden targets")
+        return ""
+    else:
+        target = list(converttargets.keys())[0]
+        time = converttargets[target]
+        timeText = f"{time:0.3g} seconds"
+        timeperhitpoint = findFromActionOrTactics(action, tactics, "extraratepertargethp", 0.0, float)
+        if timeperhitpoint > 0.0:
+            hpPerSecond = 1/timeperhitpoint
+            timeText += f", plus an additional 1 second per {hpPerSecond:0.3g} hitpoints of the target"
+        return f"{actionName} {rechargeRate(proto, action, chargeType, tech)}: {actionTargetTypeText(proto, action)} Permanently converts the target in {timeText}. {actionRange(proto, action, True)}"
 
 def handleTrailAction(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
     protoElem = action.find("trailprotounit")
@@ -1218,9 +1281,60 @@ def handleBurstHealAction(proto: ET.Element, action: ET.Element, tactics: Union[
         items.insert(1, rechargeRate(proto, action, chargeType, tech)+":")
     return f"{' '.join(items)}."
 
+def handleInlineAction(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
+    if action.find("ismanualtransform") is not None:
+        return handleDelayedTransformAction(proto, action, tactics, actionName, chargeType, tech)
+    elif action.find("isabductdrop") is not None:
+        return "May be commanded to drop abducted units instantly."
+    
+    common.warn_unhandled(f"Unknown Inline action on {proto.attrib['name']}")
+
+    return ""
+
+def handleLureAction(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
+    movespeed = findFromActionOrTactics(action, tactics, "targetedspeedmultiplier", 1.0, float)
+    return f"{actionName} {rechargeRate(proto, action, chargeType, tech)}: {actionTargetTypeText(proto, action)} Lures in one targeted unit, making them uncontrollable and having them move in at {movespeed*100:0.3g}% speed. Once they are in melee range, they remain stunned and are attacked: {actionDamageFull(proto, action, damageMultiplier=0.5, ignoreActive=tech is not None)}".replace("  ", " ")
+
+def handleConditionalTransformAction(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
+    rule = action.find("conditionaltransformrule")
+    modifyprotoid = findFromActionOrTactics(action, tactics, "modifyprotoid", None, str)
+    skipmutatespawnevents = findFromActionOrTactics(action, tactics, "skipmutatespawnevents", 0, int)
+    text = ""
+    if rule.attrib['type'] == "NotIdle":
+        text = f"Transforms into a {common.getDisplayNameForProtoOrClass(modifyprotoid)} if not idle."
+    elif rule.attrib['type'] == "EnemyInRange":
+        text = f"Transforms into a {common.getDisplayNameForProtoOrClass(modifyprotoid)} if any enemy {actionTargetList(action, tactics)} are within {float(rule.text):0.3g}m."
+    elif rule.attrib['type'] == "DamageTaken":
+        text = f"Transforms into a {common.getDisplayNameForProtoOrClass(modifyprotoid)} if damaged."
+    elif rule.attrib['type'] == "DamageDealt":
+        text = f"Transforms into a {common.getDisplayNameForProtoOrClass(modifyprotoid)} upon dealing damage."
+    else:
+        common.warn_unhandled(f"Unknown ConditionalTransform rule {rule.attrib['type']} on {proto.attrib['name']}")
+        return ""
+    if not skipmutatespawnevents:
+        targetProto = common.protoFromName(modifyprotoid)
+        # Since this is currently used for only one thing, it is probably reasonable to hardcode like this for now
+        # A more flexible approach would be to have it use the unit description for whatever it's spawning
+        mutatespawn = targetProto.findall("spawn[@type='mutate']")
+        if len(mutatespawn) > 0:
+            text += " Transforming this way releases an explosion: "
+        for spawn in mutatespawn:
+            spawnedproto = common.protoFromName(spawn.text)
+            text += selfDestructActionDamage(spawnedproto)
+            text += "."
+    return text
+
+
 def handleDelayedTransformAction(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
-    text = f"Can transform into a {common.getObjectDisplayName(protoFromName(action.find('modifyprotoid').text))} (takes {findAndFetchText(action, 'modifyduration', 0.0, float)/1000.0:0.3g} seconds)."
+    text = f"Transforms into a {common.getObjectDisplayName(protoFromName(action.find('modifyprotoid').text))} "
+    transformDuration = findAndFetchText(action, 'modifyduration', 0.0, float)/1000.0
+    if transformDuration > 0.0:
+        text += f"(takes {transformDuration:0.3g} seconds)."
+    else:
+        text += "instantly."
     items = [actionName, text]
+    if proto.find("flag[.='CanAutoTransform']") is not None and chargeType == ActionChargeType.NONE:
+        chargeType = ActionChargeType.REGULAR
     if chargeType != ActionChargeType.NONE:
         items.insert(1, rechargeRate(proto, action, chargeType, tech)+":")
     elif len(actionName) > 0:
@@ -1453,12 +1567,14 @@ def handleChargedModifyAction(proto: ET.Element, action: ET.Element, tactics: Un
         return ""
     return (". ".join(effectsList)) + "."
 
+
 MODIFY_TYPE_DISPLAY = {
     "Armor":"Damage Vulnerability",
     "MaxHP":"Max Hitpoints",
     "Speed":"Movement Speed",
     "BuildRate":"Build Speed",
     "MilitaryTrainingCost":"Military Unit Cost",
+    "ROF":"Attack Interval",
 }
 
 def getAllowForbidTargetTypes(action: ET.Element, tactics: ET.Element) -> Tuple[List[str], List[str]]:
@@ -1471,6 +1587,12 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
     modifyType = findFromActionOrTactics(action, tactics, "modifytype", None)
     if modifyType is None:
         return ""
+    
+    # Silence god-specific effects, since they probably shouldn't be noted everywhere
+    if tech is None:
+        modifyCiv = findFromActionOrTactics(action, tactics, "modifyciv", None)
+        if modifyCiv is not None:
+            return ""
 
     components = []
     lateComponents = []
@@ -1510,6 +1632,7 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
         components[-1] = "p" + components[-1][1:]
 
     modifyTargetLimit = findFromActionOrTactics(action, tactics, "modifytargetlimit", None, int)
+    skipStacking = False
 
     if modifyType == "HealRate":
         damageType = findFromActionOrTactics(action, tactics, "modifydamagetype", "Divine")
@@ -1522,11 +1645,14 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
             components.append(f"heals {damageAmount:0.3g} hitpoints per second to")
             slowHealMultiplier = findFromActionOrTactics(action, tactics, "slowhealmultiplier", 1.0, float)
             if modifyTargetLimit is not None:
-                lateComponents.append(f"Heals up to {modifyTargetLimit} targets at once.")
+                lateComponents.append(f"Heals up to {modifyTargetLimit} target{'s' if modifyTargetLimit > 1 else ''} at once.")
             if slowHealMultiplier != 1.0:
                 lateComponents.append(f"Targets that have moved or been involved in combat in the last 3 seconds are healed at {slowHealMultiplier*100:0.3g}% speed.")
-    elif modifyType in ("Damage", "Armor", "MaxHP", "Speed", "BuildRate", "MilitaryTrainingCost"):
+    elif modifyType in ("Damage", "Armor", "MaxHP", "Speed", "BuildRate", "MilitaryTrainingCost", "ROF"):
         multiplier = findFromActionOrTactics(action, tactics, "modifymultiplier", None, float)
+        if multiplier is None:
+            common.warn_data(f"RangedModify on {proto.attrib['name']} is missing modifymultiplier, ignored")
+            return ""
         modifyTypeName = MODIFY_TYPE_DISPLAY.get(modifyType, modifyType)
         if modifyType in ("Armor"):
             multiplier = 1.0 + (1.0-multiplier)
@@ -1545,16 +1671,35 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
             components.append(f"decreases {armorType} vulnerability by {100*(multiplier-1.0):0.3g}% for")
         elif multiplier < 1.0:
             components.append(f"increases {armorType} vulnerability by {-100*(multiplier-1.0):0.3g}% for")
-    elif modifyType == "GatherRateMultiplier":
+    elif modifyType in ["GatherRateMultiplier", "GatherRate"]:
         multiplier = findFromActionOrTactics(action, tactics, "modifymultiplier", None, float)
-        components.append(f"increases gather rate by {(multiplier-1.0)*100:0.3g}%. Affects")
+        components.append(f"increases gather rate of {{targets}} by {(multiplier-1.0)*100:0.3g}%.")
+    elif modifyType in ["ResourceGatherRate"]:
+        multiplier = findFromActionOrTactics(action, tactics, "modifyamount", None, float)
+        components.append(f"increases gather rate of {{targets}} by {multiplier*100:0.3g}%.")
+    elif modifyType == "DamageByTargetType":
+        victimTargetType = common.getDisplayNameForProtoOrClassPlural(findFromActionOrTactics(action, tactics, "modifydamagetargettype", None))
+        multiplier = findFromActionOrTactics(action, tactics, "modifyamount", None, float)
+        components.append(f"multiplies the damage of {{targets}} against {victimTargetType} by {multiplier:0.3g}x.")
+    elif modifyType == "PopCapBonus":
+        # Remove "projects a X m aura that..."
+        components = components[:-1]
+        amount = findFromActionOrTactics(action, tactics, "modifyamount", None, int)
+        targetLimit = findFromActionOrTactics(action, tactics, "modifytargetlimit", None, int)
+        components.append(f"Increases population cap by {amount} for each of {{targets}}")
+        if targetLimit is not None:
+            components.append(f"(max {targetLimit})")
+        components.append(f"within {range:0.3g}m.")
+        skipStacking = True
     else:
         common.warn_unhandled(f"Unknown AutoRangedModify type {modifyType} for {proto.attrib['name']}")
         return ""
 
     playerRelation = ["your"]
 
-    if findFromActionOrTactics(action, tactics, "targetenemy", ""):
+    if findFromActionOrTactics(action, tactics, "modifyciv", ""):
+        playerRelation = [findFromActionOrTactics(action, tactics, "modifyciv", "") +"'s"]
+    elif findFromActionOrTactics(action, tactics, "targetenemy", ""):
         playerRelation = ["enemy"]
     elif findFromActionOrTactics(action, tactics, "targetenemyincludenature", ""):
         playerRelation = ["nature", "enemy"]
@@ -1572,17 +1717,28 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
     elif isInfection and findFromActionOrTactics(action, tactics, "modifyselfifinfection", 0, int):
         playerRelation.insert(0, "itself")
 
-    components.append(common.commaSeparatedList(playerRelation))
+    
+    targetListComponents = []
+    targetListComponents.append(common.commaSeparatedList(playerRelation))
 
     if findFromActionOrTactics(action, tactics, "targetunbuilt", ""):
-        components.append("unfinished")
+        targetListComponents.append("unfinished")
 
     allowedTargetTypes, forbidTargetTypes = getAllowForbidTargetTypes(action, tactics)
     if findFromActionOrTactics(action, tactics, "modifyflyingunits", 0, int) == 0:
         forbidTargetTypes.append("AbstractFlyingUnit")
-    components.append(targetListToString(allowedTargetTypes, forbidTargetTypes))
+    targetListComponents.append(targetListToString(allowedTargetTypes, forbidTargetTypes))
 
-    components[-1] += "."
+    targetText = " ".join(targetListComponents)
+
+    doneReplacement = False
+    for i, component in enumerate(components):
+        if "{targets}" in component:
+            components[i] = component.replace("{targets}", targetText)
+            doneReplacement = True
+    if not doneReplacement:
+        components.append(targetText)
+        components[-1] += "."
 
     if isInfection:
         components.append("A unit can only have one infection at a time.")
@@ -1590,11 +1746,15 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
     components += lateComponents
 
     
-
-    if findFromActionOrTactics(action, tactics, "nostack", 0, int) == 0:
-        components.append("Stacking.")
-    else:
-        components.append("Does not stack.")
+    if not skipStacking:
+        if findFromActionOrTactics(action, tactics, "nostack", 0, int) == 0:
+            stacklimit = findFromActionOrTactics(action, tactics, "modifystacklimit", 0, int)
+            if stacklimit > 0:
+                components.append(f"Stacks with itself up to {stacklimit} times.")
+            else:
+                components.append("Stacking.")
+        else:
+            components.append("Does not stack.")
 
     if findFromActionOrTactics(action, tactics, "suspendbyattack", 0, int) > 0:
         components.append("Deactivated when attacking.")
@@ -1621,6 +1781,7 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
                     UNIT_INFECTION_TEXT[protoName] = joined
                     joined = "See below."
 
+
     return joined
 
 GATHER_ICONS: Dict[str, Union[str, None]] = {
@@ -1633,6 +1794,7 @@ GATHER_ICONS: Dict[str, Union[str, None]] = {
     "AbstractFarm":icon.generalIcon(r"resources\shared\static_color\buildings\farm_icon.png"),
     "FishResource":icon.generalIcon(r"resources\nature\animals\naval\fish_icon.png"),
     "Temple":None,
+    "AbstractTemple":None,
     "Taproot":None,
     "Resource":None,
     "HerdableMagnet":None,
@@ -1750,14 +1912,25 @@ ACTION_TYPE_HANDLERS: Dict[str, Callable[[ET.Element, ET.Element, Union[None, ET
     "RangedAttack":simpleActionHandler(),
     "ChainAttack":simpleActionHandler(),
     "AutoBoost":simpleActionHandler(),
-    "TeleportAttack":simpleActionHandler("Teleports to the target. May be used manually without a target to bypass obstacles such as walls.")
+    "TeleportAttack":simpleActionHandler("Teleports to the target. May be used manually without a target to bypass obstacles such as walls."),
+    "ReflectAttack":handleReflectAttackAction,
+    "Inline":handleInlineAction,
+    "Abduct":handleAbductAction,
+    "ConditionalTransform":handleConditionalTransformAction,
+    "Lure":handleLureAction,
 }
 
 def actionDamageFlagNames(action: ET.Element):
     flags = action.find("damageflags")
     if flags is None:
-        return ""
-    split = set(flags.text.split("|"))
+        actionType = common.findAndFetchText(action, "type", None, str)
+        if action.find("damagearea") is not None and actionType != "Rampage":
+            split = ["Enemy", "Self", "Ally", "Nature"]
+        else:
+            return ""
+    else:
+        split = set(flags.text.split("|"))
+
     if "Nature" in split:
         split.remove("Nature")
     if "Enemy" in split and "Self" in split and "Ally" in split:
@@ -1945,6 +2118,10 @@ def getActionAttackCount(proto: Union[str, ET.Element], action: Union[str, ET.El
         versions = animMatch.findall("versions/version")
         for version in versions:
             versionCounts.append(len(version.findall("tags/tag[type='Attack']")))
+
+    if len(versionCounts) == 0:
+        common.warn_data(f"Found no attack tags for {proto.attrib['name']}'s {findFromActionOrTactics(action, tactics, 'name')}")
+        return 1
 
     versionCounts = list(set(versionCounts))
     if len(versionCounts) != 1:

@@ -236,3 +236,28 @@ def generateMajorGodDescriptions():
     susanooContent = re.sub(susanooBadline, susanooReplacement, susanooContent)
 
     globals.stringMap["STR_CIV_SUSANOO_LR"] = susanooContent
+
+    demeterContent = globals.dataCollection["string_table.txt"]["STR_CIV_DEMETER_LR"]
+    demeterHerdableFavor = "Herdables: " + action.describeAction("DemeterBonusContainer", "TempleFavorBonus")
+    demeterHerdableAges = ("Classical", "Heroic", "Mythic")
+    demeterHerdableAgeUps = [""]
+    for index, age in enumerate(demeterHerdableAges):
+        techElem = common.techFromName(f"{age}AgeDemeter")
+        tc = techElem.find("effects/effect[@type='CreateUnit'][@generator='TownCenter']")
+        vc = techElem.find("effects/effect[@type='CreateUnit'][@generator='VillageCenter']")
+        tcUnit = tc.attrib['unit']
+        vcUnit = vc.attrib['unit']
+        tcAmount = int(float(tc.find("pattern").attrib['quantity']))
+        vcAmount = int(float(vc.find("pattern").attrib['quantity']))
+        demeterHerdableAgeUps.append(f"{common.AGE_LABELS[index+1]}: {tcAmount}x {common.getDisplayNameForProtoOrClass(tcUnit)} at every Town Center, {vcAmount}x {common.getDisplayNameForProtoOrClass(vcUnit)} at every Village Center")
+    demeterHerdableAgeupText = "Spawns herdables every age advance: " + f"\n   {icon.BULLET_POINT_ALT} ".join(demeterHerdableAgeUps)
+    demeterArchaicTech = common.techFromName("ArchaicAgeDemeter")
+    demeterBuildingBonus = "Gold Mines: " + action.describeAction("MineGoldLarge", "ProximityBuildBonus", tech=demeterArchaicTech)
+    demeterVCAttack = 100.0*float(demeterArchaicTech.find("effects/effect[@subtype='GarrisonBonusDamage']").attrib['amount'])
+    demeterVCHP = int(float(demeterArchaicTech.find("effects/effect[@subtype='ContainedHitpointBonus']").attrib['amount']))
+    demeterVCGarrison = f"Village Centers have +{demeterVCAttack:0.3g}% attack and +{demeterVCHP} hitpoints per garrisoned Villager."
+    demeterContent = re.sub("Herdables improve.*", demeterHerdableFavor, demeterContent)
+    demeterContent = re.sub("Town and Village Centers spawn.*", demeterHerdableAgeupText, demeterContent)
+    demeterContent = re.sub("Buildings build faster.*", demeterBuildingBonus, demeterContent)
+    demeterContent = re.sub("Village Centers have.*", demeterVCGarrison, demeterContent)
+    globals.stringMap["STR_CIV_DEMETER_LR"] = demeterContent

@@ -83,6 +83,12 @@ _OVERRIDE_DISPLAY_NAMES = {
     "MineGoldLarge":"Gold Mine (6000)",
     "MineGoldMedium":"Gold Mine (3000)",
     "MineGoldSmall":"Gold Mine (1500)",
+
+    "LykaonWolf":"Wolf Lykaon",
+    "LykaonVillager":"Villager Lykaon",
+    "HamadryadTree":"Hamadryad (tree form)",
+    "ArcadianMeadowDamageReceiver":"Arcadian Meadow",
+    "AttackSpeedBuffContainer":"Invisible Attack Speed Booster",
 }
 
 _UNIT_CLASS_LABELS = {
@@ -164,8 +170,8 @@ _UNIT_CLASS_LABELS = {
     "Herdable":"Herdable",
     "LogicalTypeValidShockwaveTarget":"object affected by Shockwave",
     "Resource":"Resource",
-    "MajorHero":"Heroes with Build Limits",
-    "MinorHero":"Heroes without Build Limits",
+    "MajorHero":"Major Hero",
+    "MinorHero":"Minor Hero",
     "LegendHero":"Legends",
     "All":"All objects",
     "AbstractDwarf":"Dwarves",
@@ -177,6 +183,7 @@ _UNIT_CLASS_LABELS = {
     "AbstractSamurai":"Samurai",
     "LogicalTypeHealableHero":"Healable Hero",
     "LogicalTypeTrainableMythUnit":"Trainable Myth Unit",
+    "UnitClass":"Unit",
 
     # Partial Lies
     "EconomicUpgraded":"Villager",
@@ -186,6 +193,7 @@ _UNIT_CLASS_LABELS = {
     "LogicalTypeSunRayProjectile":"Projectile",
     "AbstractTemple":"Temple",
     "LogicalTypeAffectedBySunRay":"Greek Ranged Human Soldiers, Heroes, and Myth Units",
+    "LogicalTypeWitherable":"Witherable"
 }
 
 
@@ -261,6 +269,9 @@ _UNIT_CLASS_LABELS_PLURAL = {
     "LogicalTypeBuildingThatConvertsConvertibles":"Buildings that protect convertible structures",
     "LogicalTypeHealableHero":"Healable Heroes",
     "LogicalTypeTrainableMythUnit":"Trainable Myth Units",
+    "MajorHero":"Major Heroes",
+    "MinorHero":"Minor Heroes",
+    "UnitClass":"Units",
 
 
     # Partial lies for clarity:
@@ -270,6 +281,7 @@ _UNIT_CLASS_LABELS_PLURAL = {
     "LogicalTypeBuildingSmall":"Buildings (except Wonder and Titan Gate)",
     "LogicalTypeBuildingLarge":"Buildings (except Wonder and Titan Gate)",
     "LogicalTypeSeidrTarget":"Hersir, Godi, and Valkyries",
+    "LogicalTypeWitherable":"Witherable objects",
     
     
 }
@@ -356,6 +368,8 @@ ABSTRACT_TYPES_TO_UNWRAP = (
     "AbstractSocketedTownCenter",
     "AbstractTowerBuildLimit",
     "AbstractHouseBuildLimit",
+    "BuildLimitSharedGreek",
+    "LogicalTypeValidUnderworldInvasionTarget",
 )
 
 AGE_LABELS = (f"{icon.generalIcon('resources/shared/static_color/technologies/archaic_age_icon.png')} Archaic",

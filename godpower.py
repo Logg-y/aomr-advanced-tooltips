@@ -166,41 +166,18 @@ def processGodPower(godpower: ET.Element) -> Union[None, str]:
     replacements['playerrelation'] = playerRelation.strip()
     replacements['playerrelationpos'] = playerRelationPossessive.strip()
     
-    # Some powers exclude things pointlessly that were never in the targeted unit types to begin with
-    # eg farms already lack the "affected by earthquake" flag, don't need to exclude them again
+    
     usePlacementTargetType = False
     attackTargets = [elem.text for elem in godpower.findall("abstractattacktargettype")]
     if len(attackTargets) == 0:
         usePlacementTargetType = True
         attackTargets = [elem.text for elem in godpower.findall("abstractplacementtargettype")]
-    attackTargetsExpandedTypes = []
-    for target in attackTargets:
-        if target not in globals.protosByUnitType:
-            attackTargetsExpandedTypes.append(target)
-        else:
-            attackTargetsExpandedTypes += globals.protosByUnitType[target]
-    replacements["attacktargets"] = common.commaSeparatedList(common.getListOfDisplayNamesForProtoOrClass(attackTargets, plural=True))
     if usePlacementTargetType:
         restrictedTargets = [elem.text for elem in godpower.findall("explicitlyrestrictedplacementtargettype")]
     else:
         restrictedTargets = [elem.text for elem in godpower.findall("explicitlyrestrictedattacktargettype")]
-    restrictedTargetsRevised = []
-    for target in restrictedTargets:
-        targetWouldBeHit = False
-        if target in attackTargetsExpandedTypes:
-            targetWouldBeHit = True
-        elif target in globals.protosByUnitType:
-            # Exclude if no members of this unit type are in the list of valid targets
-            for abstractTypeMember in globals.protosByUnitType[target]:
-                if abstractTypeMember in attackTargetsExpandedTypes:
-                    targetWouldBeHit = True
-                    break
-        if targetWouldBeHit:
-            restrictedTargetsRevised.append(target)
-            
-    if restrictedTargetsRevised:
-        replacements["attacktargets"] += f", except {common.commaSeparatedList(common.getListOfDisplayNamesForProtoOrClass(restrictedTargetsRevised, plural=True))}"
-
+    replacements["attacktargets"] = action.targetListToString(attackTargets, restrictedTargets)
+    
     if isinstance(params.text, list):
         items += [line.format(**replacements) for line in params.text]
     else:
@@ -714,8 +691,9 @@ def generateGodPowerDescriptions():
 
     newmoon = findGodPowerByName("NewMoon")
     newmoonResearchSpeed = common.findAndFetchText(newmoon, "freeresearchrate", 1, float)
+    newmoonMaxfreeresearches = common.findAndFetchText(newmoon, "maxfreeresearches", 1, int)
     newmoonTrainSpeed = float(newmoon.find("unitmodify[.='MilitaryTrainingRate']").attrib['amount'])
-    newmoonItems = [f"Targets one of {{playerrelationpos}} {{attacktargets}}. Queues all technologies that are currently available in this building for free, which are researched at {newmoonResearchSpeed:0.3g}x speed. This does not include upgrades which are locked behind earlier incomplete upgrades (eg Armory) or are not available until later Ages. Age advances, Secrets of the Titans, and Omniscience cannot be researched by this power.", f"Additionally, this building produces military units {newmoonTrainSpeed:0.3g}x faster for the duration.", "{duration}"]
+    newmoonItems = [f"Targets one of {{playerrelationpos}} {{attacktargets}}. Queues up to {newmoonMaxfreeresearches} techs that are currently available in this building for free, which are researched at {newmoonResearchSpeed:0.3g}x speed, prioritising the most expensive. This does not include upgrades which are locked behind earlier incomplete upgrades (eg Armory) or are not available until later Ages. Age advances, Secrets of the Titans, and Omniscience cannot be researched by this power.", f"Additionally, this building produces military units {newmoonTrainSpeed:0.3g}x faster for the duration.", "{duration}"]
     godPowerProcessingParams["NewMoon"] = GodPowerParams(newmoonItems)
 
     shrineofthehunt = findGodPowerByName("ShrineOfTheHunt")
@@ -776,6 +754,33 @@ def generateGodPowerDescriptions():
     divineslashDelay = common.findAndFetchText(divineslash, "attackdelay", None, float)
     divineslashItems = [f"A gigantic katana strikes a location in a direction of your choosing. It takes {divineslashDelay:0.3g} seconds for the katana to strike, giving victims a chance to move out of the way. It hits a {divineslashWidth:0.3g}x{divineslashDepth:0.3g}m area: {protoGodPowerDamage('DivineSlashDamage', 'HandAttack')}", "Friendly targets are still sent flying, but are not stunned."]
     godPowerProcessingParams["DivineSlash"] = GodPowerParams(divineslashItems)
+
+    wither = findGodPowerByName("Wither")
+    witherLength = float(wither.find("rangeindicator").attrib["range"])
+    witherWidth = float(wither.find("rangeindicator").attrib["width"])
+    witherTerrain = globals.dataCollection["terrain_unit_effects.xml"].find("terrainuniteffect[@name='WitherSlow']")
+    witherTerrainTarget = witherTerrain.find("creep").attrib['target'].capitalize()
+    witherTerrainSlow = 100*float(witherTerrain.find("effect[@type='speed']").attrib['amount'])
+    witherDamageAmount = 100*common.findAndFetchText(wither, "damagepercentofmaxhp", 0.5, float)
+    witherItems = [f"A wave of withering energy emerges at a location and travels in a direction of your choosing. It spread to cover an approximately {witherWidth:0.3g}x{witherLength:0.3g}m area. {witherTerrainTarget} non-flying units in this area have their movement speed slowed to {witherTerrainSlow:0.3g}% of normal. Trees, farms and berry bushes in the area are killed instantly. Other non-invulnerable Witherable objects are damaged for {witherDamageAmount:0.3g}% of their maximum hitpoints and cannot be placed in the area for the duration.", "{duration}"]
+    godPowerProcessingParams["Wither"] = GodPowerParams(witherItems)
+
+
+    arcadianmeadow = findGodPowerByName("ArcadianMeadow")
+    arcadianmeadowMaxRadius = float(arcadianmeadow.find("terraincreep").attrib['maxradius'])
+    arcadianmeadowItems = [f"Creates a circle of terrain in which attacking is prevented, from both units and buildings. This does not prevent those outside the circle from attacking inwards. No part of the circle may overlap with active Wither terrain.", "Spawns an invisible object with 100 hitpoints. This cannot be targeted by normal means: certain destructive god powers may damage it, and once destroyed the meadow is removed.", "The following powers are capable of damaging the meadow: Wither, Meteor, Tornado, Locust Swarm, Forest Fire, Great Flood, Drought Land, Blazing Prairie, Dragon Typhoon.", f"Radius: {arcadianmeadowMaxRadius:0.3g}m", "{duration}"]
+    godPowerProcessingParams["ArcadianMeadow"] = GodPowerParams(arcadianmeadowItems)
+
+    communalhearth = findGodPowerByName("CommunalHearth")
+    communalhearthItems = [f"Places a Communal Hearth at a location of your choosing.", unitdescription.describeUnit("CommunalHearth")]
+    godPowerProcessingParams["CommunalHearth"] = GodPowerParams(communalhearthItems)
+
+    underworldinvasion = findGodPowerByName("UnderworldInvasion")
+    underworldinvasionEidolonHealth = 100.0*common.findAndFetchText(underworldinvasion, "eidolonmaxhpmultiplier", 1.0, float)
+    underworldinvasionEidolonMax = common.findAndFetchText(underworldinvasion, "maxeidoloncount", 100, int)
+    underworldinvasionSuddenDeath = 100.0*common.findAndFetchText(underworldinvasion, "suddendeathhpmultiplier", 0.5, float)
+    underworldinvasionItems = [f"Targets one of your Town or Citadel centers. Destroys all of your Town and Citadel centers, spawning up to {underworldinvasionEidolonMax} of the most recently slain land military units of all players around the settlement you targeted under your control. Eidolon versions of units use your current upgrades rather than those of their original owner, retain their normal population cost, but have their maximum health reduced to {underworldinvasionEidolonHealth:0.3g}% of normal. Eidolons persist until killed, even through the expiration of this power's duration.", "Any settlements you controlled at the time of invoking this power cannot be rebuilt until its timer ends; this does not include any you manually delete prior to its usage.", f"In Sudden Death mode, this power causes your Citadel to lose {underworldinvasionSuddenDeath:0.3g}% of its maximum hitpoints instead of being destroyed.", "{duration}"]
+    godPowerProcessingParams["UnderworldInvasion"] = GodPowerParams(underworldinvasionItems)
 
     titangate = findGodPowerByName("TitanGate")
     titangateRecharge = "{:0.3g}".format(float(techtree.find("tech[@name='WonderAgeTitan']/effects/effect[@subtype='PowerROF']").attrib['amount']))

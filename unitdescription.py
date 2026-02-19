@@ -15,7 +15,7 @@ import copy
 NOTABLE_UNIT_CLASSES = ("Hero", "AbstractInfantry", "AbstractArcher", "AbstractCavalry", "AbstractSiegeWeapon", "AbstractVillager", "AbstractArcherShip", "AbstractSiegeShip", 
                         "AbstractCloseCombatShip", "MythUnit", "HeroShadowUpgraded", "HumanSoldier", "Ship", "Building", "CavalryLineUpgraded", "InfantryLineUpgraded", "ArcherLineUpgraded", 
                         "Huntable", "FoodDropsite", "WoodDropsite", "GoldDropsite", "LogicalTypeBuildingEmpoweredForLOS", "LogicalTypeArchaicMythUnit", "LogicalTypeClassicalMythUnit", "LogicalTypeHeroicMythUnit",
-                        "LogicalTypeAffectedByCeaseFireBuildingSlow", "LogicalTypeCanSeeStealth", "AbstractTower", "AbstractWall")
+                        "LogicalTypeAffectedByCeaseFireBuildingSlow", "LogicalTypeCanSeeStealth", "AbstractTower", "AbstractWall", "LogicalTypeWitherable")
 
 # Key : [list of unit classes that are hidden if a unit has this class]
 # Stating both "ship" and "archer ship" is a bit pointless.
@@ -170,8 +170,13 @@ def veterancyDamageTargets(proto: Union[str, ET.Element]):
     includeTypes = bonus.find("includetypes")
     if includeTypes is None:
         return ""
+    excludeTypes = bonus.find("excludetypes")
     unitClasses = [x.text for x in includeTypes]
-    return action.targetListToString(unitClasses, joiner="or")
+    if excludeTypes is None:
+        excludeClasses = []
+    else:
+        excludeClasses = [x.text for x in excludeTypes]
+    return action.targetListToString(unitClasses, excludeClasses, joiner="or")
 
 VETERANCY_MODIFY_NAMES = {
     "MaxHP": "Max HP",
@@ -295,6 +300,7 @@ UNIT_CLASS_PREDICTIONS: Tuple[Tuple[str, str, Callable[[ET.Element], bool], Call
 
     ("Targeted by Meteor", "Not Targeted by Meteor", lambda x: not checkProtoFlag(x, "flag", "FlyingUnit") and not checkProtoFlag(x, "flag", "Invulnerable"), lambda x: checkProtoFlag(x, "unittype", "LogicalTypeValidMeteorTarget")),
     ("Valid Forest Protection/Earth Wall target", "Cannot be targeted for Forest Protection/Earth Wall", lambda x: checkProtoFlag(x, "unittype", "Building"), lambda x: checkProtoFlag(x, "unittype", "LogicalTypeValidForestProtectionPlacement")),
+    ("Raised by Underworld Invasion", "Not raised by Underworld Invasion", lambda x: checkProtoFlag(x, "unittype", "Unit") and not checkProtoFlag(x, "unittype", "EconomicUnit") and not checkProtoFlag(x, "movementtype", "water"), lambda x: checkProtoFlag(x, "unittype", "LogicalTypeValidEidolon")),
     #("+LogicalTypeBuildingNotWonderOrTitan bug?", "-LogicalTypeBuildingNotWonderOrTitan bug?", lambda x: x.attrib['name'] not in ('Wonder', 'TitanGate') and checkProtoFlag(x, "unittype", "Building"),  lambda x: checkProtoFlag(x, "unittype", "LogicalTypeBuildingNotWonderOrTitan")),
     #("+cUnitTypeAbstractWarship bug?", "-cUnitTypeAbstractWarship bug?", lambda x: checkProtoFlag(x, "unittype", "Ship") and (checkProtoFlag(x, "unittype", "AbstractArcherShip") or checkProtoFlag(x, "unittype", "AbstractSiegeShip") or checkProtoFlag(x, "unittype", "AbstractCloseCombatShip")), lambda x: checkProtoFlag(x, "unittype", "AbstractWarship")),
     #("+cUnitTypeAbstractWarshipHero bug?", "-cUnitTypeAbstractWarshipHero bug?", lambda x: checkProtoFlag(x, "unittype", "AbstractWarship") and checkProtoFlag(x, "unittype", "Hero"), lambda x: checkProtoFlag(x, "unittype", "AbstractWarshipHero")),
@@ -452,6 +458,10 @@ class UnitDescription:
                     # Combine the label for ranged myth unit into the others (for Bow of Artemis)
                     if thisType in ("MythUnit", "LogicalTypeArchaicMythUnit", "LogicalTypeClassicalMythUnit", "LogicalTypeHeroicMythUnit") and checkProtoFlag(protoUnit, "unittype", "LogicalTypeRangedMythUnit"):
                         thisTypeText = thisTypeText.replace("Myth Unit", "Ranged Myth Unit")
+                    if thisType in ("Hero", "HeroShadowUpgraded") and checkProtoFlag(protoUnit, "unittype", "MajorHero"):
+                        thisTypeText = thisTypeText.replace("Hero", "Major Hero")
+                    if thisType in ("Hero", "HeroShadowUpgraded") and checkProtoFlag(protoUnit, "unittype", "MinorHero"):
+                        thisTypeText = thisTypeText.replace("Hero", "Minor Hero")
                     orderedTypes.append(thisTypeText)
             if checkProtoFlag(protoUnit, "unittype", "LogicalTypeDivineImmunity"):
                 orderedTypes.append("Divine Immunity")
@@ -672,7 +682,7 @@ class UnitDescription:
                 generalObservations.append(garrisonText)
 
         # At the time of writing this weird case covers the Petsuchos only
-        if protoUnit.find("unittype[.='LogicalTypeFreezableMythUnit']") is None and protoUnit.find("unittype[.='MythUnit']") is not None and protoUnit.find("unittype[.='LogicalTypeValidFrostTarget']") is not None:
+        if protoUnit.find("unittype[.='LogicalTypeFreezableMythUnit']") is None and protoUnit.find("unittype[.='MythUnit']") is not None and protoUnit.find("unittype[.='LogicalTypeValidFrostTarget']") is not None and "freezeanomaly" not in obsToIgnore:
             generalObservations.append("Unaffected by Frost Giant freeze and petrifying special attacks, but is affected by Frost.")
 
 
@@ -695,6 +705,15 @@ class UnitDescription:
             if protoUnit.attrib['name'] in sharedbuildlimittypes:
                 sharedbuildlimittypes.remove(protoUnit.attrib['name'])
             generalObservations.append(f"Shares its build limit with {common.getDisplayNameForProtoOrClassPlural(sharedbuildlimittypes)}.")
+
+        usechargeifnotidle = checkProtoFlag(protoUnit, "flag", "UseChargeIfNotIdle")
+        usechargeondamaged = checkProtoFlag(protoUnit, "flag", "UseChargeOnDamaged")
+        if usechargeifnotidle and usechargeondamaged and "usecharge" not in obsToIgnore:
+            generalObservations.append(f"Resets the cooldown of special abilities if not idle or damaged.")
+    
+        fakeastreeifenemy = checkProtoFlag(protoUnit, "flag", "FakeAsTreeIfEnemy")
+        if fakeastreeifenemy and "fakeastreeifenemy" not in obsToIgnore:
+            generalObservations.append(f"Appears as a tree to enemies.")
 
         # General stuff that can be tied to passive abilities
         for passiveAbilityKey, handler in NON_ACTION_OBSERVATIONS.items():
@@ -905,7 +924,7 @@ def generateUnitDescriptions():
     prayerEfficiencyZ = globals.dataCollection["game.cfg"]["PrayerEfficiencyModifierZ"]
     prayerEfficiencyG = globals.dataCollection["game.cfg"]["PrayerEfficiencyLaterGrowthG"]
     prayerEfficiencyV = globals.dataCollection["game.cfg"]["PrayerEfficiencyEarlyIncomeReductionV"]
-    adjustedZForRate = float(action.findActionByName("VillagerGreek", "Gather").find("rate[@type='Temple']").text) * prayerEfficiencyZ
+    adjustedZForRate = float(action.findActionByName("VillagerGreek", "Gather").find("rate[@type='AbstractTemple']").text) * prayerEfficiencyZ
     villagerGreekHistory = f"Total base Favor income per second for N villagers praying: {'' if adjustedZForRate == 1.0 else '{:0.3g} x '.format(adjustedZForRate)}N x (1/(N+{prayerEfficiencyV}) + {prayerEfficiencyG})"
     greekFavorIncome = lambda n: adjustedZForRate * n * (1/(n+prayerEfficiencyV) + prayerEfficiencyG)
 
@@ -945,6 +964,17 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["Trireme"] = UnitDescription(preActionInfoText={"RangedAttack":"Archer ship, good against close combat ships."})
     unitDescriptionOverrides["Juggernaut"] = UnitDescription(preActionInfoText={"RangedAttack":"Siege ship, good against archer ships."})
     unitDescriptionOverrides["Pentekonter"] = UnitDescription(preActionInfoText={"HandAttack":"Close combat ship, good against siege ships."})
+
+    midasGoldProto = common.protoFromName("Midas").find("veterancybonus/rank/spawn").text
+    midasGoldAmount = findAndFetchText(common.protoFromName(midasGoldProto), "initialresource", 0.0, float)
+    midasSpawnDamageThreshold = common.protoFromName("Midas").find("veterancyranks/rank/totaldamage").text
+    midasVeterancy = f"Spawns a gold mine containing {icon.resourceIcon('gold')} {midasGoldAmount:0.3g} on the next killing blow after dealing {midasSpawnDamageThreshold} damage to {veterancyDamageTargets("Midas")}. The damage counter resets upon triggering."
+    unitDescriptionOverrides["Midas"] = UnitDescription(hideNonActionObservations=["veterancy"], additionalText=midasVeterancy)
+
+    unitDescriptionOverrides["LykaonVillager"] = UnitDescription(additionalText=describeUnit("LykaonWolf"), hideNonActionObservations=["freezeanomaly"])
+    unitDescriptionOverrides["HamadryadTree"] = UnitDescription(ignoreActions=["PlaceholderAttackHamadryadTree", "DelayedHamadryadTransform"])
+    unitDescriptionOverrides["Siren"] = UnitDescription(ignoreActions=["PlaceholderAttackSiren"])
+    
     # Egyptian
     unitDescriptionOverrides["Spearman"] = UnitDescription(preActionInfoText={"HandAttack":"Fast semi-specialised infantry, mostly only good against cavalry."})
     unitDescriptionOverrides["Axeman"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry only good against other infantry."})
@@ -1297,7 +1327,7 @@ def generateUnitDescriptions():
     nonActionPassiveAbilities.append(('PassiveSerratedBlades', (techtree.find("tech[@name='BiteOfTheShark']"), biteOfTheSharkText)))
     nonActionPassiveAbilities.append(('PassiveBattleFrenzy', tech.processTech(techtree.find("tech[@name='DevoteesOfAtlas']"), skipAffectedObjects=True, lineJoin="\\n")))
 
-    nonActionPassiveAbilities.append(('PassiveMasterOfWeaponry', tech.processEffect(techtree.find("tech[@name='MasterOfWeaponry']"), techtree.find("tech[@name='MasterOfWeaponry']/effects/effect[@effecttype='Snare']")).toString(skipAffectedObjects=True)))
+    #nonActionPassiveAbilities.append(('PassiveMasterOfWeaponry', tech.processEffect(techtree.find("tech[@name='MasterOfWeaponry']"), techtree.find("tech[@name='MasterOfWeaponry']/effects/effect[@effecttype='Snare']")).toString(skipAffectedObjects=True)))
     rocksolid = common.techFromName("RockSolid")
 
     effects = [action.handleIdleStatBonusAction(protoFromName("ChargedModifyContainer"), action.findActionByName("ChargedModifyContainer", f"RockSolid{type}Bonus"), action.actionTactics("ChargedModifyContainer", f"RockSolid{type}Bonus"), "", tech=rocksolid) for type in ("Hack", "Pierce")]
