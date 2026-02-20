@@ -762,13 +762,13 @@ def generateGodPowerDescriptions():
     witherTerrainTarget = witherTerrain.find("creep").attrib['target'].capitalize()
     witherTerrainSlow = 100*float(witherTerrain.find("effect[@type='speed']").attrib['amount'])
     witherDamageAmount = 100*common.findAndFetchText(wither, "damagepercentofmaxhp", 0.5, float)
-    witherItems = [f"A wave of withering energy emerges at a location and travels in a direction of your choosing. It spread to cover an approximately {witherWidth:0.3g}x{witherLength:0.3g}m area. {witherTerrainTarget} non-flying units in this area have their movement speed slowed to {witherTerrainSlow:0.3g}% of normal. Trees, farms and berry bushes in the area are killed instantly. Other non-invulnerable Witherable objects are damaged for {witherDamageAmount:0.3g}% of their maximum hitpoints and cannot be placed in the area for the duration.", "{duration}"]
+    witherItems = [f"A wave of withering energy emerges at a location and travels in a direction of your choosing. It spreads to cover an approximately {witherWidth:0.3g}x{witherLength:0.3g}m area. {witherTerrainTarget} non-flying units in this area have their movement speed slowed to {witherTerrainSlow:0.3g}% of normal. Trees, farms and berry bushes in the area are killed instantly. Other non-invulnerable Witherable objects are damaged for {witherDamageAmount:0.3g}% of their maximum hitpoints and cannot be placed in the area for the duration.", "{duration}"]
     godPowerProcessingParams["Wither"] = GodPowerParams(witherItems)
 
 
     arcadianmeadow = findGodPowerByName("ArcadianMeadow")
     arcadianmeadowMaxRadius = float(arcadianmeadow.find("terraincreep").attrib['maxradius'])
-    arcadianmeadowItems = [f"Creates a circle of terrain in which attacking is prevented, from both units and buildings. This does not prevent those outside the circle from attacking inwards. No part of the circle may overlap with active Wither terrain.", "Spawns an invisible object with 100 hitpoints. This cannot be targeted by normal means: certain destructive god powers may damage it, and once destroyed the meadow is removed.", "The following powers are capable of damaging the meadow: Wither, Meteor, Tornado, Locust Swarm, Forest Fire, Great Flood, Drought Land, Blazing Prairie, Dragon Typhoon.", f"Radius: {arcadianmeadowMaxRadius:0.3g}m", "{duration}"]
+    arcadianmeadowItems = [f"Creates a circle of terrain in which attacking is prevented, from both units and buildings. This does not prevent those outside the circle from attacking inwards. No part of the circle may overlap with active Wither terrain.", "Spawns an invisible object with 100 hitpoints. This cannot be targeted by normal means: certain destructive god powers may damage it, and once destroyed the meadow is removed.", "The following powers are capable of damaging the meadow: Wither, Meteor, Tornado, Locust Swarm, Forest Fire, Great Flood, Drought Land, Blazing Prairie, Dragon Typhoon.", f"Radius: {arcadianmeadowMaxRadius:0.3g}m.", "{duration}"]
     godPowerProcessingParams["ArcadianMeadow"] = GodPowerParams(arcadianmeadowItems)
 
     communalhearth = findGodPowerByName("CommunalHearth")
