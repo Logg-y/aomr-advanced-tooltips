@@ -794,16 +794,11 @@ def dataSubtypeBuildingChainEffectHandler(tech: ET.Element, effect:ET.Element):
 def dataSubtypeOnHitEffectStatModify(tech: ET.Element, effect:ET.Element):
     modifyType = effect.attrib['modifytype']
     effectType = effect.attrib['effecttype']
-    if effect.attrib['relativity'] != "BasePercent":
-        common.warn_unhandled(f"OnHitEffectStatModify with unsupported relativity {effect.attrib['relativity']}")
-        return None
-    
     if effect.attrib['effecttype'] == "SelfModify":
         targetText = "self"
     else:
         common.warn_unhandled(f"OnHitEffectStatModify with unsupported effecttype {effect.attrib['effecttype']}")
         return None
-    
     if modifyType == "ArmorSpecific":
         statName = f"{effect.attrib['dmgtype']} Resistance"
     elif modifyType in ("Damage",):
@@ -811,17 +806,21 @@ def dataSubtypeOnHitEffectStatModify(tech: ET.Element, effect:ET.Element):
     else:
         common.warn_unhandled(f"OnHitEffectStatModify with unhandled modifyType {modifyType}, this text is being used in final tooltip")
         statName = modifyType
-    
     amount = float(effect.attrib['amount'])
-    # The way this seems to work is:
-    # Existing boost: 1.5x, tech: 1.5x -> new boost is 1.5 x 1.5 = 2.25x
-    # But as everything is in percentage increase (ie +50% not x1.5)
-
     actionName = getActionDisplayNameForTechEffect(tech, effect)
-    multiplier = amount
+    if effect.attrib['relativity'] == "BasePercent":
+        # The way this seems to work is:
+        # Existing boost: 1.5x, tech: 1.5x -> new boost is 1.5 x 1.5 = 2.25x
+        # But as everything is in percentage increase (ie +50% not x1.5)
+        multiplier = amount
 
-    # This is technically a lie, but if ever multiple BasePercents of this collide coming up with nonconfusing wording sounds like a disaster
-    return EffectHandlerResponse(getEffectTargets(tech, effect), f"Multiplies {statName} {targetText} modification of {actionName} by {multiplier:0.3g}x")
+        # This is technically a lie, but if ever multiple BasePercents of this collide coming up with nonconfusing wording sounds like a disaster
+        return EffectHandlerResponse(getEffectTargets(tech, effect), f"Multiplies {statName} {targetText} modification of {actionName} by {multiplier:0.3g}x")
+    elif effect.attrib['relativity'] == "Absolute":
+        return EffectHandlerResponse(getEffectTargets(tech, effect), f"Multiplier for {statName} {targetText} modification of {actionName}: {'+' if amount >= 0.0 else '-'}{amount:0.3g}x")
+
+    common.warn_unhandled(f"OnHitEffectStatModify with unsupported relativity {effect.attrib['relativity']}")
+    return None
 
 
 def handleOnTechResearchedTech(tech: ET.Element, effect:ET.Element):

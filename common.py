@@ -184,6 +184,7 @@ _UNIT_CLASS_LABELS = {
     "LogicalTypeHealableHero":"Healable Hero",
     "LogicalTypeTrainableMythUnit":"Trainable Myth Unit",
     "UnitClass":"Unit",
+    "LogicalTypeNavalMythUnit":"Water Myth Unit",
 
     # Partial Lies
     "EconomicUpgraded":"Villager",
@@ -390,11 +391,12 @@ def _getDisplayNamesFromAbstractClass(abstract: str, plural=False) -> List[str]:
         if abstract not in _UNIT_CLASS_LABELS_PLURAL:
             warn_unhandled(f"No plural label for unit class {abstract}")
             return [abstract]
-        return [_UNIT_CLASS_LABELS_PLURAL[abstract]] # KeyError means a label needs adding to the dictionary manually
+        return [_UNIT_CLASS_LABELS_PLURAL[abstract]]
     if abstract not in _UNIT_CLASS_LABELS:
+        # Things sometimes end up here due to the game using case insensitive searching...
         warn_unhandled(f"No singular label for unit class {abstract}")
         return [abstract]
-    return [_UNIT_CLASS_LABELS[abstract]] # KeyError means a label needs adding to the dictionary manually
+    return [_UNIT_CLASS_LABELS[abstract]]
 
 def getListOfDisplayNamesForProtoOrClass(protoOrAbstract: Union[str, ET.Element, Iterable[Union[str, ET.Element]]], plural=False) -> List[str]:
     "Return a not-yet-joined user-facing display name encompassing a Protounit, abstract type, or list of any combination of these."

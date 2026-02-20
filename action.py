@@ -35,12 +35,14 @@ SUPPRESS_TARGET_TYPES = (
     "MonumentToPriestsSPC",
     "MonumentToPharaohsSPC",
     "InvisibleTarget",
+    "CluckCluckBoom",
 )
 
 SUPPRESS_TARGET_TYPES_IF_EXCLUSIVE = (
     "All",
     "LogicalTypeHandUnitsAttack",
     "LogicalTypeRangedUnitsAttack",
+    "LogicalTypeVillagersAttack",
 )
 
 ACTION_TYPE_NAMES = {
@@ -116,8 +118,9 @@ def actionDamageBonus(action: ET.Element):
         
 def actionDamageOnly(proto: ET.Element, action: ET.Element, isDPS=False, hideNumProjectiles=False, damageMultiplier=1.0):
     damages = []
-    # If showing number of projectiles, don't multiply up damage - else it'll suggest you're shooting 6 projectiles each at 6x damage or whatever.
-    mult = damageMultiplier * actionDamageMultiplier(proto, action, isDPS=isDPS, singleProjectile=not hideNumProjectiles)
+    # I used to not multiply up if showing projectiles to show damage per projectile...
+    # But then it was multiplying up the DoT anyway, so it's probably better to show numbers assuming everything hits
+    mult = damageMultiplier * actionDamageMultiplier(proto, action, isDPS=isDPS)
 
     for damage in action.findall("damage"):
         damageType = damage.attrib["type"]
@@ -131,9 +134,8 @@ def actionDamageOnly(proto: ET.Element, action: ET.Element, isDPS=False, hideNum
                 damages.append(f"{icon.damageTypeIcon(damageType)} {round(damageAmount)}")
             else:
                 damages.append(f"{icon.damageTypeIcon(damageType)} {damageAmount:0.3g}")
-    if not isDPS:
-        if not hideNumProjectiles:
-            damages.append(actionNumProjectiles(proto, action))
+    if not hideNumProjectiles:
+        damages.append(actionNumProjectiles(proto, action))
     damages = [x for x in damages if len(x.strip()) > 0]
     final = " ".join(damages)
     
@@ -179,8 +181,9 @@ def actionDamageFull(protoUnit: ET.Element, action: ET.Element, isDPS=False, hid
     # but it'd be much less confusing to multiply these out for the tooltip
     hideNumProjectiles = False
     numProjectiles = actionNumProjectiles(protoUnit, action, format=False)
+    
     hasProjectile = findAndFetchText(action, "projectile", None) is not None
-    if not hasProjectile or isDPS:
+    if not hasProjectile or numProjectiles < 2:
         hideNumProjectiles = True
     components = []
     if not hideDamage:
@@ -436,12 +439,15 @@ def handleModifyStructure(parentElem: ET.Element) -> str:
         "MaxShieldPoints":"Shield Points",
         "LifeSteal":"Lifesteal",
         "DamageSpecific":"{damagetype} Damage",
-        "ArmorSpecific":f"{icon.armorTypeIcon('{damagetype}')}"
+        
     }
 
     simpleModifyTypeFormatAmounts = {
         "LifeSteal": lambda amt: f"{amt*100:0.3g}%"
     }
+    # ArmorSpecific is really strange here.
+    # Any INCREASE in vulnerability (petrify, scorching feathers) simply does the listed multiplication to their armor stat
+    # Any DECREASE in vulnerability (myth unit specials etc) uses the same calcs techs do for vulnerability reduction
 
     # ArmorSpecific should merge regardless of the types and values
     def additionalMatchPreprocessor(elem: ET.Element):
@@ -456,7 +462,6 @@ def handleModifyStructure(parentElem: ET.Element) -> str:
     effectGroups = groupUpNearIdenticalElements([child for child in parentElem], "type", additionalMatchPreprocessor=additionalMatchPreprocessor)
     items = []
     for effectGroup in effectGroups:
-        armorMods = []
         otherEffects = []
         needMentionDecay = False
         for child in effectGroup:
@@ -476,6 +481,12 @@ def handleModifyStructure(parentElem: ET.Element) -> str:
                 otherEffects.append(text)
             elif child.attrib["type"] == "Chaos":
                 otherEffects.append(f"victims become uncontrollable and attack anything nearby")
+            elif child.attrib["type"] == "ArmorSpecific":
+                if amountInitial < 1.0:
+                    otherEffects.append(f"{icon.armorTypeIcon(child.attrib.get('dmgtype', ''))} x{amountInitial:0.3g}")
+                else:
+                    otherEffects.append(f"-{100.0*(amountInitial-1.0):0.3g}% {child.attrib.get('dmgtype', '')} vulnerability")
+
             elif child.attrib["type"] in simpleModifyTypeToDisplayStrings:
                 displayString = simpleModifyTypeToDisplayStrings[child.attrib['type']]
                 displayString = displayString.format(damagetype=child.attrib.get("dmgtype", "").lower()).strip()
@@ -507,8 +518,6 @@ def handleModifyStructure(parentElem: ET.Element) -> str:
             else:
                 raise ValueError(f"Unknown onhit stat modification: {child.attrib['type']}")
         thisItem = ""
-        if len(armorMods):
-            thisItem += f" Modifies damage resistances by {' '.join(armorMods)}."
         if len(otherEffects):
             otherEffectsJoined = common.commaSeparatedList(otherEffects)
             otherEffectsJoined = " " + otherEffectsJoined[0].upper() + otherEffectsJoined[1:] + "."
@@ -629,7 +638,7 @@ def actionOnHitNonDoTEffects(proto: ET.Element, action: ET.Element, ignoreActive
         if onhitType == "Throw":
             onhitGroups = groupUpNearIdenticalElements(nodes, "targetunittype")
             for group in onhitGroups:
-                additionalTargets = [elem.attrib['targetunittype'] for elem in group[1:] if 'targetunittype' in elem]
+                additionalTargets = [elem.attrib['targetunittype'] for elem in group[1:] if 'targetunittype' in elem.attrib]
                 targetTypeString = onhiteffectTargetString(group[0], additionalHitTargets=additionalTargets)
                 text = f"{probText}Launches {targetTypeString}"
                 maxSizeClass = findAndFetchText(action, "maxsizeclass", None, int)
@@ -641,7 +650,7 @@ def actionOnHitNonDoTEffects(proto: ET.Element, action: ET.Element, ignoreActive
         elif onhitType == "Stun":            
             onhitGroups = groupUpNearIdenticalElements(nodes, "targetunittype")
             for group in onhitGroups:
-                additionalTargets = [elem.attrib['targetunittype'] for elem in group[1:] if 'targetunittype' in elem]
+                additionalTargets = [elem.attrib['targetunittype'] for elem in group[1:] if 'targetunittype' in elem.attrib]
                 targetTypeString = onhiteffectTargetString(group[0], additionalHitTargets=additionalTargets)
                 dur = float(group[0].attrib['duration'])
                 text = f"{probText}Stuns {targetTypeString} for {dur:0.3g} {'second' if dur == 1.0 else 'seconds'}."
@@ -649,14 +658,14 @@ def actionOnHitNonDoTEffects(proto: ET.Element, action: ET.Element, ignoreActive
         elif onhitType == "Pull":
             onhitGroups = groupUpNearIdenticalElements(nodes, "targetunittype")
             for group in onhitGroups:
-                additionalTargets = [elem.attrib['targetunittype'] for elem in group[1:] if 'targetunittype' in elem]
+                additionalTargets = [elem.attrib['targetunittype'] for elem in group[1:] if 'targetunittype' in elem.attrib]
                 targetTypeString = onhiteffectTargetString(group[0], additionalHitTargets=additionalTargets)
                 text = f"{probText}Pulls {targetTypeString} slightly closer."
             items.append(text)
         elif onhitType in ("StatModify", "SelfModify", "Boost"):
             onhitGroups = groupUpNearIdenticalElements(nodes, "targetunittype")
             for group in onhitGroups:
-                additionalTargets = [elem.attrib['targetunittype'] for elem in group[1:] if 'targetunittype' in elem]
+                additionalTargets = [elem.attrib['targetunittype'] for elem in group[1:] if 'targetunittype' in elem.attrib]
                 hitword = "hit"
                 if onhitType == "StatModify":
                     text = "Affects {targetTypeString}: "
@@ -882,13 +891,14 @@ def actionTargetList(proto: ET.Element, action: ET.Element, tactics: Union[None,
                         otherRateSet = set(globals.protosByUnitType.get(otherRateTarget, [otherRateTarget]))
                         intersection -= otherRateSet
                         if len(intersection) == 0:
-                            print(f"Remove rate elem {rateTarget} constrained by {tacticsTarget} since it doesn't contribute anything any more, last checked against {otherRateTarget}")
+                            #print(f"Remove rate elem {rateTarget} constrained by {tacticsTarget} since it doesn't contribute anything any more, last checked against {otherRateTarget}")
                             isUseless = True
                             uselessRateElems.append(rateTarget)
                             break
-                    print(intersection)
+                        #print(len(intersection), rateTarget, otherRateTarget, intersection)
                 if isUseless:
                     break
+                
 
     for useless in uselessRateElems:
         if useless in unitList:

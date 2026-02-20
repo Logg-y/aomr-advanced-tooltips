@@ -702,9 +702,11 @@ class UnitDescription:
         sharedbuildlimit = checkProtoFlag(protoUnit, "flag", "UseSharedBuildLimit")
         if sharedbuildlimit and "sharedbuildlimit" not in obsToIgnore:
             sharedbuildlimittypes = [x.text for x in protoUnit.findall("sharedbuildlimitunittypes/unittype")]
-            if protoUnit.attrib['name'] in sharedbuildlimittypes:
-                sharedbuildlimittypes.remove(protoUnit.attrib['name'])
-            generalObservations.append(f"Shares its build limit with {common.getDisplayNameForProtoOrClassPlural(sharedbuildlimittypes)}.")
+            nameList = common.getListOfDisplayNamesForProtoOrClass(sharedbuildlimittypes)
+            myName = common.getDisplayNameForProtoOrClassPlural(protoUnit.attrib['name'])
+            if myName in nameList:
+                nameList.remove(myName)
+            generalObservations.append(f"Shares its build limit with {common.commaSeparatedList(nameList)}.")
 
         usechargeifnotidle = checkProtoFlag(protoUnit, "flag", "UseChargeIfNotIdle")
         usechargeondamaged = checkProtoFlag(protoUnit, "flag", "UseChargeOnDamaged")
