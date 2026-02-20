@@ -729,3 +729,33 @@ def groupElementListBySameTextValues[T](elements: List[ET.Element], targetAttrib
             output[convertedText] = []
         output[convertedText].append(elem.attrib[targetAttribute])
     return output
+
+@functools.cache
+def isUnitClassASubsetOfOther(one: str, two: str) -> bool:
+    """Return True if the first protounit or unitclass is entirely a subset of the second. If one == two, this will still return True."""
+    if two == "All":
+        return True
+    elif one == "All":
+        return False
+    elif one == two:
+        return True
+    elif one not in globals.protosByUnitType and two not in globals.protosByUnitType:
+        if protoFromName(one) is None:
+            warn_data(f"areUnitClassesASubsetOfEachOther passed nonexistent test pair: {one} (doesn't exist) vs {two}")
+            return False
+        return one == two
+    elif two not in globals.protosByUnitType:
+        return two in globals.protosByUnitType[one]
+    elif one not in globals.protosByUnitType:
+        return one in globals.protosByUnitType[two]
+    setone = set(globals.protosByUnitType[one])
+    settwo = set(globals.protosByUnitType[two])
+    return setone.issubset(settwo)
+
+def isUnitClassASubsetOfOthers(cls: str, others: List[str]) -> bool:
+    for other in others:
+        if cls == other:
+            continue
+        if isUnitClassASubsetOfOther(cls, other):
+            return True
+    return False

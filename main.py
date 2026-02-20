@@ -156,11 +156,13 @@ def parseUnitTypeData():
         globals.unitTypeData[unitTypeEntry.find("unittype").text] = unitTypeEntry
     #for abstractType in globals.dataCollection['abstract_unit_types.xml']:
     #    globals.abstractTypes.add(abstractType.text)
+    globals.protosByUnitType["All"] = []
     for proto in globals.dataCollection['proto.xml']:
         for unittype in proto.findall("unittype"):
             if unittype.text not in globals.protosByUnitType:
                 globals.protosByUnitType[unittype.text] = []
             globals.protosByUnitType[unittype.text].append(proto.attrib['name'])
+        globals.protosByUnitType["All"].append(unittype.text)
     globals.abstractTypes = set(globals.protosByUnitType.keys())
 
 def prepareData():

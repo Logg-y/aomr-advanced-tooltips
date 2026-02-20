@@ -25,8 +25,6 @@ UNIT_INFECTION_TEXT = {}
 
 
 SUPPRESS_TARGET_TYPES = (
-    "All",
-    "LogicalTypeHandUnitsAttack",
     # The guardians mess up SoO's heal action.
     "GuardianSleeping",
     "GuardianSleepingTNA",
@@ -36,6 +34,13 @@ SUPPRESS_TARGET_TYPES = (
     "MonumentToVillagersSPC",
     "MonumentToPriestsSPC",
     "MonumentToPharaohsSPC",
+    "InvisibleTarget",
+)
+
+SUPPRESS_TARGET_TYPES_IF_EXCLUSIVE = (
+    "All",
+    "LogicalTypeHandUnitsAttack",
+    "LogicalTypeRangedUnitsAttack",
 )
 
 ACTION_TYPE_NAMES = {
@@ -797,7 +802,22 @@ def actionGetChargeType(action: Union[ET.Element, None], tactics: Union[ET.Eleme
             chargeType = ActionChargeType.REGULAR
     return chargeType
 
-def actionTargetList(action: ET.Element, tactics: Union[None, ET.Element]):
+def actionTargetList(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element]):
+    # It looks like the tactics file gives the final word on what can and can't target with attacks
+    tacticsAttackTypes = []
+    additionalExcludeText = []
+    if findFromActionOrTactics(action, tactics, "attackaction", 0, int) > 0:
+        tacticsFile = actionTactics(proto, None)
+        if tacticsFile is not None:
+            actInternalName = findFromActionOrTactics(action, tactics, "name")
+            for tactic in tacticsFile.findall("tactic"):
+                if tactic.find(f"action/[.='{actInternalName}']") is None:
+                    continue
+                attacktype = findAndFetchText(tactic, "attacktype", None, str)
+                if attacktype is not None:
+                    tacticsAttackTypes.append(attacktype)
+        tacticsAttackTypes = list(set(tacticsAttackTypes))
+
     unitList = []
     disallowedList = []
     for root in action, tactics:
@@ -808,13 +828,83 @@ def actionTargetList(action: ET.Element, tactics: Union[None, ET.Element]):
         disallowedList += filter(lambda elem: float(elem.text) <= 0.0, rates)
 
     typeFromElem = lambda elem: elem.attrib['type']
+    unitList = list(map(typeFromElem, unitList))
+    disallowedList = list(map(typeFromElem, disallowedList))
+
+    # Sort out the tactics attacktype mess:
+    # We need to know if it has to get involved at all:
+    # - which means it specifies restrictions that the rate elems would miss
+    # - we also want to cull any rate elems that don't actually do anything because of the tactics - eg...
+
+    # tactics provides LogicalTypeHandUnitsAttack; rate elems specify LogicalTypeHandUnitsAttack + LogicalTypeMythUnitNotFlying
+    # In this case LogicalTypeMythUnitNotFlying is not useful info
+    uselessRateElems = []
+    if len(tacticsAttackTypes) > 0:
+        suppressTargetSet = set(SUPPRESS_TARGET_TYPES)
+        for index, rateTarget in enumerate(unitList):
+            # Restriction missed by rate elem?
+            if not common.isUnitClassASubsetOfOthers(rateTarget, tacticsAttackTypes):
+                # If a tactics one is entirely a subset of the rate defined one, switching the two is okay
+                doneSwitch = False
+                for tacticsTarget in tacticsAttackTypes:
+                    if common.isUnitClassASubsetOfOther(tacticsTarget, rateTarget):
+                        unitList[index] = tacticsTarget
+                        #if tacticsTarget != rateTarget: print(f"Tactics target subsitution: tactics contained {tacticsTarget} which is a subset of rate set {rateTarget}, switching...")
+                        doneSwitch = True
+                        break
+                if not doneSwitch:
+                    # Silence some basic complaints using the logic flags: it's pretty obvious to most people what does and doesn't have "reach"
+                    if "LogicalTypeRangedUnitsAttack" in tacticsAttackTypes and findFromActionOrTactics(action, tactics, "rangedlogic", 0, int) > 0:
+                        pass
+                    elif "LogicalTypeHandUnitsAttack" in tacticsAttackTypes and findFromActionOrTactics(action, tactics, "handlogic", 0, int) > 0:
+                        pass
+                    # On second thoughts, it is probably never worth caring about LogicalTypeRangedUnitsAttack here since "except those that can't be attacked at range" is almost a nonexistent group anyway
+                    elif "LogicalTypeRangedUnitsAttack" in tacticsAttackTypes:
+                        pass
+                    # "can't be attacked with melee" and "flying" are nearly synonymous. It should be good enough, unless someone really cares about what kills herdables or something
+                    elif "LogicalTypeHandUnitsAttack" in tacticsAttackTypes:
+                        # As always, no point specifying this unless there is some overlap
+                        # This matters for some things like Shinobi's anti-building attack
+                        if 'AbstractFlyingUnit' not in disallowedList and set(globals.protosByUnitType.get(rateTarget, [rateTarget])).intersection(set(globals.protosByUnitType['AbstractFlyingUnit'])):
+                            disallowedList.append("AbstractFlyingUnit")
+                    else:
+                        common.warn_unhandled(f"{proto.attrib['name']}:{findFromActionOrTactics(action, tactics, 'name', "?")}: {rateTarget} has nonoverlapping area with tactics defined {tacticsAttackTypes}")
+
+            # Useless target class?
+            isUseless = False
+            rateSet = set(globals.protosByUnitType.get(rateTarget, [rateTarget]))
+            rateSet -= suppressTargetSet
+            for tacticsTarget in tacticsAttackTypes:
+                tacticsSet = set(globals.protosByUnitType.get(tacticsTarget, [tacticsTarget]))
+                intersection = rateSet.intersection(tacticsSet)
+                for otherRateTarget in unitList:
+                    if otherRateTarget != rateTarget:
+                        otherRateSet = set(globals.protosByUnitType.get(otherRateTarget, [otherRateTarget]))
+                        intersection -= otherRateSet
+                        if len(intersection) == 0:
+                            print(f"Remove rate elem {rateTarget} constrained by {tacticsTarget} since it doesn't contribute anything any more, last checked against {otherRateTarget}")
+                            isUseless = True
+                            uselessRateElems.append(rateTarget)
+                            break
+                    print(intersection)
+                if isUseless:
+                    break
+
+    for useless in uselessRateElems:
+        if useless in unitList:
+            unitList.remove(useless)    
     nonSuppressed = lambda target: target not in SUPPRESS_TARGET_TYPES
 
-    unitListFiltered = list(filter(nonSuppressed, map(typeFromElem, unitList)))
-    disallowedListFiltered = list(filter(nonSuppressed, map(typeFromElem, disallowedList)))
+    unitListFiltered = list(filter(nonSuppressed, unitList))
+    disallowedListFiltered = list(filter(nonSuppressed, disallowedList))
     # We have to stop suppressing the suppressible types if it would leave us with nothing
     if len(unitListFiltered) == 0 and len(disallowedListFiltered) > 0:
         unitListFiltered = (list(map(typeFromElem, unitList)))
+    # the exclusive list = filter if all are in there
+    # If all that's left is stuff on this list, we want to be left with nothing
+    # ... unless there's an exclusion
+    if all(map(lambda x: x in SUPPRESS_TARGET_TYPES_IF_EXCLUSIVE, unitListFiltered)) and len(disallowedListFiltered) == 0:
+        unitListFiltered = []
     text = targetListToString(unitListFiltered, disallowedListFiltered, joiner="and")
     return text
 
@@ -904,7 +994,7 @@ def handleReflectAttackAction(proto: ET.Element, action: ET.Element, tactics: ET
 
 def actionTargetTypeText(proto: ET.Element, action: ET.Element):
     tactics = actionTactics(proto, action)
-    stringList = actionTargetList(action, tactics)
+    stringList = actionTargetList(proto, action, tactics)
     text = ""
     if stringList:
         text += f"Targets {stringList}."
@@ -926,32 +1016,38 @@ def simpleActionHandler(additionalText=""):
         return f"{' '.join(items)}"
     return inner
 
-def targetListToString(targetList: List[str], excludeTargets: List[str] = [], joiner="and"):
+def targetListToString(targetList: List[str], excludeTargets: List[str] = [], joiner="and", additionalExclusionText=[]):
     # Various logic ends up with repeated exclusions being listed - no point checking the same things multii
     targetList = list(set(targetList))
     excludeTargets = list(set(excludeTargets))
-    if len(targetList) == 0 and len(excludeTargets) > 0:
-        unitClassNames = common.getListOfDisplayNamesForProtoOrClass("All", plural=True)
-    else:
-        unitClassNames = common.getListOfDisplayNamesForProtoOrClass(targetList, plural=True)
+
+    # Some things redundantly specify multiple target types, but some of them turn out to be subsets of other specified targets
+    # so those can get removed
+    for list_ in targetList, excludeTargets:
+        for item in list_[:]:
+            if common.isUnitClassASubsetOfOthers(item, list_):
+                list_.remove(item)    
+
+    unitClassNames = common.getListOfDisplayNamesForProtoOrClass(targetList, plural=True)
     
     text = common.commaSeparatedList(unitClassNames, joiner)
     
-    # Some things exclude things pointlessly that were never in the targeted unit types to begin with
+    # Also, some things exclude targets pointlessly that were never in the targeted unit types to begin with
     # eg farms already lack the "affected by earthquake" flag, don't need to exclude them again
-    # This is especially common for autorangedmodify actions - an aura that damages buildings need not mention that it doesn't affect flying because there are no flying buildings
+    # This is especially common for autorangedmodify actions since they exclude flying targets by default
+    # an aura that damages buildings need not mention that it doesn't affect flying because there are no flying buildings
     attackTargetsExpandedTypes = []
+    
     for target in targetList:
         if target not in globals.protosByUnitType:
             attackTargetsExpandedTypes.append(target)
         else:
             attackTargetsExpandedTypes += globals.protosByUnitType[target]
-
     
     restrictedTargetsRevised = []
     for target in excludeTargets:
         targetWouldBeHit = False
-        if target in attackTargetsExpandedTypes:
+        if target in attackTargetsExpandedTypes or len(attackTargetsExpandedTypes) == 0:
             targetWouldBeHit = True
         elif target in globals.protosByUnitType:
             # Exclude if no members of this unit type are in the list of valid targets
@@ -962,9 +1058,13 @@ def targetListToString(targetList: List[str], excludeTargets: List[str] = [], jo
         if targetWouldBeHit:
             restrictedTargetsRevised.append(target)
 
-    if len(restrictedTargetsRevised) > 0:
-        text += f" (except {common.commaSeparatedList(common.getListOfDisplayNamesForProtoOrClass(restrictedTargetsRevised, plural=True), joiner)})"
-
+    if len(restrictedTargetsRevised) + len(additionalExclusionText) > 0:
+        excludeText = common.commaSeparatedList(common.getListOfDisplayNamesForProtoOrClass(restrictedTargetsRevised, plural=True) + additionalExclusionText, joiner)
+        if len(targetList) == 0:
+            text += f"cannot target {excludeText}"
+        else:
+            text += f" (except {excludeText})"
+    
     return text
 
 def handleHealAction(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
@@ -975,7 +1075,7 @@ def handleHealAction(proto: ET.Element, action: ET.Element, tactics: Union[None,
     healRate = f"{float(rateNode.text):0.3g}"
     slowHealMultiplier = findAndFetchText(action, "slowhealmultiplier", 1.0, float) * 100
 
-    items = [actionName, rechargeRate(proto, action, chargeType, tech), "Heals", actionTargetList(action, tactics), f"{healRate} hitpoints/second.", actionRange(proto, action, True)]
+    items = [actionName, rechargeRate(proto, action, chargeType, tech), "Heals", actionTargetList(proto, action, tactics), f"{healRate} hitpoints/second.", actionRange(proto, action, True)]
     for index in range(0, 2):
         if len(items[index]):
             items[index] += ":"
@@ -1276,7 +1376,7 @@ def handleMaintainAction(proto: ET.Element, action: ET.Element, tactics: Union[N
 def handleBurstHealAction(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
     rateNode = action.find("rate")
     healRate = f"{float(rateNode.text):0.3g}"
-    items = [actionName, "Heals", actionTargetList(action, tactics), f"{healRate} hitpoints instantly.", actionRange(proto, action, True), actionRof(action)]
+    items = [actionName, "Heals", actionTargetList(proto, action, tactics), f"{healRate} hitpoints instantly.", actionRange(proto, action, True), actionRof(action)]
     if chargeType != ActionChargeType.NONE:
         items.insert(1, rechargeRate(proto, action, chargeType, tech)+":")
     return f"{' '.join(items)}."
@@ -1303,7 +1403,7 @@ def handleConditionalTransformAction(proto: ET.Element, action: ET.Element, tact
     if rule.attrib['type'] == "NotIdle":
         text = f"Transforms into a {common.getDisplayNameForProtoOrClass(modifyprotoid)} if not idle."
     elif rule.attrib['type'] == "EnemyInRange":
-        text = f"Transforms into a {common.getDisplayNameForProtoOrClass(modifyprotoid)} if any enemy {actionTargetList(action, tactics)} are within {float(rule.text):0.3g}m."
+        text = f"Transforms into a {common.getDisplayNameForProtoOrClass(modifyprotoid)} if any enemy {actionTargetList(proto, action, tactics)} are within {float(rule.text):0.3g}m."
     elif rule.attrib['type'] == "DamageTaken":
         text = f"Transforms into a {common.getDisplayNameForProtoOrClass(modifyprotoid)} if damaged."
     elif rule.attrib['type'] == "DamageDealt":
@@ -1420,7 +1520,7 @@ def handleLinearAreaAttackAction(proto: ET.Element, action: ET.Element, tactics:
 
     # Testing shows the RoF doesn't matter, but the total time is time in flight plus the entry and exit animations
     # For the nidhogg this is 3.24s
-    targetList = actionTargetList(action, tactics)
+    targetList = actionTargetList(proto, action, tactics)
     if targetList == "":
         targetList = "objects"
 
