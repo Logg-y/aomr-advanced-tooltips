@@ -1761,8 +1761,11 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
     elif modifyType in ("Damage", "Armor", "MaxHP", "Speed", "BuildRate", "MilitaryTrainingCost", "ROF"):
         multiplier = findFromActionOrTactics(action, tactics, "modifymultiplier", None, float)
         if multiplier is None:
-            common.warn_data(f"RangedModify on {proto.attrib['name']} is missing modifymultiplier, ignored")
-            return ""
+            multiplier = findFromActionOrTactics(action, tactics, "modifyamount", None, float)
+            if multiplier is None:
+                common.warn_data(f"RangedModify on {proto.attrib['name']} is missing modifymultiplier/modifyamount, ignored")
+                return ""
+            multiplier += 1.0
         modifyTypeName = MODIFY_TYPE_DISPLAY.get(modifyType, modifyType)
         if modifyType in ("Armor"):
             multiplier = 1.0 + (1.0-multiplier)

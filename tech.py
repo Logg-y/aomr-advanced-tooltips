@@ -1155,6 +1155,8 @@ def generateTechDescriptions():
 
     techManualAdditions["WingedMessenger"] = TechAddition(startEntry=f"Grants a Pegasus that respawns for free {float(globals.respawnTechs['PegasusWingedMessenger'].find('delay').text):0.3g} seconds after it is killed. This Pegasus does not have a population cost.")
 
+    techManualAdditions["PredatoryInstinct"] = TechAddition(startEntry="Allows Lykaons to transform at will between Villager and Wolf forms.")
+
     def bounceHelper(additionalBounces: int, protoName: str, actionName="RangedAttack"):
         actionElem = action.findActionByName(protoName, actionName)
         tactics = action.actionTactics(protoName, actionElem)
@@ -1172,11 +1174,7 @@ def generateTechDescriptions():
     fatedArrowsUnits = ("Toxotes", "Peltast")
     techManualAdditions["FatedArrows"] = TechAddition(endEntry=["Damage increase if all bounces hit, and bounce ranges:"] + [bounceHelper(fatedArrowsBounces, x) for x in fatedArrowsUnits])
 
-    # Initial release had this little bug in...
-    if action.findActionByName("AttackSpeedBuffContainer", "AttackSpeedBuff").find("modifymultiplier") is None:
-        techManualAdditions["PiousSacrifice"] = TechAddition(endEntry="Nonfunctional due to implementation bug.")
-    else:
-        techManualAdditions["PiousSacrifice"] = TechAddition(endEntry=[f"Speed boosters persist for {float(common.protoFromName('AttackSpeedBuffContainer').find('lifespan').text):0.3g} seconds.", action.describeAction("AttackSpeedBuffContainer", "AttackSpeedBuff", nameOverride="Speed buff")])
+    techManualAdditions["PiousSacrifice"] = TechAddition(endEntry=[f"Speed boosters persist for {float(common.protoFromName('AttackSpeedBuffContainer').find('lifespan').text):0.3g} seconds.", action.describeAction("AttackSpeedBuffContainer", "AttackSpeedBuff", nameOverride="Speed buff")])
 
     techManualAdditions["EyesInTheForest"] = TechAddition(endEntry=f"These revealers last for {eyesOnForestRevealerLifetime:0.3g} seconds. They have {eyesOnForestRevealerLOS:0.3g} LOS, which increases by {eyesOnForestRevealerActionModifyAmount:0.3g} per second to a maximum of {eyesOnForestRevealerMaxLOS:0.3g}. Then, the LOS starts to decay at {eyesOnForestRevealerModifyDecay:0.3g} per second until the revealer disappears.")
 
