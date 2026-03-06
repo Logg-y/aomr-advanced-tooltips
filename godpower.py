@@ -706,7 +706,17 @@ def generateGodPowerDescriptions():
     godPowerProcessingParams["Goshinboku"] = GodPowerParams(goshinbokuItems)
 
     swampland = findGodPowerByName("Swampland")
-    swamplandItems = [f"Temporarily creates a swampland in the targeted area. The swamp typically contains 10-18 Kappa, which attack enemies close to them.", action.describeAction("KappaSwampland", "Throw"), "{radius}", "{duration}"]
+    swamplandCreateUnits = swampland.findall("createunit")
+    swamplandUnitTotal = sum([int(elem.attrib['quantity']) for elem in swamplandCreateUnits])
+    swamplandDistanceEntries = []
+    for elem in swamplandCreateUnits:
+        minrad = float(elem.attrib['minradius'])
+        maxrad = float(elem.attrib['maxradius']) 
+        radtext = f"{minrad:0.3g}-{maxrad:0.3g}m"
+        if minrad == maxrad:
+            radtext = f"{minrad:0.3g}m"
+        swamplandDistanceEntries.append(f"{radtext}: {elem.attrib['quantity']} Kappa")
+    swamplandItems = [f"Temporarily creates a swampland in the targeted area. The swamp contains {swamplandUnitTotal} Kappa, with their spawning biased towards the middle, which attack enemies close to them:", action.describeAction("KappaSwampland", "Throw", chargeType=action.ActionChargeType.REGULAR), "{radius}", "{duration}", "Spawns by distance:", *swamplandDistanceEntries]
     godPowerProcessingParams["Swampland"] = GodPowerParams(swamplandItems)
 
     shogun = findGodPowerByName("Shogun")
