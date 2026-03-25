@@ -967,12 +967,6 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["Juggernaut"] = UnitDescription(preActionInfoText={"RangedAttack":"Siege ship, good against archer ships."})
     unitDescriptionOverrides["Pentekonter"] = UnitDescription(preActionInfoText={"HandAttack":"Close combat ship, good against siege ships."})
 
-    midasGoldProto = common.protoFromName("Midas").find("veterancybonus/rank/spawn").text
-    midasGoldAmount = findAndFetchText(common.protoFromName(midasGoldProto), "initialresource", 0.0, float)
-    midasSpawnDamageThreshold = common.protoFromName("Midas").find("veterancyranks/rank/totaldamage").text
-    midasVeterancy = f"Spawns a gold mine containing {icon.resourceIcon('gold')} {midasGoldAmount:0.3g} on the next killing blow after dealing {midasSpawnDamageThreshold} damage to {veterancyDamageTargets("Midas")}. The damage counter resets upon triggering."
-    unitDescriptionOverrides["Midas"] = UnitDescription(hideNonActionObservations=["veterancy"], additionalText=midasVeterancy)
-
     unitDescriptionOverrides["LykaonVillager"] = UnitDescription(additionalText=describeUnit("LykaonWolf"), hideNonActionObservations=["freezeanomaly"])
     unitDescriptionOverrides["HamadryadTree"] = UnitDescription(ignoreActions=["PlaceholderAttackHamadryadTree", "DelayedHamadryadTransform"])
     unitDescriptionOverrides["Siren"] = UnitDescription(ignoreActions=["PlaceholderAttackSiren"])

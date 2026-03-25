@@ -58,6 +58,7 @@ ACTION_TYPE_NAMES = {
     "PetrificationBonus":"Idle Stacking Armor Bonus",
     "OracleRevealEnemyUI":"Building Production Spying",
     "ArgivePatronageMyrmidon":"Passive Myrmidon Production",
+    "ArgivePatronageAmazonArcher":"Passive Amazon Archer Production",
     "RangedAttackMyth":"Anti-Myth Attack",
     "BeamAttack":"Beam Attack",
     "AOTGKronosUniqueAura":"Slow Aura",
@@ -617,6 +618,8 @@ def actionOnHitNonDoTEffects(proto: ET.Element, action: ET.Element, ignoreActive
                 continue
 
             thisItem = f"{probString}Infects {targetString} for {infectionDuration:0.3g}s: {infectionActionContent}"
+        elif onhitType == "KillReward":
+            thisItem = f"{probString}Becomes attackable by any player for {float(onhiteffect.attrib['duration']):0.3g}s, giving {icon.resourceIcon(onhiteffect.attrib['rewardtype'])} {float(onhiteffect.attrib['amount']):0.3g} to the killer."
         else:
             raise ValueError(f"Unknown onhiteffect type: {onhitType}")
         thisItem = thisItem.strip()
@@ -1710,36 +1713,48 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
         components.append(f"{actionName}:")
 
     range = findFromActionOrTactics(action, tactics, "maxrange", None, float)
+    isSelfOnly = findFromActionOrTactics(action, tactics, "modifyselfonly", False, int)
     
     if isInfection:
         infectionRange = findFromActionOrTactics(action, tactics, "infectionrange", None, float)
         if infectionRange is not None:
             range = infectionRange
 
-    if range is None:
+    if range is None and not isSelfOnly:
         return ""
 
     restrictempowered = findFromActionOrTactics(action, tactics, "restrictifempowered", None, int)
     restrictempowertype = findFromActionOrTactics(action, tactics, "restrictempowertype", None, str)
+    modifytargetdoingaction = findFromActionOrTactics(action, tactics, "modifytargetdoingaction", None, str)
+
     if restrictempowertype is not None:
         restrictProto = protoFromName(restrictempowertype)
         if restrictProto is not None:
             empowerer = common.getObjectDisplayName()
         else:
             empowerer = common.getDisplayNameForProtoOrClass(restrictempowertype) # KeyError if a missing unit class
-        components.append(f"If empowered by a {empowerer},") 
+        components.append(f"if empowered by a {empowerer},") 
     elif restrictempowered:
-        components.append(f"If empowered, ")
-    
+        components.append(f"if empowered, ")
 
-    modifyrangeuselos = findFromActionOrTactics(action, tactics, "modifyrangeuselos", None, int)
-    if modifyrangeuselos is not None and modifyrangeuselos > 0:
-        components.append(f"Projects an aura over its LOS which")
-    else:
-        components.append(f"Projects a {range:0.3g}m aura which")
+    if range is not None:
+        modifyrangeuselos = findFromActionOrTactics(action, tactics, "modifyrangeuselos", None, int)
+        if modifyrangeuselos is not None and modifyrangeuselos > 0:
+            components.append(f"projects an aura over its LOS which")
+        else:
+            components.append(f"projects a {range:0.3g}m aura which")
     
-    if len(components) > 1:
-        components[-1] = "p" + components[-1][1:]
+    else:
+        modifyduration = findFromActionOrTactics(action, tactics, "modifyduration", None, int)
+        modifyupdateintervalrandomness = findFromActionOrTactics(action, tactics, "modifyupdateintervalrandomness", None, int)
+        if modifytargetdoingaction != "Birth" or modifytargetdoingaction is None or modifyduration is None:
+            common.warn_unhandled(f"{proto.attrib['name']}: modifyselfonly with unhandled parameters")
+            return ""
+        components.append(f"on spawn for {'about ' if modifyupdateintervalrandomness else ''}{modifyduration/1000:0.3g}s: ")
+    
+    # Capitalise first letter correctly no matter how the text starts
+    if len(components) > 0:
+        components[0] = components[0][0].upper() + components[0][1:]
 
     modifyTargetLimit = findFromActionOrTactics(action, tactics, "modifytargetlimit", None, int)
     skipStacking = False
@@ -1781,6 +1796,8 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
     elif modifyType == "ArmorSpecific":
         multiplier = findFromActionOrTactics(action, tactics, "modifyamount", None, float)
         armorType = findFromActionOrTactics(action, tactics, "modifydamagetype", None, str)
+        if multiplier is None:
+            multiplier = findFromActionOrTactics(action, tactics, "modifymultiplier", None, float)
         if multiplier > 1.0:
             components.append(f"decreases {armorType} vulnerability by {100*(multiplier-1.0):0.3g}% for")
         elif multiplier < 1.0:
@@ -1845,6 +1862,9 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
 
     targetText = " ".join(targetListComponents)
 
+    if isSelfOnly:
+        targetText = "itself"
+
     doneReplacement = False
     for i, component in enumerate(components):
         if "{targets}" in component:
@@ -1856,6 +1876,9 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
 
     if isInfection:
         components.append("A unit can only have one infection at a time.")
+
+    if modifytargetdoingaction is not None and not isSelfOnly:
+        components.append(f"Only affects units performing a {modifytargetdoingaction} action.")
 
     components += lateComponents
 

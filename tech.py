@@ -1171,7 +1171,7 @@ def generateTechDescriptions():
             return f"{common.getDisplayNameForProtoOrClass(common.protoFromName(protoName))}: +{totalBonus:0.3g}% ({bounceRange:0.3g}m)"
         
     fatedArrowsBounces = int(float(common.techFromName("FatedArrows").find("effects/effect[@subtype='NumberBounces']").attrib['amount']))
-    fatedArrowsUnits = ("Toxotes", "Peltast")
+    fatedArrowsUnits = ("Toxotes", "Peltast", "AmazonArcher", "Medusa")
     techManualAdditions["FatedArrows"] = TechAddition(endEntry=["Damage increase if all bounces hit, and bounce ranges:"] + [bounceHelper(fatedArrowsBounces, x) for x in fatedArrowsUnits])
 
     techManualAdditions["PiousSacrifice"] = TechAddition(endEntry=[f"Speed boosters persist for {float(common.protoFromName('AttackSpeedBuffContainer').find('lifespan').text):0.3g} seconds.", action.describeAction("AttackSpeedBuffContainer", "AttackSpeedBuff", nameOverride="Speed buff")])
