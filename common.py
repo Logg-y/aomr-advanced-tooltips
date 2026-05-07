@@ -185,6 +185,8 @@ _UNIT_CLASS_LABELS = {
     "LogicalTypeTrainableMythUnit":"Trainable Myth Unit",
     "UnitClass":"Unit",
     "LogicalTypeNavalMythUnit":"Water Myth Unit",
+    "AbstractCalpulli":"Calpulli",
+    "AbstractTeixiptla":"Teixiptla",
 
     # Partial Lies
     "EconomicUpgraded":"Villager",
@@ -226,6 +228,9 @@ _UNIT_CLASS_LABELS_PLURAL = {
     "AbstractFishingShip":"Fishing Ships",
     "AbstractTransportShip":"Transport Ships",
     "AbstractWarship":"War Ships",
+    "AbstractArcherShip":"Archer Ships",
+    "AbstractCloseCombatShip":"Close Combat Ships",
+    "AbstractSiegeShip":"Siege Ships",
     "AbstractSettlement":"Settlements",
     "LogicalTypeMilitaryProductionBuilding":"Military Production Buildings",
     "AbstractTemple":"Temples",
@@ -257,6 +262,9 @@ _UNIT_CLASS_LABELS_PLURAL = {
     "Gold":"Gold",
     "FishResource":"Fish",
     "Food":"Food",
+    "ArcherLineUpgraded":"Archers",
+    "CavalryLineUpgraded":"Cavalry",
+    "InfantryLineUpgraded":"Infantry",
     "AbstractInfantry":"Infantry",
     "AbstractArcher":"Ranged Soldiers",
     "LogicalTypeBuildingsThatShoot":"Buildings that Shoot",

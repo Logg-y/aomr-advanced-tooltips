@@ -48,6 +48,7 @@ SUPPRESS_TARGET_TYPES_IF_EXCLUSIVE = (
 ACTION_TYPE_NAMES = {
     "HandAttack":"Melee Attack",
     "RangedAttack":"Ranged Attack",
+    "FlyingUnitAttack":"Anti-Air Attack",
     "AreaHeal":"Area Healing",
     "ChargedHandAttack":"Melee Special Attack",
     "ChargedRangedAttack":"Ranged Special Attack",
@@ -437,6 +438,7 @@ def handleModifyStructure(parentElem: ET.Element) -> str:
         "ROF":"Attack Interval",
         "Speed":"Movement Speed",
         "Damage":"Damage",
+        "MaxHP":"Max Hitpoints",
         "MaxShieldPoints":"Shield Points",
         "LifeSteal":"Lifesteal",
         "DamageSpecific":"{damagetype} Damage",
@@ -620,6 +622,10 @@ def actionOnHitNonDoTEffects(proto: ET.Element, action: ET.Element, ignoreActive
             thisItem = f"{probString}Infects {targetString} for {infectionDuration:0.3g}s: {infectionActionContent}"
         elif onhitType == "KillReward":
             thisItem = f"{probString}Becomes attackable by any player for {float(onhiteffect.attrib['duration']):0.3g}s, giving {icon.resourceIcon(onhiteffect.attrib['rewardtype'])} {float(onhiteffect.attrib['amount']):0.3g} to the killer."
+        elif onhitType == "InstantKillablePercentChance":
+            byUnitType = onhiteffect.attrib.get("byunittype")
+            byUnitText = common.getDisplayNameForProtoOrClass(byUnitType) if byUnitType is not None else "this unit"
+            thisItem = f"{probString}For {float(onhiteffect.attrib['duration']):0.3g}s, {byUnitText} has a {100*float(onhiteffect.attrib['amount']):0.3g}% chance to instantly kill {targetString}."
         else:
             raise ValueError(f"Unknown onhiteffect type: {onhitType}")
         thisItem = thisItem.strip()
@@ -1192,7 +1198,31 @@ def handleBuildAction(proto: ET.Element, action: ET.Element, tactics: Union[None
     return stem.strip()
 
 def handleEatAction(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
-    return f"Can eat trees and gold mines, draining {float(action.find('rate').text):0.3g} resources per second to heal the same amount of hitpoints."
+    rateNodes = action.findall("rate")
+    if len(rateNodes) == 0:
+        return ""
+
+    targetTypes = [node.attrib["type"] for node in rateNodes]
+    rates = [float(node.text) for node in rateNodes]
+    yields = [float(node.attrib.get("yield", 1.0)) for node in rateNodes]
+    targetText = common.getDisplayNameForProtoOrClassPlural(targetTypes)
+
+    if len(set(rates)) == 1:
+        eatText = f"Can eat {targetText}, draining {rates[0]:0.3g} resources per second"
+    else:
+        rateItems = [f"{common.getDisplayNameForProtoOrClassPlural(node.attrib['type'])} at {float(node.text):0.3g} resources per second" for node in rateNodes]
+        eatText = f"Can eat {common.commaSeparatedList(rateItems)}, draining resources"
+
+    healRates = [rate * resourceYield for rate, resourceYield in zip(rates, yields)]
+    if all(abs(resourceYield - 1.0) < 0.0001 for resourceYield in yields):
+        eatText += " to heal the same amount of hitpoints."
+    elif len(set(healRates)) == 1:
+        eatText += f" to heal {healRates[0]:0.3g} hitpoints per second."
+    else:
+        healItems = [f"{healRate:0.3g} hitpoints per second from {common.getDisplayNameForProtoOrClassPlural(node.attrib['type'])}" for healRate, node in zip(healRates, rateNodes)]
+        eatText += f". Heals for {common.commaSeparatedList(healItems)}."
+
+    return eatText
 
 def handleTradeAction(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
     protoRate = float(action.find("rate[@type='AbstractTownCenter']").text)
@@ -1370,7 +1400,11 @@ def handleMaintainAction(proto: ET.Element, action: ET.Element, tactics: Union[N
     modifytargetlimit = findFromActionOrTactics(action, tactics, "modifytargetlimit", None, int)
     modifybase = findFromActionOrTactics(action, tactics, "modifybase", None, int)
     maxrange = findFromActionOrTactics(action, tactics, "maxrange", None, float)
-    spawnedObject = protoFromName(findAllFromActionOrTactics(action, tactics, "rate")[0].attrib['type'])
+    rateNodes = findAllFromActionOrTactics(action, tactics, "rate")
+    if len(rateNodes) == 0:
+        common.warn_data(f"Maintain action {actionName} on {proto.attrib['name']} is missing rate, ignored")
+        return ""
+    spawnedObject = protoFromName(rateNodes[0].attrib['type'])
     targettype = common.getDisplayNameForProtoOrClass(spawnedObject)
     targettypePlural = common.getDisplayNameForProtoOrClassPlural(spawnedObject)
     sentences = []
@@ -1762,6 +1796,9 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
     if modifyType == "HealRate":
         damageType = findFromActionOrTactics(action, tactics, "modifydamagetype", "Divine")
         damageAmount = findFromActionOrTactics(action, tactics, "modifyamount", None, float)
+        if damageAmount is None:
+            common.warn_data(f"RangedModify on {proto.attrib['name']} HealRate is missing modifyamount, ignored")
+            return ""
         if damageAmount < 0.0:
             components.append(f"deals {icon.damageTypeIcon(damageType)} {damageAmount*-1:0.3g}")
             components.append(actionDamageBonus(action))
