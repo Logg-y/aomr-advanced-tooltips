@@ -261,3 +261,16 @@ def generateMajorGodDescriptions():
     demeterContent = re.sub("Buildings build faster.*", demeterBuildingBonus, demeterContent)
     demeterContent = re.sub("Village Centers have.*", demeterVCGarrison, demeterContent)
     globals.stringMap["STR_CIV_DEMETER_LR"] = demeterContent
+
+    # Nothing to change here (yet)
+    #huitzContent =globals.dataCollection["string_table.txt"]["STR_CIV_HUITZILOPOCHTLI_LR"]
+    #globals.stringMap["STR_CIV_HUITZILOPOCHTLI_LR"] = huitzContent
+
+    tezcaContent = globals.dataCollection["string_table.txt"]["STR_CIV_TEZCATLIPOCA_LR"]
+    tezcaContent = tezcaContent.replace("more Favor per age", "more initial Favor per age (the trickle is unaffected)")
+    globals.stringMap["STR_CIV_TEZCATLIPOCA_LR"] = tezcaContent
+
+    quetzContent = globals.dataCollection["string_table.txt"]["STR_CIV_QUETZALCOATL_LR"]
+    quetzContent = re.sub("\n.*Warrior Priests generate.*", "", quetzContent)
+    quetzContent += f"\n{icon.BULLET_POINT} Warrior Priests can perform {action.describeAction("WarriorPriest", "DevoteMinor", tech=common.techFromName("ArchaicAgeQuetzalcoatl"))}"
+    globals.stringMap["STR_CIV_QUETZALCOATL_LR"] = quetzContent

@@ -78,6 +78,8 @@ _OVERRIDE_DISPLAY_NAMES = {
 
     "AbilityTaotieDevour":"Eat", # Normally Fuel Consumption, makes the tooltip harder to understand
     "AbilityTaotieExpel":"Spit", # Normally Fuel Expulsion
+    
+    "NonAmbushLeap":"Leap", # default "Ambush Attack - Open" which is weird
 
     # These are for Amaterasu's Shrine resource inventory increase, need to distinguish the different mine sizes
     "MineGoldLarge":"Gold Mine (6000)",
@@ -89,6 +91,10 @@ _OVERRIDE_DISPLAY_NAMES = {
     "HamadryadTree":"Hamadryad (tree form)",
     "ArcadianMeadowDamageReceiver":"Arcadian Meadow",
     "AttackSpeedBuffContainer":"Invisible Attack Speed Booster",
+
+    "TeixiptlaHuitz":"Teixiptla (Huitzilopochtli)",
+    "TeixiptlaTezca":"Teixiptla (Tezcatlipoca)",
+    "TeixiptlaQuetz":"Teixiptla (Quetzalcoatl)",
 }
 
 _UNIT_CLASS_LABELS = {
@@ -185,6 +191,8 @@ _UNIT_CLASS_LABELS = {
     "LogicalTypeTrainableMythUnit":"Trainable Myth Unit",
     "UnitClass":"Unit",
     "LogicalTypeNavalMythUnit":"Water Myth Unit",
+    "LogicalTypeBuildingSmall":"Small Building",
+    "LogicalTypeBuildingLarge":"Large Building",
 
     # Partial Lies
     "EconomicUpgraded":"Villager",
@@ -194,7 +202,11 @@ _UNIT_CLASS_LABELS = {
     "LogicalTypeSunRayProjectile":"Projectile",
     "AbstractTemple":"Temple",
     "LogicalTypeAffectedBySunRay":"Greek Ranged Human Soldiers, Heroes, and Myth Units",
-    "LogicalTypeWitherable":"Witherable"
+    "LogicalTypeWitherable":"Witherable",
+    "AbstractTeixiptla":"Teixiptla and Incarnates",
+    "AbstractCalpulli":"Calpulli",
+    "EconomicUpgraded":"Villagers",
+    "BuildLimitSharedNorse":"Gatherers and Dwarves", # For campaign reasons this includes Aztec villagers
 }
 
 
@@ -273,6 +285,7 @@ _UNIT_CLASS_LABELS_PLURAL = {
     "MajorHero":"Major Heroes",
     "MinorHero":"Minor Heroes",
     "UnitClass":"Units",
+    "LogicalTypeValidBloodPactTarget":"Units that can be given Blood Pact",
 
 
     # Partial lies for clarity:
@@ -283,7 +296,7 @@ _UNIT_CLASS_LABELS_PLURAL = {
     "LogicalTypeBuildingLarge":"Buildings (except Wonder and Titan Gate)",
     "LogicalTypeSeidrTarget":"Hersir, Godi, and Valkyries",
     "LogicalTypeWitherable":"Witherable objects",
-    
+    "EconomicUpgraded":"Villagers",
     
 }
 
@@ -545,11 +558,19 @@ def prependTextToHistoryFile(objectName: str, objectType: str, text: Union[str, 
     if not isinstance(text, str):
         text = "\\n".join(text)
 
-    globals.stringMap[strid] = text + "\\n"*3 + "----------\\n" + globals.dataCollection["string_table.txt"][strid]
+    if strid not in globals.historyTextStrings:
+        globals.historyTextStrings.append(strid)
+    if strid in globals.stringMap:
+        globals.stringMap[strid] += "\\n\\n" + text
+    else:
+        globals.stringMap[strid] = text
 
 def findGodPowerByName(powerName: Union[str, ET.Element]) -> ET.Element:
     if isinstance(powerName, str):
-        return globals.dataCollection["god_powers_combined"].find(f"power[@name='{powerName}']")
+        elem = globals.dataCollection["god_powers_combined"].find(f"power[@name='{powerName}']")
+        if elem is not None:
+            return elem
+        return globals.dataCollection["abilities_combined"].find(f"power[@name='{powerName}']")
     return powerName
 
 def collapseSpaces(string: str) -> str:
@@ -731,6 +752,12 @@ def groupElementListBySameTextValues[T](elements: List[ET.Element], targetAttrib
             output[convertedText] = []
         output[convertedText].append(elem.attrib[targetAttribute])
     return output
+
+def ordinalSuffix(number: int) -> str:
+    if str(number).endswith("1") and number != 11: return "st"
+    elif str(number).endswith("2") and number != 12: return "nd"
+    elif str(number).endswith("3") and number != 13: return "rd"
+    return "th"
 
 @functools.cache
 def isUnitClassASubsetOfOther(one: str, two: str) -> bool:

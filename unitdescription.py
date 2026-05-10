@@ -15,7 +15,7 @@ import copy
 NOTABLE_UNIT_CLASSES = ("Hero", "AbstractInfantry", "AbstractArcher", "AbstractCavalry", "AbstractSiegeWeapon", "AbstractVillager", "AbstractArcherShip", "AbstractSiegeShip", 
                         "AbstractCloseCombatShip", "MythUnit", "HeroShadowUpgraded", "HumanSoldier", "Ship", "Building", "CavalryLineUpgraded", "InfantryLineUpgraded", "ArcherLineUpgraded", 
                         "Huntable", "FoodDropsite", "WoodDropsite", "GoldDropsite", "LogicalTypeBuildingEmpoweredForLOS", "LogicalTypeArchaicMythUnit", "LogicalTypeClassicalMythUnit", "LogicalTypeHeroicMythUnit",
-                        "LogicalTypeAffectedByCeaseFireBuildingSlow", "LogicalTypeCanSeeStealth", "AbstractTower", "AbstractWall", "LogicalTypeWitherable")
+                        "LogicalTypeAffectedByCeaseFireBuildingSlow", "LogicalTypeCanSeeStealth", "AbstractTower", "AbstractWall", "LogicalTypeWitherable", "LogicalTypeBuildingLarge", "LogicalTypeBuildingSmall")
 
 # Key : [list of unit classes that are hidden if a unit has this class]
 # Stating both "ship" and "archer ship" is a bit pointless.
@@ -28,6 +28,8 @@ UNIT_CLASS_SUPPRESSION = {
 "LogicalTypeHeroicMythUnit":["MythUnit"],
 "LogicalTypeMythicMythUnit":["MythUnit"],
 "HeroShadowUpgraded":["Hero"],
+"LogicalTypeBuildingLarge":["Building"],
+"LogicalTypeBuildingSmall":["Building"],
 }
 
 # These all get unworkably long.
@@ -87,6 +89,10 @@ IGNORE_UNITS = (
 "TitanPredator",
 "ShinigamiRevenant",
 "ShinigamiVengeful",
+"VillagerAztecRun",
+"VillagerAztecInjured",
+"CheatEagleRanger",
+"WarriorPriestHeart",
 )
 
 
@@ -152,13 +158,13 @@ def directionalarmorText(proto: Union[str, ET.Element]):
     return ""
 
 
-def veterancyDamagePoints(proto: Union[str, ET.Element]) -> List[str]:
+def veterancyDamagePoints(proto: Union[str, ET.Element], searchElem="totaldamage") -> List[str]:
     if isinstance(proto, str):
         proto = protoFromName(proto)
     ranks = proto.find("veterancyranks")
     if ranks is None:
         return []
-    dmgs = [totaldamageNode.text for totaldamageNode in ranks.findall(".//*totaldamage")]
+    dmgs = [totaldamageNode.text for totaldamageNode in ranks.findall(f".//*{searchElem}")]
     return dmgs
 
 def veterancyDamageTargets(proto: Union[str, ET.Element]):
@@ -242,16 +248,22 @@ def veterancyText(proto: Union[str, ET.Element], rankName="rank", ignoreExperien
     proto = protoFromName(proto)
     if not ignoreExperienceUnitFlag and proto.find("./flag[.='ExperienceUnit']") is None:
         return ""
+    damagePoints = veterancyDamagePoints(proto)
+    inflictedDamage = "inflicted damage"
+    if len(damagePoints) == 0:
+        damagePoints = veterancyDamagePoints(proto, "damageandresourceseaten")
+        inflictedDamage = "resources eaten plus inflicted damage"
+        
     if not multiline:
-        damagePoints = "/".join(veterancyDamagePoints(proto))
+        damagePoints = "/".join(damagePoints)
         if damagePoints != "":
-            return f"Gains additional {rankName}s after dealing a total of {damagePoints} damage to {veterancyDamageTargets(proto)}. Additional {rankName}s {'/'.join(veterancyEffects(proto, multiline=multiline))}."
+            return f"Gains additional {rankName}s after {damagePoints} total {inflictedDamage} to {veterancyDamageTargets(proto)}. Additional {rankName}s {'/'.join(veterancyEffects(proto, multiline=multiline))}."
     else:
-        damageThresholds = [f"After inflicting {damage} damage:" for damage in veterancyDamagePoints(proto)]
+        damageThresholds = [f"After {damage} total:" for damage in damagePoints]
         effects = veterancyEffects(proto, multiline=multiline)
         zipped = zip(damageThresholds, effects)
         rankTexts = [" ".join(pair) for pair in zipped]
-        items = [f"Gains additional {rankName}s after dealing damage to {veterancyDamageTargets(proto)}:", *rankTexts]
+        items = [f"Gains additional {rankName}s after reaching thresholds of total {inflictedDamage} on {veterancyDamageTargets(proto)}:", *rankTexts]
         return items
 
     return ""
@@ -288,19 +300,21 @@ GOD_POWER_FLAG_PREDICTIONS: Dict[str, Tuple[str, Callable[[ET.Element], bool]]] 
     "Tornado":("LogicalTypeValidTornadoAttack", lambda x: not checkProtoFlag(x, "flag", "Invulnerable")),
     "Restoration":("LogicalTypeAffectedByRestoration", lambda x: (checkProtoFlag(x, "unittype", "Building") or checkProtoFlag(x, 'unittype', 'LogicalTypeHealed')) and not checkProtoFlag(x, "flag", "Invulnerable")),
     "Shifting Sands":("LogicalTypeValidShiftingSandsTarget", lambda x: checkProtoFlag(x, "unittype", "Unit") and (checkProtoFlag(x, 'movementtype', 'land') or checkProtoFlag(x, 'movementtype', 'air') or checkProtoFlag(x, 'movementtype', 'amphibious'))),
+    "Blood Pact":("LogicalTypeValidBloodPactTarget", lambda x: checkProtoFlag(x, "unittype", "Unit") and not checkProtoFlag(x, "flag", "Invulnerable")),
 }
 
 # Label if true, Label if false, prediction, actual
 UNIT_CLASS_PREDICTIONS: Tuple[Tuple[str, str, Callable[[ET.Element], bool], Callable[[ET.Element], bool]]] = (
     # Any air/water movement types or non-units that can enter transports are noteworthy
     # Technically, Sentinels and Water Carnivora have LogicalTypeGarrisonInShips but can't actually board :(
-    ("Transportable", "Untransportable", lambda x: checkProtoFlag(x, "unittype", "Unit") and (checkProtoFlag(x, 'movementtype', 'land') or checkProtoFlag(x, 'movementtype', 'amphibious')), lambda x: checkProtoFlag(x, 'unittype', 'LogicalTypeGarrisonInShips') and findAndFetchText(x, "maxvelocity", 0.0, float) > 0.0),
+    ("Transportable", "Untransportable", lambda x: checkProtoFlag(x, "unittype", "Unit") and (checkProtoFlag(x, 'movementtype', 'land') or checkProtoFlag(x, 'movementtype', 'Land') or checkProtoFlag(x, 'movementtype', 'amphibious')), lambda x: checkProtoFlag(x, 'unittype', 'LogicalTypeGarrisonInShips') and findAndFetchText(x, "maxvelocity", 0.0, float) > 0.0),
     # Any nonunit that can be healed, or unit that can't be healed is noteworthy
     ("Healable", "Unhealable", lambda x: checkProtoFlag(x, "unittype", "Unit"), lambda x: checkProtoFlag(x, 'unittype', 'LogicalTypeHealed') and not checkProtoFlag(x, 'unittype', 'Building')),
 
     ("Targeted by Meteor", "Not Targeted by Meteor", lambda x: not checkProtoFlag(x, "flag", "FlyingUnit") and not checkProtoFlag(x, "flag", "Invulnerable"), lambda x: checkProtoFlag(x, "unittype", "LogicalTypeValidMeteorTarget")),
     ("Valid Forest Protection/Earth Wall target", "Cannot be targeted for Forest Protection/Earth Wall", lambda x: checkProtoFlag(x, "unittype", "Building"), lambda x: checkProtoFlag(x, "unittype", "LogicalTypeValidForestProtectionPlacement")),
     ("Raised by Underworld Invasion", "Not raised by Underworld Invasion", lambda x: checkProtoFlag(x, "unittype", "Unit") and not checkProtoFlag(x, "unittype", "EconomicUnit") and not checkProtoFlag(x, "movementtype", "water"), lambda x: checkProtoFlag(x, "unittype", "LogicalTypeValidEidolon")),
+
     #("+LogicalTypeBuildingNotWonderOrTitan bug?", "-LogicalTypeBuildingNotWonderOrTitan bug?", lambda x: x.attrib['name'] not in ('Wonder', 'TitanGate') and checkProtoFlag(x, "unittype", "Building"),  lambda x: checkProtoFlag(x, "unittype", "LogicalTypeBuildingNotWonderOrTitan")),
     #("+cUnitTypeAbstractWarship bug?", "-cUnitTypeAbstractWarship bug?", lambda x: checkProtoFlag(x, "unittype", "Ship") and (checkProtoFlag(x, "unittype", "AbstractArcherShip") or checkProtoFlag(x, "unittype", "AbstractSiegeShip") or checkProtoFlag(x, "unittype", "AbstractCloseCombatShip")), lambda x: checkProtoFlag(x, "unittype", "AbstractWarship")),
     #("+cUnitTypeAbstractWarshipHero bug?", "-cUnitTypeAbstractWarshipHero bug?", lambda x: checkProtoFlag(x, "unittype", "AbstractWarship") and checkProtoFlag(x, "unittype", "Hero"), lambda x: checkProtoFlag(x, "unittype", "AbstractWarshipHero")),
@@ -309,7 +323,8 @@ UNIT_CLASS_PREDICTIONS: Tuple[Tuple[str, str, Callable[[ET.Element], bool], Call
     #("+LogicalTypeMythUnitNotFlying bug?", "-LogicalTypeMythUnitNotFlying bug?", lambda x: checkProtoFlag(x, "unittype", "MythUnit") and not checkProtoFlag(x, "flag", "FlyingUnit"), lambda x: checkProtoFlag(x, "unittype", "LogicalTypeMythUnitNotFlying")),
     #("+cUnitTypeLogicalTypeVillagerNotHero bug?", "-cUnitTypeLogicalTypeVillagerNotHero bug?", lambda x: checkProtoFlag(x, "unittype", "AbstractVillager") and not checkProtoFlag(x, "unittype", "Hero"), lambda x: checkProtoFlag(x, "unittype", "LogicalTypeVillagerNotHero")),
     #("+AbstractFlyingUnit bug?", "-AbstractFlyingUnit bug?", lambda x: checkProtoFlag(x, "flag", "FlyingUnit"), lambda x: checkProtoFlag(x, "unittype", "AbstractFlyingUnit")),
-    #("+LogicalTypeHealableHeroBug?", "-LogicalTypeHealableHeroBug?", lambda x: checkProtoFlag(x, "unittype", "Hero") and checkProtoFlag(x, 'unittype', 'LogicalTypeHealed'), lambda x: checkProtoFlag(x, 'unittype', 'LogicalTypeHealableHero'))
+    #("+LogicalTypeHealableHeroBug?", "-LogicalTypeHealableHeroBug?", lambda x: checkProtoFlag(x, "unittype", "Hero") and checkProtoFlag(x, 'unittype', 'LogicalTypeHealed'), lambda x: checkProtoFlag(x, 'unittype', 'LogicalTypeHealableHero')),
+    #("+LogicalTypeLandMilitary bug", "-LogicalTypeLandMilitary", lambda x: checkProtoFlag(x, "unittype", "MilitaryUnit") and not checkProtoFlag(x, "movementtype", "water"), lambda x: checkProtoFlag(x, 'unittype', 'LogicalTypeLandMilitary')),
 )
 
 # (nodename, nice looking label, datatype)
@@ -458,6 +473,9 @@ class UnitDescription:
                     # Combine the label for ranged myth unit into the others (for Bow of Artemis)
                     if thisType in ("MythUnit", "LogicalTypeArchaicMythUnit", "LogicalTypeClassicalMythUnit", "LogicalTypeHeroicMythUnit") and checkProtoFlag(protoUnit, "unittype", "LogicalTypeRangedMythUnit"):
                         thisTypeText = thisTypeText.replace("Myth Unit", "Ranged Myth Unit")
+                    # This peculiar check covers Serpents
+                    if thisType in ("LogicalTypeArchaicMythUnit", "LogicalTypeClassicalMythUnit", "LogicalTypeHeroicMythUnit") and not checkProtoFlag(protoUnit, "unittype", "MythUnit"):
+                        thisTypeText = "Stats improve with age like a " + thisTypeText
                     if thisType in ("Hero", "HeroShadowUpgraded") and checkProtoFlag(protoUnit, "unittype", "MajorHero"):
                         thisTypeText = thisTypeText.replace("Hero", "Major Hero")
                     if thisType in ("Hero", "HeroShadowUpgraded") and checkProtoFlag(protoUnit, "unittype", "MinorHero"):
@@ -558,13 +576,15 @@ class UnitDescription:
                 raise ValueError(f"Bad action on {protoName}")
             if actionType in self.ignoreActions:
                 continue
-            active = findAndFetchText(actionNode, "active", 1, int)
             tactics = action.actionTactics(protoUnit, actionNode)
+            active = action.findFromActionOrTactics(actionNode, tactics, "active", 1, int)
             chargeType = action.actionGetChargeType(actionNode, tactics)
             if chargeType != action.ActionChargeType.NONE:
                 actionChargeTypes[chargeType].append(actionType)
             if tactics is not None and active:
                 active = findAndFetchText(tactics, "active", 1, int)
+            # This is run before the active state checking so that ability linking works correctly
+            # Must check all actions and generate text for them even if they are not displayed by default
             description = action.describeAction(protoUnit, actionNode, chargeType, self.actionNameOverrides.get(actionType, None), self.linkActionsToAbilities.get(actionType, None), overrideText=self.overrideActionInfoText.get(actionType, None))
             if not active and actionType not in self.showActionsIfDisabled:
                 continue
@@ -594,6 +614,10 @@ class UnitDescription:
         
         protoName = protoUnit.attrib['name']
         generalObservations = []
+
+        stealthdetectionradius = protoUnit.find("stealthdetectionradius")
+        if stealthdetectionradius is not None and "stealthdetectionradius" not in obsToIgnore:
+            generalObservations.append(f"Stealth detection range: {float(stealthdetectionradius.text):0.3g}m.")
 
         gatherratemultiplier = protoUnit.find("gatherratemultiplier")
         if gatherratemultiplier is not None and "gatherratemultiplier" not in obsToIgnore:
@@ -716,6 +740,36 @@ class UnitDescription:
         fakeastreeifenemy = checkProtoFlag(protoUnit, "flag", "FakeAsTreeIfEnemy")
         if fakeastreeifenemy and "fakeastreeifenemy" not in obsToIgnore:
             generalObservations.append(f"Appears as a tree to enemies.")
+
+        if "dropoffmultiplier" not in obsToIgnore:
+            mults = {}
+            for res in ("Food", "Wood", "Gold"):
+                if checkProtoFlag(protoUnit, "unittype", f"{res}Dropsite"):
+                    carrycapacity = protoUnit.find(f"carrycapacity[@resourcetype='{res}']")
+                    if carrycapacity is not None:
+                        mult = float(carrycapacity.attrib.get("dropoffmultiplier", 1.0))
+                        if mult not in mults:
+                            mults[mult] = [res]
+                        else:
+                            mults[mult].append(res)
+            for mult in mults:
+                if mult > 1.0:
+                    generalObservations.append(f"Whenever {common.commaSeparatedList(mults[mult], "or")} is dropped here, {(mult-1.0)*100:0.3g}% more is added to your stockpile.")
+                elif mult < 1.0:
+                    generalObservations.append(f"Whenever {common.commaSeparatedList(mults[mult], "or")} is dropped here, {(1.0-mult)*100:0.3g}% less is added to your stockpile.")
+
+        if "resourceconversion" not in obsToIgnore:
+            conversionsByTarget = {}
+            for elem in protoUnit.findall("resourceconversion"):
+                targ = elem.attrib['toresourcetype']
+                rate = float(elem.text)
+                key = (rate, targ)
+                if key not in conversionsByTarget:
+                    conversionsByTarget[key] = []
+                conversionsByTarget[key].append(elem.attrib['fromresourcetype'])
+            for rate, targ in conversionsByTarget:
+                sources = conversionsByTarget[(rate, targ)]
+                generalObservations.append(f"Whenever {common.commaSeparatedList(sources, "or")} is dropped here, {rate*100:0.3g}% of that amount is added to your {targ} stockpile.")
 
         # General stuff that can be tied to passive abilities
         for passiveAbilityKey, handler in NON_ACTION_OBSERVATIONS.items():
@@ -982,7 +1036,8 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["Pharaoh"] = UnitDescription(preActionInfoText={"RangedAttack":"Hero with a ranged attack that is especially good against myth units."})
     unitDescriptionOverrides["PharaohNewKingdom"] = UnitDescription(preActionInfoText={"RangedAttack":"Hero with a ranged attack that is especially good against myth units."})
     unitDescriptionOverrides["Petsuchos"] = UnitDescription(passiveAbilityLink={"other":"AbilityPetsuchos"}, nonActionObservationArgs={"other":[SunRayRevealerText]})
-    unitDescriptionOverrides["Phoenix"] = UnitDescription(ignoreActions=["FlyingUnitAttack"], overrideNonActionObservations={"spawns":f"Leaves an egg on death. After {float(action.actionTactics('PhoenixEgg', 'PhoenixRebirth').find('maintaintrainpoints').text):0.3g} seconds, it hatches back into a Phoenix."}, passiveAbilityLink={"spawns":"AbilityPhoenix"})
+    phoenixAction = action.findActionByName("PhoenixEgg", "MaintainTrain")
+    unitDescriptionOverrides["Phoenix"] = UnitDescription(ignoreActions=["FlyingUnitAttack"], overrideNonActionObservations={"spawns":f"Leaves an egg on death. After {action.findFromActionOrTactics(phoenixAction, action.actionTactics("PhoenixEgg", phoenixAction), "maintaintrainpoints", None, float):0.3g} seconds, it hatches back into a Phoenix."}, passiveAbilityLink={"spawns":"AbilityPhoenix"})
     unitDescriptionOverrides["PhoenixEgg"] = UnitDescription(linkActionsToAbilities={"PhoenixRebirth":"AbilityPhoenixEgg"})
     unitDescriptionOverrides["Scarab"] = UnitDescription(linkActionsToAbilities={"SelfDestructAttack":"AbilityScarab"})
     unitDescriptionOverrides["Kebenit"] = UnitDescription(preActionInfoText={"RangedAttack":"Archer ship, good against close combat ships."})
@@ -1070,17 +1125,35 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["MengChong"] = UnitDescription(preActionInfoText={"HandAttack":"Close combat ship, good against siege ships."})
 
     # Fei have a lot of duplicated target text - and with the confusing amount of stuff going on with them, they need all the help they can get
+
+
+    # These versions exclude siege
     feiTargeting = action.onhiteffectTargetString(protoFromName("Fei").find("protoaction/onhiteffect[@type='DamageOverTime']"), hitword = "").strip()
     feiTargetingNoFlying = action.onhiteffectTargetString(protoFromName("Fei").find("protoaction/onhiteffect[@type='DamageOverTime']"), hitword = "", additionalForbiddenTargets=["AbstractFlyingUnit"]).strip()
-    def feiPostprocessor(lines):
-        l = []
-        for index, line in enumerate(lines):
-            if index + 1 < len(lines):
-                line = line.replace(feiTargeting, "non-Hero land units")
-                line = line.replace(feiTargetingNoFlying, "non-Hero land units")
-            l.append(line)
-        return l
-    feiHandler = UnitDescription(generaliseInfectionEffects=True, textPostprocessor=feiPostprocessor, additionalText=f"\'Non-Hero land units\' includes {feiTargeting}.")
+    
+    # These versions are okay with infecting siege for some reason
+    feiAreaInfectAction = action.findActionByName("Fei", "AreaInfect")
+    feiAreaInfectTactics = action.actionTactics("Fei", "AreaInfect")
+    feiInfectAllowed, feiInfectForbid = action.getAllowForbidTargetTypes(feiAreaInfectAction, feiAreaInfectTactics) 
+    if action.findFromActionOrTactics(feiAreaInfectAction, feiAreaInfectTactics, "modifyflyingunits", 0, int) == 0:
+        feiInfectForbid.append("AbstractFlyingUnit")
+    feiInfectTargeting = action.targetListToString(feiInfectAllowed, feiInfectForbid)
+    feiInfectTargetingNoSiege = action.targetListToString(feiInfectAllowed, [*feiInfectForbid, "AbstractSiegeWeapon"])
+    if feiTargetingNoFlying != feiInfectTargetingNoSiege:
+        common.warn_unhandled(f"Fei targeting cleanup assumptions were invalidated! '{feiInfectTargetingNoSiege}' vs '{feiInfectTargeting}'")
+        feiHandler = UnitDescription(generaliseInfectionEffects=True)
+    else:
+        def feiPostprocessor(lines):
+            l = []
+            for index, line in enumerate(lines):
+                if index + 1 < len(lines):
+                    line = line.replace(feiTargeting, "non-Hero land units (except Siege Weapons)")
+                    line = line.replace(feiTargetingNoFlying, "non-Hero land units (except Siege Weapons)")
+                    line = line.replace(feiInfectTargeting, "non-Hero land units")
+                    line = line.replace(feiInfectTargetingNoSiege, "non-Hero land units")
+                l.append(line)
+            return l
+        feiHandler = UnitDescription(generaliseInfectionEffects=True, textPostprocessor=feiPostprocessor, additionalText=f"\'Non-Hero land units\' includes {feiInfectTargeting}.")
 
 
     unitDescriptionOverrides["Fei"] = feiHandler
@@ -1121,6 +1194,57 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["Junkozosen"] = UnitDescription(preActionInfoText={"RangedAttack":"Siege ship, good against archer ships."})
     unitDescriptionOverrides["RammingWasen"] = UnitDescription(preActionInfoText={"HandAttack":"Close combat ship, good against siege ships."})
 
+    unitDescriptionOverrides["YariSpearman"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry only good against cavalry."})
+    unitDescriptionOverrides["YumiArcher"] = UnitDescription(preActionInfoText={"RangedAttack":"Generalist archer, especially good against infantry."})
+    unitDescriptionOverrides["YariSpearman"] = UnitDescription(preActionInfoText={"RangedAttack":"Hero archer. Primarily good against myth units, but reasonably effective against other targets."})
+    unitDescriptionOverrides["Samurai"] = UnitDescription(preActionInfoText={"HandAttack":"Slow generalist infantry, especially good against other infantry."})
+    unitDescriptionOverrides["OnnaMusha"] = UnitDescription(preActionInfoText={"HandAttack":"Hero infantry. Primarily good against myth units, but reasonably effective against other targets."})
+    unitDescriptionOverrides["NaginataRider"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist cavalry, especially good against ranged soldiers."})
+    unitDescriptionOverrides["Shinobi"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry, good against ranged soldiers and buildings."})
+    unitDescriptionOverrides["YumiArcher"] = UnitDescription(preActionInfoText={"RangedAttack":"Generalist mounted archer."})
+    unitDescriptionOverrides["Daimyo"] = UnitDescription(preActionInfoText={"HandAttack":"Hero cavalry. Primarily good against myth units, but reasonably effective against other targets."})
+    unitDescriptionOverrides["Onmyoji"] = UnitDescription(preActionInfoText={"RangedAttack":"Hero. Effective against myth units, buildings, and tight groups of other units."})
+
+    # Aztec
+
+    unitDescriptionOverrides["QuimichinSpy"] = UnitDescription(preActionInfoText={"RangedAttack":"Cheap ranged soldier scout. Underwhelming in combat."}, additionalText="Receives +4 range in the Classical Age.")
+    unitDescriptionOverrides["WarriorPriest"] = UnitDescription(preActionInfoText={"HandAttack":"Hero infantry. Primarily good against myth units, but reasonably effective against other targets."})
+    unitDescriptionOverrides["TlamanihSpearman"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry only good against cavalry."})
+    unitDescriptionOverrides["TequihuaArcher"] = UnitDescription(preActionInfoText={"RangedAttack":"Generalist archer, especially good against infantry."})
+    unitDescriptionOverrides["CoyoteWarrior"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry only good against ranged soldiers. Can build."})
+    unitDescriptionOverrides["EagleWarrior"] = UnitDescription(preActionInfoText={"RangedAttack":"Ranged soldier with long reach, especially effective against other ranged soldiers."})
+    unitDescriptionOverrides["Otontin"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry primarily good against buildings."}, additionalText="Receives a free Medium line upgrade.")
+    unitDescriptionOverrides["ShornOne"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry primarily good against other infantry."}, additionalText="Receives a free Medium line upgrade.")
+
+    # For this unit the actions are completely identical
+    unitDescriptionOverrides["OcelotlWarrior"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist infantry."}, ignoreActions=["JumpAttackStealth"])
+    # Others get the attack speed buff only on the ambush variant
+    unitDescriptionOverrides["JaguarRider"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist cavalry, especially good against ranged soldiers."}, ignoreActions=["JumpAttackStealth"], postActionInfoText={"JumpAttack":f"If used as stealth ambush: {action.actionOnHitNonDoTEffects(common.protoFromName("JaguarRider"), action.findActionByName("JaguarRider", "JumpAttackStealth"), filterOnHitTypes=["SelfModify"])}"}, additionalText="Receives a free Medium line upgrade.")
+
+    teixiptlaLifetimeBonus = float(common.techFromName("ClassicalAgeAztec").find("effects/effect[@subtype='Lifespan'][target='AbstractTeixiptla']").attrib['amount']) - 1.0
+    for god in ("Tezca", "Quetz", "Huitz"):
+        for superness in ("", "Super"):
+            additional = {}
+            if god == "Tezca" and superness == "":
+                additional['ignoreActions'] = ["JumpAttackStealth"] # This seems to be half an action from shared tactics
+            lifetime = float(common.protoFromName(f"{superness}Teixiptla{god}").find("lifespan").text)
+            unitDescriptionOverrides[f"{superness}Teixiptla{god}"] = UnitDescription(additionalText=f"Lifespan is increased by {lifetime*teixiptlaLifetimeBonus:0.3g} after each Age advance.{" Is fully healed upon creation, regardless of the health of the Warrior Priest." if superness == "" else ""}", **additional)
+
+    unitDescriptionOverrides["ArrowCanoe"] = UnitDescription(preActionInfoText={"RangedAttack":"Archer ship, good against close combat ships."})
+    unitDescriptionOverrides["AtlatlSiegeCanoe"] = UnitDescription(preActionInfoText={"RangedAttack":"Siege ship, good against archer ships."})
+    unitDescriptionOverrides["TepoztliCanoe"] = UnitDescription(preActionInfoText={"HandAttack":"Close combat ship, good against siege ships."})
+
+    unitDescriptionOverrides["AxolotlMutant"] = UnitDescription(ignoreActions=["HandAttackLand"])
+    unitDescriptionOverrides["Ahuizotl"] = UnitDescription(ignoreActions=["NavalHandAttack", "NavalThrow"])
+    unitDescriptionOverrides["Chaneque"] = UnitDescription(additionalText=describeUnit("ChanequeIdol"))
+    for calpulliType in ("LivestockPen", "LumberOutpost", "CraftWorkshop"):
+        costreduction = float(common.techFromName(f"{calpulliType}PriceShadow").find(f"effects/effect[@subtype='Cost'][target='CalpulliTo{calpulliType}']").attrib['amount'])
+        kwargs = {}
+        if calpulliType != "LumberOutpost":
+            kwargs['ignoreActions'] = ["RangedAttack"]
+        unitDescriptionOverrides[f"Calpulli{calpulliType}"] = UnitDescription(additionalText=["Only one of each upgraded Calpulli can exist at a time. Repeating the upgrade on another Calpulli will downgrade the first and upgrade the new one.", f"After each upgrade is completed once, the cost is reduced to {costreduction*100:0.2g}%."], **kwargs)
+    unitDescriptionOverrides["SpikeTrap"] = UnitDescription(additionalText=["When triggered or destroyed by damage: " + action.actionDamageOverTimeArea("SpikeTrapAura", "AreaDamage", parentAction=action.findActionByName("SpikeTrap", "HandAttack"))])
+    unitDescriptionOverrides["SmokeTrap"] = UnitDescription(additionalText=[f"When triggered or destroyed by damage, emits smoke that lasts {float(common.protoFromName("SmokeTrapAura").find("lifespan").text):0.3g} seconds:", action.describeAction("SmokeTrapAura", "AreaLOSReduction"), action.describeAction("SmokeTrapAura", "AreaSpeedReduction")])
 
     # Common/Similar
     unitDescriptionOverrides["SentryTower"] = UnitDescription(showActionsIfDisabled=["RangedAttack"])
@@ -1131,6 +1255,8 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["TitanYmir"] = TitanHandler
     unitDescriptionOverrides["TitanAtlantean"] = TitanHandler
     unitDescriptionOverrides["TitanBird"] = TitanHandler
+    unitDescriptionOverrides["TitanYamataNoOrochi"] = TitanHandler
+    unitDescriptionOverrides["TitanCipactli"] = TitanHandler
     unitDescriptionOverrides["WallLong"] = WallHandler
     unitDescriptionOverrides["WallMedium"] = WallHandler
     unitDescriptionOverrides["WallShort"] = WallHandler
@@ -1140,6 +1266,8 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["AsgardianHillFort"] = HideFlyingAttack
     unitDescriptionOverrides["Palace"] = HideFlyingAttack
     unitDescriptionOverrides["Baolei"] = HideFlyingAttack
+    unitDescriptionOverrides["Castle"] = HideFlyingAttack
+    unitDescriptionOverrides["GreatTemple"] = HideFlyingAttack
     unitDescriptionOverrides["Wonder"] = UnitDescription(overrideDescription=tech.processTech(techtree.find("tech[@name='WonderAgeGeneral']")))
     unitDescriptionOverrides["Regent"] = UnitDescription(overrideDescription="If your Regent dies, you lose the game.")
     unitDescriptionOverrides["Setna"] = UnitDescription(ignoreActions=["Build"])
@@ -1340,6 +1468,11 @@ def generateUnitDescriptions():
     
     # Other misc unit related strings
 
+    # Aztec unit commands
+    globals.stringMap["STR_TRANSFORM_TO_CALPULLI_LIVESTOCK_PEN_LR"] = icon.iconTime() + f" {common.findAndFetchText(common.techFromName("CalpulliToLivestockPen"), "researchpoints", 0.0, float):0.3g}: " + describeUnit("CalpulliLivestockPen")
+    globals.stringMap["STR_TRANSFORM_TO_CALPULLI_LUMBER_OUTPOST_LR"] = icon.iconTime() + f" {common.findAndFetchText(common.techFromName("CalpulliToLumberOutpost"), "researchpoints", 0.0, float):0.3g}: " + describeUnit("CalpulliLumberOutpost")
+    globals.stringMap["STR_TRANSFORM_TO_CALPULLI_CRAFT_WORKSHOP_LR"] = icon.iconTime() + f" {common.findAndFetchText(common.techFromName("CalpulliToCraftWorkshop"), "researchpoints", 0.0, float):0.3g}: " + describeUnit("CalpulliCraftWorkshop")
+
     # Chinese training yard/tower commands
     globals.stringMap["STR_TRANSFORM_TO_MILITARY_CAMP_TOWER_LR"] = icon.iconTime() + f" {common.findAndFetchText(common.techFromName("MilitaryCampToTower"), "researchpoints", 0.0, float):0.3g}: " + towerAddon("MilitaryCamp") + " Only one addon may be built per building."
     globals.stringMap["STR_TRANSFORM_TO_MACHINE_WORKSHOP_TOWER_LR"] = icon.iconTime() + f" {common.findAndFetchText(common.techFromName("MachineWorkshopToTower"), "researchpoints", 0.0, float):0.3g}: " + towerAddon("MachineWorkshop") + " Only one addon may be built per building."
@@ -1383,6 +1516,8 @@ def generateUnitDescriptions():
         except Exception:
             raise ValueError(f"Error while processing unit {unit.attrib['name']}")
         if value is not None:
+            if int(globals.config["options"].get("retainVanillaTooltipForUnitsAndTechs", 0)):
+                value = globals.dataCollection["string_table.txt"][strid] + "\n" + value
             if strid not in stringIdsByOverwriters:
                 stringIdsByOverwriters[strid] = {}
             if value not in stringIdsByOverwriters[strid].values():
@@ -1441,31 +1576,31 @@ def generateUnitDescriptions():
                     techInternalName = techNode.text
                     if techInternalName in techsWithMultipleEnablers:
                         print(f"Ability {abilityNode.text} for {unitNode.tag} depends on {techInternalName} which has multiple enablers")
-                        techInternalName = ""
-                    enablerName = techsByEnabler.get(techInternalName, None)
-                    techDisplayName = techInternalToDisplayName[techInternalName]
-                    displayNameStrId = findAndFetchText(abilityInfo, "displaynameid", None)
-                    if displayNameStrId is None:
-                        print(f"Passive ability {abilityNode.text} has no display name string id?")
                     else:
-                        # Eg: Skaldic Inspiration [Long Serpent, Bragi]
-                        # ... we might not have a tech source
-                        # and if the ability name is the same name as the tech that enables it, listing it again is a bit redundant
-                        baseAbilityName = globals.dataCollection["string_table.txt"][displayNameStrId].replace(" (Passive)", "").strip()
-                        bracketItems = []
-                        if techDisplayName != baseAbilityName:
-                            bracketItems.append(techDisplayName)
-                        if enablerName is not None:
-                            bracketItems.append(enablerName)
-                        brackets = ""
-                        if len(bracketItems) > 0:
-                            brackets = UNIT_ABILITY_SOURCE_COLOUR(f"[{", ".join(bracketItems)}]")
-                        replacement = f"{baseAbilityName} {brackets}".strip()
-
-                        if displayNameStrId in globals.stringMap and globals.stringMap[displayNameStrId] != replacement:
-                            abilityNameStringIdsWithMultipleReplacers.add(displayNameStrId)
+                        enablerName = techsByEnabler.get(techInternalName, None)
+                        techDisplayName = techInternalToDisplayName[techInternalName]
+                        displayNameStrId = findAndFetchText(abilityInfo, "displaynameid", None)
+                        if displayNameStrId is None:
+                            common.warn_data(f"Passive ability {abilityNode.text} has no display name string id?")
                         else:
-                            globals.stringMap[displayNameStrId] = replacement
+                            # Eg: Skaldic Inspiration [Long Serpent, Bragi]
+                            # ... we might not have a tech source
+                            # and if the ability name is the same name as the tech that enables it, listing it again is a bit redundant
+                            baseAbilityName = globals.dataCollection["string_table.txt"][displayNameStrId].replace(" (Passive)", "").strip()
+                            bracketItems = []
+                            if techDisplayName != baseAbilityName:
+                                bracketItems.append(techDisplayName)
+                            if enablerName is not None:
+                                bracketItems.append(enablerName)
+                            brackets = ""
+                            if len(bracketItems) > 0:
+                                brackets = UNIT_ABILITY_SOURCE_COLOUR(f"[{", ".join(bracketItems)}]")
+                            replacement = f"{baseAbilityName} {brackets}".strip()
+
+                            if displayNameStrId in globals.stringMap and globals.stringMap[displayNameStrId] != replacement:
+                                abilityNameStringIdsWithMultipleReplacers.add(displayNameStrId)
+                            else:
+                                globals.stringMap[displayNameStrId] = replacement
     for badStringId in abilityNameStringIdsWithMultipleReplacers:
         del globals.stringMap[badStringId]
         print(f"Ability name {badStringId} had multiple different attempted replacements, removing")

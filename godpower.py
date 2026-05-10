@@ -39,6 +39,12 @@ IGNORE_POWERS = (
     "AmeNoUkihashi",
     "RepairPillarSPC",
     "GreatFloodSPC",
+    "ImplodeSPCShorter",
+    "ShockwaveWeakerSPC",
+    "ForestFireHIDDEN",
+    "FrostSPC",
+    "WalkingWoodsSingleTargetHIDDEN",
+    "AvalancheSPC",
     )
 
 @dataclasses.dataclass
@@ -206,6 +212,17 @@ def findGodPowerRecharges():
 
 # There's a bug that is making the damage interval of certain powers 50ms longer than the data would have you believe
 DAMAGE_INTERVAL_BUG_AMOUNT = 0.05
+
+def preloadGodPowerProcessing():
+    "Definitions for processing parameters that are needed earlier go here. This is so actions or techs can reference the overridden god power text, otherwise they are generated before the processing params are defined."
+    animalsacrifice = findGodPowerByName("AnimalSacrifice")
+    animalsacrificeItems = ["Grants the following effects:", *describeGodPowerEffectsLikeDataTech(animalsacrifice), "{duration} Multiple instances of this can be active at a time and stack additively."]
+    godPowerProcessingParams["AnimalSacrifice"] = GodPowerParams(animalsacrificeItems)
+
+    newfire = findGodPowerByName("GreatTempleNewFireCeremony")
+    newfireItems = ["Grants the following effects:", *describeGodPowerEffectsLikeDataTech(newfire), "{duration} May only be used once per game."]
+    godPowerProcessingParams["GreatTempleNewFireCeremony"] = GodPowerParams(newfireItems)
+
 
 def generateGodPowerDescriptions():
     proto = globals.dataCollection["proto.xml"]
@@ -587,7 +604,13 @@ def generateGodPowerDescriptions():
     earthwallBuildRate = common.findAndFetchText(common.protoFromName("EarthWall"), "autobuildrate", 1.0, float)
     earthwallPercentHealth = 100.0 * common.findAndFetchText(common.protoFromName("EarthWall"), "initialhitpoints", 1.0, float) / common.findAndFetchText(common.protoFromName("EarthWall"), "maxhitpoints", 1.0, float)
     earthwallBuildTime = earthwallBuildPoints/earthwallBuildRate
-    earthwallItems = [f"Creates a ring of {earthwallSegments} Earth Wall segments around the targeted friendly building. They start at {earthwallPercentHealth:0.3g}% hitpoints, and build up to full strength over {earthwallBuildTime:0.3g} seconds. These segments all function like gates.", "{radius}"]
+    earthwallHPBonusHeroic = float(common.techFromName("HeroicAgeGeneral").find("effects/effect[@subtype='Hitpoints'][target='EarthWall']").attrib['amount']) - 1.0
+    earthwallHPBonusMythic = float(common.techFromName("MythicAgeGeneral").find("effects/effect[@subtype='Hitpoints'][target='EarthWall']").attrib['amount']) - 1.0
+    if earthwallHPBonusHeroic == earthwallHPBonusMythic:
+        earthwallHPBonus = f"Gains +{earthwallHPBonusHeroic*100:0.3g}% base hitpoints in the Heroic age, and again in the Mythic age."
+    else:
+        earthwallHPBonus = f"Gains +{earthwallHPBonusHeroic*100:0.3g}% base hitpoints in the Heroic age and +{earthwallHPBonusMythic*100:0.3g}% in the Mythic age."
+    earthwallItems = [f"Creates a ring of {earthwallSegments} Earth Wall segments around the targeted friendly building. They start at {earthwallPercentHealth:0.3g}% hitpoints, and build up to full strength over {earthwallBuildTime:0.3g} seconds. These segments all function like gates.", earthwallHPBonus, "{radius}"]
     earthwallItems += [unitdescription.describeUnit("EarthWall")]
     godPowerProcessingParams["EarthWall"] = GodPowerParams(earthwallItems)
 
@@ -792,6 +815,50 @@ def generateGodPowerDescriptions():
     underworldinvasionSuddenDeath = 100.0*common.findAndFetchText(underworldinvasion, "suddendeathhpmultiplier", 0.5, float)
     underworldinvasionItems = [f"Targets one of your Town or Citadel Centers. Destroys all of your Town, Citadel and Village Centers, spawning up to {underworldinvasionEidolonStep} for each one destroyed (to a maximum of {underworldinvasionEidolonMax}) of the most recently slain land military units of all players around the settlement you targeted under your control. Eidolon versions of units use your current upgrades rather than those of their original owner, retain their normal population cost, but have their maximum health reduced to {underworldinvasionEidolonHealth:0.3g}% of normal. Eidolons persist until killed, even through the expiration of this power's duration.", "Any settlements you controlled at the time of invoking this power cannot be rebuilt until its timer ends; this does not include any you manually delete prior to its usage.", f"In Sudden Death mode, this power causes your Citadel to lose {underworldinvasionSuddenDeath:0.3g}% of its maximum hitpoints instead of being destroyed.", "{duration}"]
     godPowerProcessingParams["UnderworldInvasion"] = GodPowerParams(underworldinvasionItems)
+
+    bloodpact = findGodPowerByName("BloodPact")
+    ageindex = 0
+    modifykeys = {"Speed":"Movement Speed", "MaxHP":"Maximum HP", "BuildRate":"Building Speed", "VisualScale":"Model Size", "FavorDeathReward":"Favor given to you on death", "GatherRate":"Gather Rates"}
+    bloodpactItems = ["Grants a single unit greatly increased abilities for a short time, then kills it. Targets your or an ally's {attacktargets}."]
+    for effect in bloodpact.findall("unitmodify"):
+        label = ""
+        if "age" in effect.attrib:
+            label += common.AGE_LABELS[ageindex] + ": "
+            ageindex += 1
+        apply = effect.attrib['apply']
+        labelformat = "{rel} {value} to {target}."
+        lateword = "to"
+        if apply == "Add":
+            rel = "Adds"
+        elif apply == "Multiply":
+            rel = "Multiplies"
+            labelformat = "{rel} {target} by {value}."
+        elif apply == "Set":
+            rel = "Sets"
+            labelformat = "{rel} {target} to {value}."
+        else:
+            common.warn_unhandled(f"BloodPact has unknown unitmodify relativity {apply}")
+            continue
+        target = f"{modifykeys.get(effect.text, effect.text)}"
+        if effect.text == "VisualScale":
+            value = f"{float(effect.attrib['amount'])*100:0.3g}%"
+        else:
+            value = f"{float(effect.attrib['amount']):0.3g}"
+        label += labelformat.format(rel=rel, target=target, value=value)
+        bloodpactItems.append(label)    
+    
+    bloodpactItems.append("{duration}")
+    godPowerProcessingParams["BloodPact"] = GodPowerParams(bloodpactItems)
+
+    obsidianmirror = findGodPowerByName("ObsidianMirror")
+    obsidianmirrorAltPowers = [common.getObjectDisplayName(findGodPowerByName(elem.text)) for elem in obsidianmirror.findall("duplicatetargetreplacement/target")]
+    obsidianmirrorItems = [f"Target any object in line of sight owned by another player to copy their Archaic age power. This power is given an initial cooldown of {float(globals.godPowerRecharges['ObsidianMirror']):0.3g} seconds. Their power remains in your power list until used once, which causes the slot to revert back to Obsidian Mirror, which has another recharge of {float(globals.godPowerRecharges['ObsidianMirror']):0.3g} seconds.", "Every use of a borrowed power beyond the first will incur a recast cost: the game tracks how many times borrowed powers have been used, and then charges favor equal to the borrowed power's normal recast cost as if it had been cast that many times before, even if different powers have been copied this way.", f"If the targeted player's god power is also Obsidian Mirror, you are given one of {common.commaSeparatedList(obsidianmirrorAltPowers)} at equal weighting."]
+    godPowerProcessingParams["ObsidianMirror"] = GodPowerParams(obsidianmirrorItems)
+
+    tailwind = findGodPowerByName("Tailwind")
+    tailwindBoost = f"Multiplies Movement Speed by {tailwind.find("unitmodify").attrib['amount']}."
+    tailwindItems = [f"Targets {{playerrelationpos}} {{attacktargets}}.", tailwindBoost, "{radius}", "{duration}"]
+    godPowerProcessingParams["Tailwind"] = GodPowerParams(tailwindItems)
 
     titangate = findGodPowerByName("TitanGate")
     titangateRecharge = "{:0.3g}".format(float(techtree.find("tech[@name='WonderAgeTitan']/effects/effect[@subtype='PowerROF']").attrib['amount']))
