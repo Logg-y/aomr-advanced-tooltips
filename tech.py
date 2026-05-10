@@ -270,7 +270,7 @@ def dataSubtypeOnHitEffectHandler(tech: ET.Element, effect:ET.Element):
         preTargetText = f"Movement Speed of {targetTypeString} hit"
         if effect.attrib.get("action") is not None:
             preTargetText += " with"
-        return dataSubtypeWithAmountHelper(preTargetText + " {actionof}{combinable}: {value} for " + f"{duration:0.3g}s", combinableAttribute="action", valueFormat="{:0.0%}".format)(tech, effect)
+        return dataSubtypeWithAmountHelper(preTargetText + " {combinable}: {value} for " + f"{duration:0.3g}s", combinableAttribute="action", valueFormat="{:0.0%}".format)(tech, effect)
     elif effectType == "damageovertime":
         damageType = effect.attrib.get("damagetype", "Divine")
         preTargetText = "Hits"
@@ -284,6 +284,15 @@ def dataSubtypeOnHitEffectHandler(tech: ET.Element, effect:ET.Element):
         return dataSubtypeWithAmountHelper(preTargetText, combinableAttribute="action")(tech, effect)
     else:
         common.warn_unhandled(f"{tech.attrib['name']}: unknown OnHitEffect {effectType}")
+
+def dataSubtypeOnHitEffectProbabilityHandler(tech: ET.Element, effect: ET.Element):
+    effectType = effect.attrib.get("effecttype", "")
+    actionName = getActionDisplayNameForTechEffect(tech, effect)
+    if effectType == "Snare":
+        effectType = "movement slow"
+    return EffectHandlerResponse(getEffectTargets(tech, effect),
+                                 f"On-hit {effectType} chance of {{combinable}}: {float(effect.attrib['amount']):0.3g}%",
+                                 actionName)
 
 def dataSubtypeDamageHandler(tech: ET.Element, effect:ET.Element):
     damageType = effect.attrib.get("damagetype", None)
@@ -620,6 +629,23 @@ def dataSubtypeModifyRateHandler(tech: ET.Element, effect:ET.Element):
                 continue
             if actionType == "HealRate":
                 responses.append(dataSubtypeWithAmountHelper(combinableString="Area Damage Rate" if actionModifyRate < 0.0 else "Area Healing Rate")(tech, effect))
+            elif actionType in ("LOSFactor", "Speed"):
+                statName = "Enemy LOS" if actionType == "LOSFactor" else "Enemy Movement Speed"
+                multiplier = action.findFromActionOrTactics(actionElement, tactics, "modifymultiplier", None, float)
+                if multiplier is None:
+                    common.warn_unhandled(f"{tech.attrib['name']} using ModifyRate on a {actionType} without a base multiplier")
+                    continue
+                amount = float(effect.attrib["amount"])
+                relativity = effect.attrib["relativity"].lower()
+                if relativity in ("absolute", "assign"):
+                    finalValue = multiplier + amount
+                elif relativity in ("percent", "basepercent"):
+                    finalValue = multiplier * amount
+                else:
+                    common.warn_unhandled(f"{tech.attrib['name']} using ModifyRate with unknown relativity {effect.attrib['relativity']}")
+                    continue
+                responses.append(EffectHandlerResponse(getEffectTargets(tech, effect),
+                                                       f"{statName}: reduced to {100*finalValue:0.3g}%"))
             else:
                 common.warn_unhandled(f"{tech.attrib['name']} using ModifyRate on a {actionType}, no text defined to handle this case")
                 continue
@@ -924,6 +950,7 @@ DATA_SUBTYPE_HANDLERS: Dict[str, Callable[[ET.Element, ET.Element], Union[Effect
     "cost":dataSubtypeWithAmountHelper(textFormat="{combinable} Cost: {value}", combinableAttribute="resource"),
     "onhiteffectrate":dataSubtypeOnHitEffectRateHandler,
     "onhiteffect":dataSubtypeOnHitEffectHandler,
+    "onhiteffectprobability":dataSubtypeOnHitEffectProbabilityHandler,
     "populationcount":dataSubtypeWithAmountHelper(combinableString="Population Usage"),
     "rechargetime":dataSubtypeRechargeTimeHandler,
     "auxrechargetime":dataSubtypeAuxRechargeTimeHandler,
@@ -1003,6 +1030,7 @@ DATA_SUBTYPE_HANDLERS: Dict[str, Callable[[ET.Element, ET.Element], Union[Effect
     "respawntrainactive":dataSubtypeRespawnTrainActiveHandler,
     "dropoffheal":dataSubtypeWithAmountHelper("Healing per full resource inventory dropped off: {value}", combinableString=""),
     "numberbounces":dataSubtypeWithAmountHelper("Maximum number of bounce targets {actionof}{combinable}: {value}", combinableAttribute="action"),
+    "displayednumberprojectiles":dataSubtypeWithAmountHelper("Number of Projectiles {actionof}{combinable}: {value}", combinableAttribute="action"),
     "modifyduration":dataSubtypeWithAmountHelper("Duration {actionof}{combinable}: {value}", combinableAttribute="action"),
     "targetedspeedmultiplier":dataSubtypeWithAmountHelper("Target speed {actionof}{combinable}: {value}", combinableAttribute="action"),
     "researchrate":dataSubtypeWithAmountHelper("{combinable} speed: {value}", combinableString="Research"),
@@ -1229,8 +1257,129 @@ def generateTechDescriptions():
         spoilsHistory.append(common.commaSeparatedList(common.getListOfDisplayNamesForProtoOrClass(target, plural=False)) + f": {' '.join(rewards)}")
     techManualAdditions["SpoilsOfWar"] = TechAddition(startEntry="Destroying enemy buildings rewards you with about 50% of their base resource cost. A full list is available in this tech's history section.", historyText=spoilsHistory)
 
+    def techEffect(techName: str, query: str) -> ET.Element:
+        elem = common.techFromName(techName).find(query)
+        if elem is None:
+            raise ValueError(f"{techName} expected one effect matching {query}")
+        return elem
+
+    def formatBasePercent(effect: ET.Element) -> str:
+        return f"+{100*(float(effect.attrib['amount'])-1.0):0.3g}% of base"
+
+    def formatPercent(value: float) -> str:
+        return f"{100*value:0.3g}%"
+
+    def sourceBackedOnDeathSpawnText(techName: str) -> str:
+        spawnEffect = techEffect(techName, "effects/effect[@subtype='ModifySpawn']")
+        spawnedProto = common.protoFromName(spawnEffect.attrib["proto"])
+        birthAction = action.findActionByName(spawnedProto, common.findAndFetchText(spawnedProto, "birthprotoaction", None))
+        damage = birthAction.find("damage")
+        target = common.commaSeparatedList(getEffectTargets(common.techFromName(techName), spawnEffect))
+        components = [
+            f"{target}: On death, deals {float(damage.text):0.3g} {damage.attrib['type']} damage",
+            f"in a {float(birthAction.find('damagearea').text):0.3g}m radius",
+        ]
+        if birthAction.find("onhiteffect[@type='Throw']") is not None:
+            components.append("and throws enemies")
+        return " ".join(components) + "."
+
+    def sourceBackedPenanceText() -> str:
+        effect = techEffect("TecciztecatlsPenance", "effects/effect[@subtype='WorkRate']")
+        target = common.commaSeparatedList(getEffectTargets(common.techFromName("TecciztecatlsPenance"), effect))
+        resource = common.getDisplayNameForProtoOrClass(effect.attrib["unittype"])
+        return f"{target} dedication {resource} generation: {formatBasePercent(effect)}."
+
+    def sourceBackedToloacheText() -> str:
+        effects = common.techFromName("ToloacheTrance").findall("effects/effect[@subtype='OnHitEffectActive']")
+        firstEffect = effects[0]
+        firstTarget = common.protoFromName(firstEffect.find("target").text)
+        firstAction = action.findActionByName(firstTarget, firstEffect.attrib["action"])
+        onhit = firstAction.find(f"onhiteffect[@type='{firstEffect.attrib['effecttype']}']")
+        modify = onhit.find("modify")
+        rate = float(modify.text)
+        duration = float(onhit.attrib["duration"])
+        targetTypes = action.onhiteffectTargetString(onhit).replace("hit ", "")
+        return f"Aztec human soldiers: Hits make {targetTypes} attack {100*(rate-1.0):0.3g}% slower for {duration:0.3g} seconds. Stacks."
+
+    def sourceBackedToloacheAdvancedRolloverText() -> str:
+        effects = common.techFromName("ToloacheTrance").findall("effects/effect[@subtype='OnHitEffectActive']")
+        firstEffect = effects[0]
+        firstTarget = common.protoFromName(firstEffect.find("target").text)
+        firstAction = action.findActionByName(firstTarget, firstEffect.attrib["action"])
+        onhit = firstAction.find(f"onhiteffect[@type='{firstEffect.attrib['effecttype']}']")
+        modify = onhit.find("modify")
+        rate = float(modify.text)
+        duration = float(onhit.attrib["duration"])
+        targetType = common.commaSeparatedList(common.getListOfDisplayNamesForProtoOrClass(onhit.find("target[@attacktype]").attrib["attacktype"], plural=True)).lower()
+        exclusions = [f"non-{common.getDisplayNameForProtoOrClass(elem.attrib['ignoretype'])}" for elem in onhit.findall("target[@ignoretype]")]
+        targetTypes = f"{', '.join(exclusions)} {targetType}"
+        return f"Hits reduce {targetTypes} attack speed by {100*(rate-1.0):0.3g}% for {duration:0.3g} seconds. Stacks."
+
+    def sourceBackedTzompantliWatchTowerText() -> List[str]:
+        tech = common.techFromName("TzompantliWatchTower")
+        tower = globals.dataCollection["string_table.txt"]["STR_BLD_TZOMPANTLI_TOWER_NAME"]
+        actionEnableEffects = tech.findall("effects/effect[@subtype='ActionEnable']")
+        enabledActions = common.commaSeparatedList([getActionDisplayNameForTechEffect(tech, effect) for effect in actionEnableEffects])
+        snareEffects = tech.findall("effects/effect[@subtype='OnHitEffect']")
+        chanceEffects = tech.findall("effects/effect[@subtype='OnHitEffectProbability']")
+        chanceByAction = {effect.attrib["action"]: float(effect.attrib["amount"]) for effect in chanceEffects}
+        snareByRate = {}
+        for effect in snareEffects:
+            key = (float(effect.attrib["amount"]), float(effect.attrib["duration"]), chanceByAction.get(effect.attrib["action"]))
+            snareByRate.setdefault(key, []).append(getActionDisplayNameForTechEffect(tech, effect))
+        lines = [f"{tower}: Enables {enabledActions}."]
+        for (rate, duration, chance), actionNames in snareByRate.items():
+            chanceText = f" have a {chance:0.3g}% chance to" if chance is not None else ""
+            lines.append(f"{tower}: {common.commaSeparatedList(actionNames)} hits{chanceText} slow targets to {formatPercent(rate)} speed for {duration:0.3g} seconds.")
+        return lines
+
+    def sourceBackedTemiminaloyanText() -> List[str]:
+        tech = common.techFromName("TemiminaloyanTrials")
+        tower = globals.dataCollection["string_table.txt"]["STR_BLD_TZOMPANTLI_TOWER_NAME"]
+        projectileEffects = tech.findall("effects/effect[@subtype='DisplayedNumberProjectiles']")
+        projectileActions = common.commaSeparatedList([getActionDisplayNameForTechEffect(tech, effect) for effect in projectileEffects])
+        projectileAmount = {float(effect.attrib["amount"]) for effect in projectileEffects}
+        snareEffects = tech.findall("effects/effect[@subtype='OnHitEffect']")
+        snareActions = common.commaSeparatedList([getActionDisplayNameForTechEffect(tech, effect) for effect in snareEffects])
+        snareRates = {float(effect.attrib["amount"]) for effect in snareEffects}
+        snareDurations = {float(effect.attrib["duration"]) for effect in snareEffects}
+        if len(projectileAmount) != 1 or len(snareRates) != 1 or len(snareDurations) != 1:
+            raise ValueError("TemiminaloyanTrials assumptions invalidated")
+        return [
+            f"{tower}: {projectileActions} fire +{projectileAmount.pop():0.3g} projectile.",
+            f"{tower}: {snareActions} hits slow targets to {formatPercent(snareRates.pop())} speed for {snareDurations.pop():0.3g} seconds.",
+        ]
+
+    def sourceBackedAdvancedTrapsText() -> List[str]:
+        tech = common.techFromName("AdvancedTraps")
+        damageEffects = tech.findall("effects/effect[@subtype='Damage']")
+        damageTargets = common.commaSeparatedList([common.commaSeparatedList(getEffectTargets(tech, effect)) for effect in damageEffects])
+        damageAmounts = {formatBasePercent(effect) for effect in damageEffects}
+        if len(damageAmounts) != 1:
+            raise ValueError(f"AdvancedTraps damage assumptions invalidated: {damageAmounts}")
+        spikeAuraEffect = techEffect("AdvancedTraps", "effects/effect[@subtype='ModifyRate'][@action='AreaDamage']")
+        smokeLosEffect = techEffect("AdvancedTraps", "effects/effect[@subtype='ModifyRate'][@action='AreaLOSReduction']")
+        smokeSpeedEffect = techEffect("AdvancedTraps", "effects/effect[@subtype='ModifyRate'][@action='AreaSpeedReduction']")
+        smokeAura = common.protoFromName(smokeLosEffect.find("target").text)
+        losBase = common.findAndFetchText(action.findActionByName(smokeAura, smokeLosEffect.attrib["action"]), "modifymultiplier", 0.0, float)
+        speedBase = common.findAndFetchText(action.findActionByName(smokeAura, smokeSpeedEffect.attrib["action"]), "modifymultiplier", 0.0, float)
+        return [
+            f"{damageTargets}: Damage: {damageAmounts.pop()}.",
+            f"{common.getDisplayNameForProtoOrClass('SpikeTrap')}: lingering area damage rate {formatBasePercent(spikeAuraEffect)}.",
+            f"{common.getDisplayNameForProtoOrClass('SmokeTrap')}: Enemy vision reduced to {formatPercent(losBase + float(smokeLosEffect.attrib['amount']))}.",
+            f"{common.getDisplayNameForProtoOrClass('SmokeTrap')}: Enemy speed reduced to {formatPercent(speedBase + float(smokeSpeedEffect.attrib['amount']))}.",
+        ]
+
     # Hide VFX spawn text
     techManualAdditions["DroughtShips"] = TechAddition(lineFilter=lambda x: "spawns" not in x)
+    techManualAdditions["EveningStar"] = TechAddition(startEntry=globals.dataCollection["string_table.txt"]["STR_TECH_EVENING_STAR_OVERRIDE"], lineFilter=lambda x: False)
+    techManualAdditions["OmenOfDeath"] = TechAddition(startEntry=sourceBackedOnDeathSpawnText("OmenOfDeath"), lineFilter=lambda x: False)
+    techManualAdditions["TecciztecatlsPenance"] = TechAddition(startEntry=sourceBackedPenanceText(), lineFilter=lambda x: False)
+    techManualAdditions["ToloacheTrance"] = TechAddition(startEntry=sourceBackedToloacheText(), lineFilter=lambda x: False)
+    techManualAdditions["TzompantliWatchTower"] = TechAddition(startEntry=sourceBackedTzompantliWatchTowerText(), lineFilter=lambda x: False)
+    techManualAdditions["TemiminaloyanTrials"] = TechAddition(startEntry=sourceBackedTemiminaloyanText(), lineFilter=lambda x: False)
+    techManualAdditions["AdvancedTraps"] = TechAddition(startEntry=sourceBackedAdvancedTrapsText(),
+                                                        lineFilter=lambda x: False)
 
     skyfireLand = action.actionDamageOverTimeArea("SkylanternFireAreaGround")
     skyfireWater = action.actionDamageOverTimeArea("SkylanternFireAreaWater")
@@ -1409,3 +1558,10 @@ def generateTechDescriptions():
         # And for any per-effect set overrides, since those are now a thing
         for effect in tech.findall("effects/effect[@tooltipid]"):
             globals.stringMap[effect.attrib['tooltipid']] = VANILLA_FULL_TOOLTIP_EFFECT_COLOUR(globals.dataCollection['string_table.txt'][effect.attrib['tooltipid']])
+
+    advancedTrapLines = sourceBackedAdvancedTrapsText()
+    globals.stringMap["STR_TECH_OMEN_OF_DEATH_OVERRIDE"] = VANILLA_FULL_TOOLTIP_EFFECT_COLOUR(sourceBackedOnDeathSpawnText("OmenOfDeath"))
+    globals.stringMap["STR_TECH_ADVANCED_TRAPS_OVERRIDE1"] = VANILLA_FULL_TOOLTIP_EFFECT_COLOUR(advancedTrapLines[2])
+    globals.stringMap["STR_TECH_ADVANCED_TRAPS_OVERRIDE2"] = VANILLA_FULL_TOOLTIP_EFFECT_COLOUR(advancedTrapLines[3])
+    globals.stringMap["STR_TECH_TOLOACHE_TRANCE_OVERRIDE"] = VANILLA_FULL_TOOLTIP_EFFECT_COLOUR(sourceBackedToloacheAdvancedRolloverText())
+    globals.stringMap["STR_TECH_TEMIMINALOYAN_TRIALS_OVERRIDE"] = VANILLA_FULL_TOOLTIP_EFFECT_COLOUR(sourceBackedTemiminaloyanText()[0])

@@ -24,6 +24,7 @@ IGNORE_POWERS = (
     "AOTGFimbulwinter",
     "AOTGForestFire",
     "AOTGMeteor",
+    "InfestationSPC",
     "GauntletChaosMeteor",
     "GauntletChaosTornado",
     "GauntletChaosEarthquake",
@@ -186,10 +187,12 @@ def processGodPower(godpower: ET.Element) -> Union[None, str]:
     if godpower.find("exclusive") is not None:
         items.append(f"Only one instance of {common.getObjectDisplayName(godpower)} can be active at a time.")
     activelistvisibility = common.findAndFetchText(godpower, "activelistvisibility", None, str)
-    if activelistvisibility == "AlliesOnly":
+    if powerName == "ObsidianMirror":
+        items.append(f"Opponents are alerted that Obsidian Mirror was used, but not which god power was copied.")
+    elif activelistvisibility == "AlliesOnly":
         items.append(f"Enemies are not notified when you use this power.")
     elif activelistvisibility == "None":
-        items.append(f"No other players are not notified when you use this power.")
+        items.append(f"No other players are notified when you use this power.")
     
     return "\\n".join(items)
 
@@ -206,6 +209,45 @@ def findGodPowerRecharges():
 
 # There's a bug that is making the damage interval of certain powers 50ms longer than the data would have you believe
 DAMAGE_INTERVAL_BUG_AMOUNT = 0.05
+
+def godPowerFloat(power: ET.Element, query: str, default=0.0) -> float:
+    return common.findAndFetchText(power, query, default, float)
+
+def protoFloat(protoName: str, query: str, default=0.0) -> float:
+    return common.findAndFetchText(common.protoFromName(protoName), query, default, float)
+
+def protoActionFloat(protoName: str, actionName: str, query: str, default=0.0) -> float:
+    return common.findAndFetchText(action.findActionByName(protoName, actionName), query, default, float)
+
+def powerUnitModifyAmount(power: ET.Element, modifyType: str, default=0.0) -> float:
+    for elem in power.findall("unitmodify"):
+        if elem.text == modifyType and "age" not in elem.attrib:
+            return float(elem.attrib["amount"])
+    return default
+
+def powerAgeUnitModifyAmounts(power: ET.Element, modifyType: str) -> List[str]:
+    items = []
+    for ageName, ageLabel in zip(("ArchaicAge", "ClassicalAge", "HeroicAge", "MythicAge", "WonderAge"), common.AGE_LABELS):
+        elem = power.find(f"unitmodify[@age='{ageName}'][.='{modifyType}']")
+        if elem is not None:
+            items.append(f"{icon.BULLET_POINT} {ageLabel}: x{float(elem.attrib['amount']):0.3g}")
+    return items
+
+def protoInitialResourceByAge(protoName: str, resource: str, ageTechNames: List[str]) -> List[float]:
+    values = [protoFloat(protoName, f"initialresource[@resourcetype='{resource}']")]
+    for ageTechName in ageTechNames:
+        value = values[-1]
+        techElem = common.techFromName(ageTechName)
+        if techElem is not None:
+            for effect in techElem.findall("effects/effect"):
+                if effect.attrib.get("type") != "Data" or effect.attrib.get("subtype") != "InitialResource":
+                    continue
+                if effect.attrib.get("resource") != resource or effect.attrib.get("relativity") != "Assign":
+                    continue
+                if any(target.text == protoName for target in effect.findall("target[@type='ProtoUnit']")):
+                    value = float(effect.attrib["amount"])
+        values.append(value)
+    return values
 
 def generateGodPowerDescriptions():
     proto = globals.dataCollection["proto.xml"]
@@ -798,6 +840,123 @@ def generateGodPowerDescriptions():
     titangateCost= "{:0.3g}".format(float(techtree.find("tech[@name='WonderAgeTitan']/effects/effect[@subtype='PowerCost']").attrib['amount']))
     titangateItems = [f"Places a Titan Gate at 50% hitpoints. When fully built, unleashes a Titan.", "Can only be recast if you have a Wonder."]
     godPowerProcessingParams["TitanGate"] = GodPowerParams(titangateItems, overrideRecharge=titangateRecharge, overrideCost=titangateCost)
+
+    bloodpact = findGodPowerByName("BloodPact")
+    bloodpactItems = [f"Targets most non-Titan units. The target is killed when the effect ends.", f"For the duration, the target gains Damage x{powerUnitModifyAmount(bloodpact, 'Damage'):0.3g}, Max Hitpoints x{powerUnitModifyAmount(bloodpact, 'MaxHP'):0.3g}, Movement Speed x{powerUnitModifyAmount(bloodpact, 'Speed'):0.3g}, and Build Rate x{powerUnitModifyAmount(bloodpact, 'BuildRate'):0.3g}.", f"When the target dies, it grants {powerUnitModifyAmount(bloodpact, 'FavorDeathReward'):0.3g} Favor. Gather-capable targets also get a resource gather rate multiplier:", *powerAgeUnitModifyAmounts(bloodpact, "GatherRate"), "{duration}"]
+    godPowerProcessingParams["BloodPact"] = GodPowerParams(bloodpactItems)
+
+    tailwind = findGodPowerByName("Tailwind")
+    tailwindItems = [f"Increases Movement Speed of {{playerrelationpos}} {{attacktargets}} in the target area by {100*(powerUnitModifyAmount(tailwind, 'Speed')-1):0.3g}%.", "{radius}", "{duration}"]
+    godPowerProcessingParams["Tailwind"] = GodPowerParams(tailwindItems)
+
+    obsidianmirror = findGodPowerByName("ObsidianMirror")
+    obsidianmirrorItems = ["Copies the Archaic Age god power from the targeted unit or building.", "If used on another Tezcatlipoca player's object, copies Blood Pact instead.", "The copied power uses its normal cast cost and recast cost."]
+    godPowerProcessingParams["ObsidianMirror"] = GodPowerParams(obsidianmirrorItems, overrideCost="copied power cost")
+
+    lullaby = findGodPowerByName("Lullaby")
+    lullabySleep = lullaby.find("onhiteffect[@type='Sleep']")
+    lullabySleepDuration = godPowerFloat(lullaby, "activetime") if lullabySleep is None else float(lullabySleep.attrib.get("duration", godPowerFloat(lullaby, "activetime")))
+    lullabyItems = [f"Puts enemy Military Units (except targets with Divine Immunity) in the target area to sleep for {lullabySleepDuration:0.3g} seconds. Any damage dealt to sleeping units wakes them immediately.", "{radius}"]
+    godPowerProcessingParams["Lullaby"] = GodPowerParams(lullabyItems)
+
+    infestation = findGodPowerByName("Infestation")
+    infestationUnit = infestation.find("createunit").text
+    infestationItems = [f"Places an {common.getObjectDisplayName(common.protoFromName(infestationUnit))}.", unitdescription.describeUnit(infestationUnit)]
+    godPowerProcessingParams["Infestation"] = GodPowerParams(infestationItems)
+
+    agavebloom = findGodPowerByName("AgaveBloom")
+    agavebloomUnit = agavebloom.find("createunit").text
+    agavebloomFoodByAge = protoInitialResourceByAge(agavebloomUnit, "Food", ["HeroicAgeGeneral", "MythicAgeGeneral", "WonderAgeGeneral"])
+    agavebloomAgeText = "Classical/Heroic/Mythic/Wonder"
+    agavebloomFoodText = "/".join(f"{value:0.0f}" if abs(value - round(value)) < 0.0001 else f"{value:0.3g}" for value in agavebloomFoodByAge)
+    agavebloomGather = protoFloat(agavebloomUnit, "gatherratemultiplier")
+    agavebloomHeal = protoActionFloat(agavebloomUnit, "ResourceTiedHeal", "modifyamount")
+    agavebloomHealRange = protoActionFloat(agavebloomUnit, "ResourceTiedHeal", "maxrange")
+    agavebloomSlowHeal = protoActionFloat(agavebloomUnit, "ResourceTiedHeal", "slowhealmultiplier")
+    agavebloomMinFoodDrain = protoActionFloat(agavebloomUnit, "ResourceTiedHeal", "minrate")
+    agavebloomItems = [f"Places an Agave Bloom with x{agavebloomGather:0.3g} gather rate and {icon.resourceIcon('food')} {agavebloomFoodText} in the {agavebloomAgeText} Age. It remains until depleted or destroyed instead of expiring on a normal timer.", f"While it has enough Food remaining, it heals units within {agavebloomHealRange:0.3g}m for {agavebloomHeal:0.3g} hitpoints/second, spending {agavebloomMinFoodDrain:0.3g} Food/second per unit healed. Targets that recently moved or fought are healed at {100*agavebloomSlowHeal:0.3g}% speed.", f"It is invulnerable, cannot be repaired or deleted, and dies when its Food reaches 0. It can be converted from up to {protoActionFloat(agavebloomUnit, 'AutoConvert', 'maxrange'):0.3g}m away if none of its current owner's units or buildings are nearby."]
+    godPowerProcessingParams["AgaveBloom"] = GodPowerParams(agavebloomItems)
+
+    earthmonster = findGodPowerByName("EarthMonster")
+    earthmonsterUnit = common.findAndFetchText(earthmonster, "earthmonsterprotounit", "EarthMonster")
+    earthmonsterStrikes = 1 + common.findAndFetchText(earthmonster, "numberofadditionalstrikes", 0, int)
+    earthmonsterInterval = godPowerFloat(earthmonster, "secondsbetweenstrikes")
+    earthmonsterRegurgitate = godPowerFloat(earthmonster, "regurgitatetime")
+    earthmonsterLimit = common.findAndFetchText(earthmonster, "strikeunitlimit", 0, int)
+    earthmonsterStrikeAction = action.findActionByName(earthmonsterUnit, "Strike")
+    earthmonsterStrikeDamage = common.findAndFetchText(earthmonsterStrikeAction, "damage[@type='Hack']", 0.0, float)
+    earthmonsterStrikeHumanSoldierBonus = common.findAndFetchText(earthmonsterStrikeAction, "damagebonus[@type='HumanSoldier']", 1.0, float)
+    earthmonsterItems = [f"Summons an Earth Monster that immediately deals {protoGodPowerDamage(earthmonsterUnit, 'Crush', damageOnly=True)} in the selected area and swallows up to {earthmonsterLimit} land {{attacktargets}}.", f"It erupts {earthmonsterStrikes - 1} additional times, with {earthmonsterInterval:0.3g} seconds between eruptions. These additional eruptions deal no Crush damage, but can each swallow up to {earthmonsterLimit} more land {{attacktargets}}.", f"Swallowed enemies remain underground for {earthmonsterRegurgitate:0.3g} seconds, then are regurgitated and take {icon.damageTypeIcon('Hack')} {earthmonsterStrikeDamage:0.3g} (x{earthmonsterStrikeHumanSoldierBonus:0.3g} vs Human Soldiers).", "{radius}", f"Lasts {godPowerFloat(earthmonster, 'activetime'):0.3g} seconds."]
+    godPowerProcessingParams["EarthMonster"] = GodPowerParams(earthmonsterItems)
+
+    starfall = findGodPowerByName("Starfall")
+    starfallLargeTimes = [float(elem.text) for elem in starfall.findall("largestrikeintervaltiming/time")]
+    starfallLargeProto = common.protoFromName(starfall.find('largestrikeproto').text)
+    starfallLargeSpawn = starfallLargeProto.find("spawn[@type='dead']")
+    starfallLargeSpawnName = common.getObjectDisplayName(common.protoFromName(starfallLargeSpawn.text))
+    starfallItems = [f"Calls down falling stars on {{playerrelationpos}} {{attacktargets}}. Small strikes have {100*godPowerFloat(starfall, 'accuracy'):0.3g}% accuracy and inflict {protoGodPowerDamage(starfall.find('strikeproto').text, 'HandAttack')}", f"Large strikes occur at {common.commaSeparatedList([f'{time:0.3g}s' for time in starfallLargeTimes])} and avoid buildings, water, and impassable land. Each summons a {starfallLargeSpawnName} and inflicts {protoGodPowerDamage(starfall.find('largestrikeproto').text, 'HandAttack')}", "{radius}", "{duration}"]
+    godPowerProcessingParams["Starfall"] = GodPowerParams(starfallItems)
+
+    purge = findGodPowerByName("Purge")
+    purgeResourceCap = godPowerFloat(purge, "resourcevaluecap")
+    purgeItems = [f"Lifts the targeted enemy and nearby enemies of a similar unit type into the air, then kills the caged units when the effect ends. Only affects units with total resource value up to {purgeResourceCap:0.0f}.", "Targets {playerrelationpos} {attacktargets}.", "{radius}", "{duration}"]
+    godPowerProcessingParams["Purge"] = GodPowerParams(purgeItems)
+
+    corruptedground = findGodPowerByName("CorruptedGround")
+    corruptedGroundTerrain = corruptedground.find("terraincreep")
+    corruptedGroundCorruption = corruptedground.find("onhiteffect[@type='DamageOverTime']")
+    corruptedGroundCorruptionDuration = float(corruptedGroundCorruption.attrib["duration"])
+    corruptedGroundCorruptionDamage = float(corruptedGroundCorruption.find("damage[@type='Divine']").text)
+    corruptedGroundImmediateProto = corruptedground.find("areavfx").text
+    corruptedGroundImmediateDamage = protoActionFloat(corruptedGroundImmediateProto, "HandAttack", "damage[@type='Divine']")
+    corruptedGroundRepeat = godPowerFloat(corruptedground, "repeatdelay")
+    corruptedGroundRepeatText = "Every second" if corruptedGroundRepeat == 1.0 else f"Every {corruptedGroundRepeat:0.3g} seconds"
+    corruptedGroundReincarnation = corruptedground.find("onhiteffect[@type='Reincarnation']")
+    corruptedGroundReincarnationProto = corruptedGroundReincarnation.attrib["proto"]
+    corruptedGroundReincarnationDuration = protoFloat(corruptedGroundReincarnationProto, "maxhitpoints") / abs(protoFloat(corruptedGroundReincarnationProto, "unitregen"))
+    corruptedgroundItems = [f"Creates corrupted terrain up to {float(corruptedGroundTerrain.attrib['maxradius']):0.3g}m across. Immediately deals {icon.damageTypeIcon('Divine')} {corruptedGroundImmediateDamage:0.3g} to {{playerrelationpos}} {{attacktargets}} in the area.", f"{corruptedGroundRepeatText} while active, affected units are marked as corrupted for at least {corruptedGroundCorruptionDuration:0.3g} seconds and take {icon.damageTypeIcon('Divine')} {corruptedGroundCorruptionDamage:0.3g} per second.", f"If a corrupted unit dies, it resurrects as your temporary uncontrollable {common.getDisplayNameForProtoOrClass(corruptedGroundReincarnationProto)}.", f"The Tlacanexquimilli loses {abs(protoFloat(corruptedGroundReincarnationProto, 'unitregen')):0.3g} hitpoints/second and lasts up to {corruptedGroundReincarnationDuration:0.3g} seconds.", "{radius}", "{duration}"]
+    godPowerProcessingParams["CorruptedGround"] = GodPowerParams(corruptedgroundItems)
+
+    monolith = findGodPowerByName("MonolithOfTlaloc")
+    monolithUnit = monolith.find("createunit").text
+    monolithProto = common.protoFromName(monolithUnit)
+    monolithCreate = monolith.find("createunit")
+    monolithStrikeAction = action.findActionByName(monolithUnit, "MonolithStrike")
+    monolithStrikeHack = common.findAndFetchText(monolithStrikeAction, "damage[@type='Hack']", 0.0, float)
+    monolithStrikeDivine = common.findAndFetchText(monolithStrikeAction, "damage[@type='Divine']", 0.0, float)
+    monolithStrikeRange = common.findAndFetchText(monolithStrikeAction, "maxrange", 0.0, float)
+    monolithStrikeMythBonus = common.findAndFetchText(monolithStrikeAction, "damagebonus[@type='MythUnit']", 1.0, float)
+    monolithStrikeHeroBonus = common.findAndFetchText(monolithStrikeAction, "damagebonus[@type='Hero']", 1.0, float)
+    monolithStrikeVillagerBonus = common.findAndFetchText(monolithStrikeAction, "damagebonus[@type='AbstractVillager']", 1.0, float)
+    monolithStrikeBuildingBonus = common.findAndFetchText(monolithStrikeAction, "damagebonus[@type='Building']", 1.0, float)
+    monolithHackArmor = float(monolithProto.find("armor[@type='Hack']").attrib["value"])
+    monolithPierceArmor = float(monolithProto.find("armor[@type='Pierce']").attrib["value"])
+    monolithCrushArmor = float(monolithProto.find("armor[@type='Crush']").attrib["value"])
+    monolithItems = [f"After {float(monolithCreate.attrib.get('delay', 0.0)):0.3g} second, calls down a {common.getObjectDisplayName(monolithProto)}. It can be placed over enemy Buildings, destroying overlapped enemy Buildings, and remains until destroyed.", unitdescription.aztecMonolithImpactText(), f"While enemies are nearby, the Pillar fires water strikes every {protoFloat(monolithUnit, 'rechargetime'):0.3g} seconds up to {monolithStrikeRange:0.3g}m: {icon.damageTypeIcon('Hack')} {monolithStrikeHack:0.3g} + {icon.damageTypeIcon('Divine')} {monolithStrikeDivine:0.3g} (x{monolithStrikeMythBonus:0.3g} vs Myth Units, x{monolithStrikeHeroBonus:0.3g} vs Heroes, x{monolithStrikeVillagerBonus:0.3g} vs Villagers, x{monolithStrikeBuildingBonus:0.3g} vs Buildings). {unitdescription.aztecMonolithStrikeStunText()}", f"Building: {protoFloat(monolithUnit, 'maxhitpoints'):0.0f} hitpoints, {monolithHackArmor*100:0.3g}% Hack armor, {monolithPierceArmor*100:0.3g}% Pierce armor, {monolithCrushArmor*100:0.3g}% Crush armor, {protoFloat(monolithUnit, 'los'):0.3g}m line of sight. Cannot be repaired."]
+    godPowerProcessingParams["MonolithOfTlaloc"] = GodPowerParams(monolithItems)
+
+    volcano = findGodPowerByName("Volcano")
+    volcanoUnit = common.findAndFetchText(volcano, "createunit[.='Volcano']", "Volcano", str)
+    volcanoBirthAction = action.findActionByName(volcanoUnit, "BirthAttack")
+    volcanoBirthArea = common.findAndFetchText(volcanoBirthAction, "damagearea", 0.0, float)
+    volcanoBirthDamage = common.findAndFetchText(volcanoBirthAction, "damage[@type='Divine']", 0.0, float)
+    volcanoMeteorPower = globals.dataCollection["abilities_combined"].find("power[@name='AbilityVolcanoMeteor']")
+    volcanoMeteorProto = common.findAndFetchText(volcanoMeteorPower, "meteorprotounit", "VolcanoMeteor", str)
+    volcanoMeteorProtoElem = common.protoFromName(volcanoMeteorProto)
+    volcanoMeteorAction = action.findActionByName(volcanoMeteorProtoElem, "HandAttack")
+    volcanoMeteorRadius = common.findAndFetchText(volcanoMeteorPower, "radius", 0.0, float)
+    volcanoMeteorStrikeCount = common.findAndFetchText(volcanoMeteorPower, "numberofstrikes", 0, int)
+    volcanoMeteorArea = common.findAndFetchText(volcanoMeteorAction, "damagearea", 0.0, float)
+    volcanoMeteorDamage = f"{action.actionDamageOnly(volcanoMeteorProtoElem, volcanoMeteorAction)} {icon.iconAoe()} {volcanoMeteorArea:0.3g} {action.actionDamageBonus(volcanoMeteorAction)}".replace("  ", " ").strip()
+    volcanoItems = [f"Creates a Volcano on land, destroying overlapped enemy Buildings. On impact, enemy units within {volcanoBirthArea:0.3g}m are thrown and take {icon.damageTypeIcon('Divine')} {volcanoBirthDamage:0.3g}.", f"While active, fires up to {volcanoMeteorStrikeCount} Meteor-style fireballs at nearby valid Meteor targets within {volcanoMeteorRadius:0.3g}m: {volcanoMeteorDamage}.", "Creates a local god power shield for the duration.", "{duration}"]
+    godPowerProcessingParams["Volcano"] = GodPowerParams(volcanoItems)
+
+    animalsacrifice = findGodPowerByName("AnimalSacrifice")
+    animalsacrificeEffect = animalsacrifice.find("effect[@type='WorkRateAll'][@action='Gather']")
+    animalsacrificeWorkRateBonus = (float(animalsacrificeEffect.attrib["amount"]) - 1.0) * 100.0
+    animalsacrificeDuration = common.findAndFetchText(animalsacrifice, "activetime", 0.0, float)
+    animalsacrificeItems = [f"Feast of Sustenance: Devoting a Herdable at a Temple grants Workers {animalsacrificeWorkRateBonus:+0.3g}% work rate for {animalsacrificeDuration:0.3g} seconds.", f"Stacks with itself: each Herdable devoted starts another {animalsacrificeDuration:0.3g} second Feast of Sustenance stack."]
+    godPowerProcessingParams["AnimalSacrifice"] = GodPowerParams(animalsacrificeItems)
 
 
     godpowers = globals.dataCollection["god_powers_combined"]

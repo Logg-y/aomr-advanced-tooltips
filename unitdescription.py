@@ -11,6 +11,19 @@ import os
 import tech
 import copy
 
+def aztecMonolithImpactText() -> str:
+    monolith = protoFromName("MonolithOfTlaloc")
+    birthAction = monolith.find("protoaction/name[.='BirthAttack']/..")
+    strikePower = globals.dataCollection["abilities_combined"].find("power[@name='AbilityMonolithStrike']")
+    radius = findAndFetchText(strikePower, "radius", findAndFetchText(birthAction, "damagearea", 0.0, float), float)
+    damage = findAndFetchText(birthAction, "damage[@type='Divine']", 0.0, float)
+    return f"Impact: enemies in a {radius:0.3g}m area take {icon.damageTypeIcon('Divine')} {damage:0.3g} with no distance falloff. Hit units are launched."
+
+def aztecMonolithStrikeStunText() -> str:
+    strikePower = globals.dataCollection["abilities_combined"].find("power[@name='AbilityMonolithStrike']")
+    stunDuration = findAndFetchText(strikePower, "stunduration", 0.0, float)
+    return f"Water strikes stun hit units for {stunDuration:0.3g} seconds."
+
 # This also decides the order in which things appear in the list
 NOTABLE_UNIT_CLASSES = ("Hero", "AbstractInfantry", "AbstractArcher", "AbstractCavalry", "AbstractSiegeWeapon", "AbstractVillager", "AbstractArcherShip", "AbstractSiegeShip", 
                         "AbstractCloseCombatShip", "MythUnit", "HeroShadowUpgraded", "HumanSoldier", "Ship", "Building", "CavalryLineUpgraded", "InfantryLineUpgraded", "ArcherLineUpgraded", 
@@ -87,6 +100,7 @@ IGNORE_UNITS = (
 "TitanPredator",
 "ShinigamiRevenant",
 "ShinigamiVengeful",
+"VillagerAztecRun",
 )
 
 
@@ -128,6 +142,35 @@ def spawnText(proto: Union[str, ET.Element]):
                 spawnstrings.append(f"On death, spawns a {common.getObjectDisplayName(targetProto)}.")
             else:
                 spawnstrings.append(f"On death, spawns {count}x {common.getObjectDisplayName(targetProto)}.")
+
+    lifespan = findAndFetchText(proto, "lifespan", 0.0, float)
+    if lifespan > 0.0:
+        actionNodes = proto.findall("protoaction")
+        protoActionNames = {findAndFetchText(actionNode, "name", None) for actionNode in actionNodes}
+        tactics = action.actionTactics(proto, None)
+        if tactics is not None:
+            actionNodes += [actionNode for actionNode in tactics.findall("action") if findAndFetchText(actionNode, "name", None) not in protoActionNames]
+        for actionNode in actionNodes:
+            actionTactics = action.actionTactics(proto, actionNode)
+            actionType = findAndFetchText(actionNode, "type", findAndFetchText(actionNode, "name", None))
+            tacticsType = findAndFetchText(actionTactics, "type", None) if actionTactics is not None else None
+            if actionType != "Maintain" and tacticsType != "Maintain":
+                continue
+            if action.findFromActionOrTactics(actionNode, actionTactics, "killontrain", None, int):
+                continue
+            trainpoints = action.findFromActionOrTactics(actionNode, actionTactics, "maintaintrainpoints", None, float)
+            if trainpoints is None or trainpoints <= 0.0:
+                continue
+            rateNodes = action.findAllFromActionOrTactics(actionNode, actionTactics, "rate")
+            if len(rateNodes) == 0:
+                continue
+            spawnedObject = protoFromName(rateNodes[0].attrib["type"])
+            deathSpawns = sum(int(spawn.attrib.get("count", "1")) for spawn in spawns if spawn.attrib.get("type") == "dead" and spawn.text == spawnedObject.attrib["name"])
+            totalSpawns = (action.findFromActionOrTactics(actionNode, actionTactics, "modifybase", 0, int) or 0) + int((lifespan - 0.000001) // trainpoints) + deathSpawns
+            if totalSpawns > 0:
+                targettype = common.getDisplayNameForProtoOrClass(spawnedObject)
+                targettypePlural = common.getDisplayNameForProtoOrClassPlural(spawnedObject)
+                spawnstrings.append(f"In total, spawns {totalSpawns} {targettypePlural if totalSpawns > 1 else targettype} over its lifetime.")
     return " ".join(spawnstrings)
 
 def dependentUnitsTextList(proto: Union[str, ET.Element]) -> List[str]:
@@ -159,6 +202,8 @@ def veterancyDamagePoints(proto: Union[str, ET.Element]) -> List[str]:
     if ranks is None:
         return []
     dmgs = [totaldamageNode.text for totaldamageNode in ranks.findall(".//*totaldamage")]
+    if len(dmgs) == 0:
+        dmgs = [totaldamageNode.text for totaldamageNode in ranks.findall(".//*damageandresourceseaten")]
     return dmgs
 
 def veterancyDamageTargets(proto: Union[str, ET.Element]):
@@ -225,7 +270,10 @@ def veterancyEffects(proto: Union[str, ET.Element], multiline=False) -> Union[st
             textByTarget.append(f"{relativity} {VETERANCY_MODIFY_NAMES.get(target, target)} by {'/'.join(valuesByRank)}")
         else:
             for index, value in enumerate(valuesByRank):
-                newItem = [f"{relativity} {VETERANCY_MODIFY_NAMES.get(target, target)} by {value}"]
+                if relativity == "multiply":
+                    newItem = [f"{VETERANCY_MODIFY_NAMES.get(target, target)} x{value}"]
+                else:
+                    newItem = [f"{relativity} {VETERANCY_MODIFY_NAMES.get(target, target)} by {value}"]
                 if index >= len(textByTarget):
                     textByTarget.append(newItem)
                 else:
@@ -242,16 +290,26 @@ def veterancyText(proto: Union[str, ET.Element], rankName="rank", ignoreExperien
     proto = protoFromName(proto)
     if not ignoreExperienceUnitFlag and proto.find("./flag[.='ExperienceUnit']") is None:
         return ""
+    ranks = proto.find("veterancyranks")
+    includesResourcesEaten = ranks is not None and ranks.find(".//*damageandresourceseaten") is not None
     if not multiline:
         damagePoints = "/".join(veterancyDamagePoints(proto))
         if damagePoints != "":
+            if includesResourcesEaten:
+                return f"Gains additional {rankName}s after dealing a total of {damagePoints} damage to {veterancyDamageTargets(proto)} or eating resources. Additional {rankName}s {'/'.join(veterancyEffects(proto, multiline=multiline))}."
             return f"Gains additional {rankName}s after dealing a total of {damagePoints} damage to {veterancyDamageTargets(proto)}. Additional {rankName}s {'/'.join(veterancyEffects(proto, multiline=multiline))}."
     else:
-        damageThresholds = [f"After inflicting {damage} damage:" for damage in veterancyDamagePoints(proto)]
+        if includesResourcesEaten:
+            damageThresholds = [f"After {damage} damage dealt or resources eaten:" for damage in veterancyDamagePoints(proto)]
+        else:
+            damageThresholds = [f"After inflicting {damage} damage:" for damage in veterancyDamagePoints(proto)]
         effects = veterancyEffects(proto, multiline=multiline)
         zipped = zip(damageThresholds, effects)
         rankTexts = [" ".join(pair) for pair in zipped]
-        items = [f"Gains additional {rankName}s after dealing damage to {veterancyDamageTargets(proto)}:", *rankTexts]
+        if includesResourcesEaten:
+            items = [f"Gains additional {rankName}s from damage dealt to {veterancyDamageTargets(proto)} and resources eaten:", *rankTexts]
+        else:
+            items = [f"Gains additional {rankName}s after dealing damage to {veterancyDamageTargets(proto)}:", *rankTexts]
         return items
 
     return ""
@@ -262,8 +320,6 @@ def recoverableDeathHeal(proto: Union[str, ET.Element]) -> Union[str, List[str]]
         return "On death, its corpse persists for 90 seconds. Being healed at all resets this timer. Returns to life if fully healed before disappearing."
 
     return ""
-
-
 
 NON_ACTION_OBSERVATIONS = {
     "killreward":killrewardText,
@@ -982,8 +1038,9 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["Pharaoh"] = UnitDescription(preActionInfoText={"RangedAttack":"Hero with a ranged attack that is especially good against myth units."})
     unitDescriptionOverrides["PharaohNewKingdom"] = UnitDescription(preActionInfoText={"RangedAttack":"Hero with a ranged attack that is especially good against myth units."})
     unitDescriptionOverrides["Petsuchos"] = UnitDescription(passiveAbilityLink={"other":"AbilityPetsuchos"}, nonActionObservationArgs={"other":[SunRayRevealerText]})
-    unitDescriptionOverrides["Phoenix"] = UnitDescription(ignoreActions=["FlyingUnitAttack"], overrideNonActionObservations={"spawns":f"Leaves an egg on death. After {float(action.actionTactics('PhoenixEgg', 'PhoenixRebirth').find('maintaintrainpoints').text):0.3g} seconds, it hatches back into a Phoenix."}, passiveAbilityLink={"spawns":"AbilityPhoenix"})
-    unitDescriptionOverrides["PhoenixEgg"] = UnitDescription(linkActionsToAbilities={"PhoenixRebirth":"AbilityPhoenixEgg"})
+    phoenixRebirthActionName = "PhoenixRebirth" if action.findActionByName("PhoenixEgg", "PhoenixRebirth") is not None else "MaintainTrain"
+    unitDescriptionOverrides["Phoenix"] = UnitDescription(ignoreActions=["FlyingUnitAttack"], overrideNonActionObservations={"spawns":f"Leaves an egg on death. After {float(action.actionTactics('PhoenixEgg', phoenixRebirthActionName).find('maintaintrainpoints').text):0.3g} seconds, it hatches back into a Phoenix."}, passiveAbilityLink={"spawns":"AbilityPhoenix"})
+    unitDescriptionOverrides["PhoenixEgg"] = UnitDescription(linkActionsToAbilities={phoenixRebirthActionName:"AbilityPhoenixEgg"}, ignoreActions=["MaintainTrainClassical", "MaintainTrainHeroic", "MaintainTrainMythic"])
     unitDescriptionOverrides["Scarab"] = UnitDescription(linkActionsToAbilities={"SelfDestructAttack":"AbilityScarab"})
     unitDescriptionOverrides["Kebenit"] = UnitDescription(preActionInfoText={"RangedAttack":"Archer ship, good against close combat ships."})
     unitDescriptionOverrides["WarBarge"] = UnitDescription(preActionInfoText={"RangedAttack":"Siege ship, good against archer ships."})
@@ -1096,6 +1153,31 @@ def generateUnitDescriptions():
     peachBlossomInitialResourceAmount = float(common.protoFromName("ThePeachBlossomSpring").find("initialresource").text)
     unitDescriptionOverrides["ThePeachBlossomSpring"] = UnitDescription(hideNonActionObservations=["spawns"], includeVanillaDescription=False, ignoreActions=["AutoGatherFood", "AutoGatherWood", "AutoGatherGold"], overrideDescription=f"Starts with {peachBlossomInitialResourceAmount:0.3g} resources. Accumulates resources at {peachBlossomSpringGatherRate[0]:0.3g} per second. The type of resource can be freely swapped at any time. Once gathered from, the spring stops accumulating resources.", additionalText="The base gather rate from the spring is the same as the villager normally gathers its chosen resource. Food uses the base huntable rate.")
     unitDescriptionOverrides["FarmShennong"] = UnitDescription(overrideDescription="Friendly units standing on the farm are invisible.")
+
+
+    # Aztec
+    foliageStealthText = "Gains Foliage Stealth near trees."
+    unitDescriptionOverrides["QuimichinSpy"] = UnitDescription(additionalText=foliageStealthText)
+    foliageAmbushLeapHandler = UnitDescription(ignoreActions=["JumpAttackStealth"], additionalText=foliageStealthText)
+    unitDescriptionOverrides["OcelotlWarrior"] = foliageAmbushLeapHandler
+    unitDescriptionOverrides["JaguarRider"] = foliageAmbushLeapHandler
+    ambushLeapHandler = UnitDescription(ignoreActions=["JumpAttackStealth"])
+    unitDescriptionOverrides["TeixiptlaTezca"] = ambushLeapHandler
+    unitDescriptionOverrides["Popocatepetl"] = ambushLeapHandler
+    unitDescriptionOverrides["Iztaccihuatl"] = ambushLeapHandler
+    trapStealthText = "Enters stealth after being built. Enemy units can detect it when too close."
+    unitDescriptionOverrides["SmokeTrap"] = UnitDescription(additionalText=trapStealthText)
+    unitDescriptionOverrides["SpikeTrap"] = UnitDescription(additionalText=trapStealthText)
+    centzonRankHistoryText = "Rank mechanics:\n" + "\n".join(veterancyText("CentzonTotochtin", "rank", multiline=True))
+    unitDescriptionOverrides["CentzonTotochtin"] = UnitDescription(
+        passiveAbilityLink={"veterancy": "PassiveCentzonTotochtin"},
+        historyText=centzonRankHistoryText,
+    )
+    unitDescriptionOverrides["Ahuizotl"] = UnitDescription(ignoreActions=["NavalHandAttack", "NavalThrow"])
+    unitDescriptionOverrides["MonolithOfTlaloc"] = UnitDescription(
+        overrideActionInfoText={"BirthAttack": aztecMonolithImpactText()},
+        postActionInfoText={"MonolithStrike": aztecMonolithStrikeStunText()}
+    )
 
 
     # Japanese
@@ -1388,12 +1470,16 @@ def generateUnitDescriptions():
             if value not in stringIdsByOverwriters[strid].values():
                 stringIdsByOverwriters[strid][unit] = value
 
-    # This forces NezhaChild's description to be displayed by default
-    # Otherwise it fights with the amphibious mythic age form - and simply skipping that one results in not writing the history files
-    nezhaDict = stringIdsByOverwriters[protoFromName("Nezha").find("rollovertextid").text]
-    for key in list(nezhaDict.keys()):
-        if key.attrib['name'] != "NezhaChild":
-            del nezhaDict[key]
+    def forceSharedStringOwner(stringIdSourceProto: str, ownerProto: str):
+        ownerDict = stringIdsByOverwriters.get(protoFromName(stringIdSourceProto).find("rollovertextid").text, {})
+        for key in list(ownerDict.keys()):
+            if key.attrib['name'] != ownerProto:
+                del ownerDict[key]
+
+    # Keep the main playable form when variants share a rollover id but need different generated text.
+    forceSharedStringOwner("Nezha", "NezhaChild")
+    for protoName in ("MonolithOfTlaloc", "WarriorPriest", "EagleWarrior"):
+        forceSharedStringOwner(protoName, protoName)
 
     common.handleSharedStringIDConflicts(stringIdsByOverwriters)
     common.handleSharedStringIDConflicts(globals.unitAbilityDescriptions)
@@ -1443,7 +1529,12 @@ def generateUnitDescriptions():
                         print(f"Ability {abilityNode.text} for {unitNode.tag} depends on {techInternalName} which has multiple enablers")
                         techInternalName = ""
                     enablerName = techsByEnabler.get(techInternalName, None)
-                    techDisplayName = techInternalToDisplayName[techInternalName]
+                    if len(techInternalName) == 0:
+                        techDisplayName = ""
+                    else:
+                        techDisplayName = techInternalToDisplayName.get(techInternalName, "")
+                        if len(techDisplayName) == 0:
+                            common.warn_data(f"Passive ability {abilityNode.text} for {unitNode.tag} depends on {techInternalName}, but no tech display name was found")
                     displayNameStrId = findAndFetchText(abilityInfo, "displaynameid", None)
                     if displayNameStrId is None:
                         print(f"Passive ability {abilityNode.text} has no display name string id?")
@@ -1453,7 +1544,7 @@ def generateUnitDescriptions():
                         # and if the ability name is the same name as the tech that enables it, listing it again is a bit redundant
                         baseAbilityName = globals.dataCollection["string_table.txt"][displayNameStrId].replace(" (Passive)", "").strip()
                         bracketItems = []
-                        if techDisplayName != baseAbilityName:
+                        if len(techDisplayName) > 0 and techDisplayName != baseAbilityName:
                             bracketItems.append(techDisplayName)
                         if enablerName is not None:
                             bracketItems.append(enablerName)
