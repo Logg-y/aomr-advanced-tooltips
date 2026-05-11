@@ -265,69 +265,28 @@ def generateMajorGodDescriptions():
     demeterContent = re.sub("Village Centers have.*", demeterVCGarrison, demeterContent)
     globals.stringMap["STR_CIV_DEMETER_LR"] = demeterContent
 
-    huitzilopochtliTech = common.techFromName("ArchaicAgeHuitzilopochtli")
-    huitzilopochtliRefund = float(huitzilopochtliTech.find("effects/effect[@subtype='ResourceReturnRate']").attrib["amount"])
-    huitzilopochtliShornHP = float(huitzilopochtliTech.find("effects/effect[@subtype='Hitpoints']/target[.='ShornOne']/..").attrib["amount"])
-    huitzilopochtliBounty = globals.dataCollection["major_gods.xml"].find("civ[name='Huitzilopochtli']/bountyresourceearning")
-    huitzilopochtliResourceReward = float(huitzilopochtliBounty.find("bountyreward[@multiplybyunitcost='true']").text)
-    huitzilopochtliBaseTonalli = float(huitzilopochtliBounty.find("bountyreward[@unittype='MilitaryUnit'][@resourcetype='Favor']").text)
-    huitzilopochtliShornTonalli = float(huitzilopochtliBounty.find("bountytargetmultiplier[@unittype='MilitaryUnit'][@attackertype='ShornOne']").text)
-    huitzilopochtliShornTonalliMult = huitzilopochtliShornTonalli / huitzilopochtliBaseTonalli
-    globals.stringMap["STR_CIV_HUITZILOPOCHTLI_LR"] = (
-        "Focus: Conquest, Expansion, and Sacrifice.\n"
-        f"{icon.BULLET_POINT} Temples, Great Temples, Village Centers, and Town Centers refund {huitzilopochtliRefund*100:.0f}% of their Wood and Gold cost upon completion.\n"
-        f"{icon.BULLET_POINT} Collected enemy tonalli grants Favor plus Food, Wood, and Gold equal to {huitzilopochtliResourceReward*100:.0f}% of the defeated unit's matching resource costs.\n"
-        f"{icon.BULLET_POINT} Shorn Ones have +{(huitzilopochtliShornHP-1)*100:.0f}% hitpoints. Enemies killed by Shorn Ones generate {_formatGodTooltipNumber(huitzilopochtliShornTonalliMult)}x tonalli."
-    )
 
-    tezcatlipocaTech = common.techFromName("ArchaicAgeTezcatlipoca")
-    tezcatlipocaAgeTechs = [common.techFromName(f"{age}AgeTezcatlipoca") for age in ("Archaic", "Classical", "Heroic", "Mythic")]
+    
+
+    # There is nothing worth changing here from the vanilla tooltip (yet)
+    #huitzContent = globals.dataCollection["string_table.txt"]["STR_CIV_HUITZILOPOCHTLI_LR"]
+    #globals.stringMap["STR_CIV_HUITZILOPOCHTLI_LR"] = huitzContent
+
+    tezcaContent = globals.dataCollection["string_table.txt"]["STR_CIV_TEZCATLIPOCA_LR"]
+
     tezcatlipocaShardGoal = globals.dataCollection["major_gods.xml"].find("civ[name='Tezcatlipoca']/bonusunitspawning/deathcountgoal[@name='ObsidianShardSpawn']")
+    tezcatlipocaShardGoalAmount = int(float(tezcatlipocaShardGoal.find("goalamount").text))
     tezcatlipocaShard = common.protoFromName(tezcatlipocaShardGoal.find("reward").text)
     tezcatlipocaShardHP = float(tezcatlipocaShard.find("maxhitpoints").text)
     tezcatlipocaShardTrainTime = float(tezcatlipocaShard.find("protoaction[name='MaintainTrainClassical']/maintaintrainpoints").text)
-    tezcatlipocaTowerDamage = float(tezcatlipocaTech.find("effects/effect[@subtype='Damage']/target[.='SentryTower']/..").attrib["amount"])
-    tezcatlipocaTrapDamage = float(tezcatlipocaTech.find("effects/effect[@subtype='Damage']/target[.='AbstractTrap']/..").attrib["amount"])
-    tezcatlipocaTowerBuildPoints = float(tezcatlipocaTech.find("effects/effect[@subtype='BuildPoints']/target[.='SentryTower']/..").attrib["amount"])
-    tezcatlipocaTrapBuildPoints = float(tezcatlipocaTech.find("effects/effect[@subtype='BuildPoints']/target[.='AbstractTrap']/..").attrib["amount"])
-    if abs(tezcatlipocaTowerDamage - tezcatlipocaTrapDamage) > 0.0001 or abs(tezcatlipocaTowerBuildPoints - tezcatlipocaTrapBuildPoints) > 0.0001:
-        raise ValueError("Expected Tezcatlipoca tower and trap bonuses to match")
-    tezcatlipocaDevotionBonuses = []
-    devotionBonusPerAge = None
-    for ageTech in tezcatlipocaAgeTechs:
-        devotionEffect = ageTech.find("effects/effect[@action='DevoteMinor'][@subtype='WorkRate']")
-        if devotionEffect is None:
-            raise ValueError(f"Missing Tezcatlipoca devotion bonus in {ageTech.attrib['name']}")
-        if devotionBonusPerAge is None:
-            devotionBonusPerAge = float(devotionEffect.attrib["amount"]) - 1.0
-        tezcatlipocaDevotionBonuses.append(devotionBonusPerAge * (len(tezcatlipocaDevotionBonuses) + 1))
-    globals.stringMap["STR_CIV_TEZCATLIPOCA_LR"] = (
-        "Focus: Defense and Myth Units.\n"
-        f"{icon.BULLET_POINT} Every {float(tezcatlipocaShardGoal.find('goalamount').text):.0f} trainable Myth Units lost spawns an Obsidian Shard at the second unit's death location.\n"
-        f"{icon.BULLET_POINT} Obsidian Shards have {tezcatlipocaShardHP:.0f} hitpoints. If they survive for {tezcatlipocaShardTrainTime:.0f} seconds, they summon a free random Aztec Myth Unit from your current age.\n"
-        f"{icon.BULLET_POINT} Tzompantli Towers, Spike Traps, and Smoke Traps are built {(1-tezcatlipocaTowerBuildPoints)*100:.0f}% faster and inflict +{(tezcatlipocaTowerDamage-1)*100:.0f}% damage.\n"
-        f"{icon.BULLET_POINT} Devoting Settlers grants {'/'.join([f'+{bonus*100:.0f}%' for bonus in tezcatlipocaDevotionBonuses])} more Favor in Archaic/Classical/Heroic/Mythic Age."
-    )
+    tezcaContent = tezcaContent.replace("more Favor per age", "more initial Favor in Archaic/Classical/Heroic/Mythic Ages (the trickle is unaffected)")
+    # Move shards to bottom
+    tezcaContent = re.sub("\n.*Every.*Obsidian Shard", "", tezcaContent)
+    tezcaContent += f"\n{icon.BULLET_POINT} Every {tezcatlipocaShardGoalAmount}{common.ordinalSuffix(tezcatlipocaShardGoalAmount)} trainable Myth Unit lost spawns an Obsidian Shard where it died:"
+    tezcaContent += f"\n{unitdescription.describeUnit("ObsidianShard")}"
+    globals.stringMap["STR_CIV_TEZCATLIPOCA_LR"] = tezcaContent
 
-    quetzalcoatlTech = common.techFromName("ArchaicAgeQuetzalcoatl")
-    warriorPriestDevotion = common.protoFromName("WarriorPriest").find("protoaction[name='DevoteMinor']")
-    bloodlettingTrickle = float(warriorPriestDevotion.find("devotionfavortrickle").text)
-    bloodlettingDrain = float(warriorPriestDevotion.find("devotionhealthdraineachsecond").text)
-    bloodlettingDrainLimit = float(warriorPriestDevotion.find("devotionhealthdrainlimit").text)
-    bloodlettingMinimumScale = float(warriorPriestDevotion.find("devotionscaleatminimumhealth").text)
-    bloodlettingMinimumTrickle = bloodlettingTrickle * bloodlettingMinimumScale
-    calpulliDiscountEffect = quetzalcoatlTech.find("effects/effect[@subtype='Cost']/target[.='AbstractCalpulli']/..")
-    calpulliCost = float(common.protoFromName("Calpulli").find("cost[@resourcetype='Wood']").text)
-    calpulliDiscount = -float(calpulliDiscountEffect.attrib["amount"]) / calpulliCost
-    noblesHutTargets = [effect.find("target").text for effect in quetzalcoatlTech.findall("effects/effect[@subtype='Hitpoints']")]
-    noblesHutTargetText = common.commaSeparatedList([common.getDisplayNameForProtoOrClass(target) + "s" for target in noblesHutTargets])
-    noblesHutHP = float(quetzalcoatlTech.find("effects/effect[@subtype='Hitpoints']").attrib["amount"])
-    eagleRange = float(quetzalcoatlTech.find("effects/effect[@subtype='MaximumRange']/target[.='EagleWarrior']/..").attrib["amount"])
-    globals.stringMap["STR_CIV_QUETZALCOATL_LR"] = (
-        "Focus: Warrior Priests and Nobles Hut Warriors.\n"
-        f"{icon.BULLET_POINT} Warrior Priests can perform Bloodletting at Temples, generating {_formatGodTooltipNumber(bloodlettingTrickle)} Favor/second at full health.\n"
-        f"{icon.BULLET_POINT} Bloodletting drains {_formatGodTooltipNumber(bloodlettingDrain)} hitpoints/second and gradually reduces Favor generation, down to {_formatGodTooltipNumber(bloodlettingMinimumTrickle)} Favor/second at {bloodlettingDrainLimit*100:.0f}% health.\n"
-        f"{icon.BULLET_POINT} Calpullis and their additions cost -{calpulliDiscount*100:.0f}%.\n"
-        f"{icon.BULLET_POINT} Nobles Hut units ({noblesHutTargetText}) have +{(noblesHutHP-1)*100:.0f}% hitpoints.\n"
-        f"{icon.BULLET_POINT} Eagle Warriors have +{eagleRange:.0f} Range."
-    )
+    quetzContent = globals.dataCollection["string_table.txt"]["STR_CIV_QUETZALCOATL_LR"]
+    quetzContent = re.sub("\n.*Warrior Priests generate.*", "", quetzContent)
+    quetzContent += f"\n{icon.BULLET_POINT} Warrior Priests can perform {action.describeAction("WarriorPriest", "DevoteMinor", tech=common.techFromName("ArchaicAgeQuetzalcoatl"))}"
+    globals.stringMap["STR_CIV_QUETZALCOATL_LR"] = quetzContent

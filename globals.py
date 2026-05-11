@@ -8,6 +8,9 @@ historyPath = ""
 # The working dict of string ids: replacements
 stringMap: Dict[str, str] = {}
 
+# A list of string ids that are history text, and must have their original values returned to the end of them after editing
+historyTextStrings: list[str] = []
+
 # In most cases: filename.xml : XML root
 # "string_table":{strid:strvalue}
 dataCollection: Dict[str, Union[ET.Element, Dict[str, Union[ET.Element, str]], Dict[str, Union[float, int, bool]]]] = {}

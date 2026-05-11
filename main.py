@@ -8,6 +8,7 @@ from godpower import generateGodPowerDescriptions
 from majorgodtooltip import generateMajorGodDescriptions
 from aotg import generateBlessingDescriptions
 from loadingtips import generateLoadTips
+import godpower
 import re
 import globals
 import json
@@ -181,10 +182,6 @@ def prepareData():
     loadGameCfg()
     globals.historyPath = os.path.join(globals.config["paths"]["dataPath"], "game/data/strings", globals.config["paths"]["lang"], "history")
 
-def main():
-    print("Beginning build...")
-    prepareData()
-
     # This class doesn't include Nidhogg, for now
     mythUnitNotTitanExceptions = ["Titan"]
     # This is technically correct but returns some useless things like Locusts
@@ -200,24 +197,35 @@ def main():
     replacement = f"(except {common.commaSeparatedList(mythUnitNotTitanExceptions)})"
     common._UNIT_CLASS_LABELS["LogicalTypeMythUnitNotTitan"] = common._UNIT_CLASS_LABELS["LogicalTypeMythUnitNotTitan"].replace("LOGICAL_TYPE_MYTH_UNIT_NOT_TITAN_EXCEPTION", replacement)
     common._UNIT_CLASS_LABELS_PLURAL["LogicalTypeMythUnitNotTitan"] = common._UNIT_CLASS_LABELS_PLURAL["LogicalTypeMythUnitNotTitan"].replace("LOGICAL_TYPE_MYTH_UNIT_NOT_TITAN_EXCEPTION", replacement)
+    godpower.preloadGodPowerProcessing()
+
+def outputStrings():
+
+    additionalCompendium = f"\\n\\nAdvanced Tooltips is active for (hopefully correct) additional information!\\nThis version was built on {datetime.datetime.now().strftime('%d %b %y')}. Game updates or data mods will make displayed values incorrect."
+    additionalCompendium += "\\n\\nAll stats shown in tooltips are for the unit's base data - any techs that apply will NOT be included, including 'hidden' effects such as the bonuses from age advancement given to heroes and myth units.\\n\\n"
+    additionalCompendium += f"\'Snares\' is used as a shorthand for the 'standard' slowing effect ({100*(1.0-action.STANDARD_SNARE['rate']):0.3g}% for {action.STANDARD_SNARE['duration']:0.3g} seconds) caused by nearly every melee attack in the game. Effects that slow movement by any other amount or duration will list their true numbers."
+    globals.stringMap["STR_HISTORY_HISTORY"] = globals.dataCollection["string_table.txt"]["STR_HISTORY_HISTORY"] + additionalCompendium
     
+    for strid in globals.historyTextStrings:
+        globals.stringMap[strid] += "\\n"*3 + "----------\\n" + globals.dataCollection["string_table.txt"][strid]
+    
+    with open(os.path.join(globals.config["paths"]["outputPath"], "game/data/strings/stringmods.txt"), "w", encoding="utf8") as f:
+        for strid, value in globals.stringMap.items():
+            f.write(f"ID = \"{strid}\"   ;   Str = \"{value}\"\n")
+
+def main():
+    print("Beginning build...")
+    prepareData()
+
     generateTechDescriptions()           
     generateUnitDescriptions()
     generateGodPowerDescriptions()
     generateMajorGodDescriptions()
     generateBlessingDescriptions()
     generateLoadTips()
+
+    outputStrings()
     
-    
-    additionalCompendium = f"\\n\\nAdvanced Tooltips is active for (hopefully correct) additional information!\\nThis version was built on {datetime.datetime.now().strftime('%d %b %y')}. Game updates or data mods will make displayed values incorrect."
-    additionalCompendium += "\\n\\nAll stats shown in tooltips are for the unit's base data - any techs that apply will NOT be included, including 'hidden' effects such as the bonuses from age advancement given to heroes and myth units.\\n\\n"
-    additionalCompendium += f"\'Snares\' is used as a shorthand for the 'standard' slowing effect ({100*(1.0-action.STANDARD_SNARE['rate']):0.3g}% for {action.STANDARD_SNARE['duration']:0.3g} seconds) caused by nearly every melee attack in the game. Effects that slow movement by any other amount or duration will list their true numbers."
-    globals.stringMap["STR_HISTORY_HISTORY"] = globals.dataCollection["string_table.txt"]["STR_HISTORY_HISTORY"] + additionalCompendium
-    
-    
-    with open(os.path.join(globals.config["paths"]["outputPath"], "game/data/strings/stringmods.txt"), "w", encoding="utf8") as f:
-        for strid, value in globals.stringMap.items():
-            f.write(f"ID = \"{strid}\"   ;   Str = \"{value}\"\n")
                         
     
     

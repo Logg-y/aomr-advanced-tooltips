@@ -269,22 +269,23 @@ def otherAotgStrings():
 
     favorstashItems()
 
+favorStashItemAdditions = {}
+
 def favorstashItems():
     stashxml = globals.dataCollection["aotg_favorstash.xml"]
 
-    additions = {}
 
     fortifiedperimeterItems = []
     fortifiedPerimeterPowerName = stashxml.find("favorstashitem[name='FortifiedPerimeter']/activatepower").text
     fortifiedPerimeterPower = common.findGodPowerByName(fortifiedPerimeterPowerName)
     fortifiedPerimeterCreateElem = fortifiedPerimeterPower.find("createunit")
     fortifiedperimeterItems = [f"Spawns {fortifiedPerimeterCreateElem.attrib['quantity']} Sentinels with altered stats around each of your Town Centers.", *unitdescription.describeUnit(fortifiedPerimeterCreateElem.text).split("\\n")]
-    additions["FortifiedPerimeter"] = fortifiedperimeterItems
+    favorStashItemAdditions["FortifiedPerimeter"] = fortifiedperimeterItems
 
     
     mythicrejuvenationProto = stashxml.find("favorstashitem[name='MythicRejuvenation']/spawnprotos/proto").text
     mythicrejuvenationItems = action.describeAction(mythicrejuvenationProto, "FavorStashMassHeal").split("\\n")
-    additions["MythicRejuvenation"] = mythicrejuvenationItems
+    favorStashItemAdditions["MythicRejuvenation"] = mythicrejuvenationItems
 
 
     for item in stashxml:
@@ -324,7 +325,7 @@ def favorstashItems():
                 else:
                     newDescription += [f"{icon.BULLET_POINT} {key}" for key in spawnlistItems]
                 
-        newDescription += additions.get(itemName, [])
+        newDescription += favorStashItemAdditions.get(itemName, [])
 
         if len(newDescription) > 0:
             strid = common.findAndFetchText(item, "descriptionid", "", str)

@@ -11,6 +11,7 @@ import re
 import unitdescription
 import functools
 import dataclasses
+import godpower
 
 class ActionChargeType(enum.Enum):
     NONE = 0
@@ -48,32 +49,34 @@ SUPPRESS_TARGET_TYPES_IF_EXCLUSIVE = (
 ACTION_TYPE_NAMES = {
     "HandAttack":"Melee Attack",
     "RangedAttack":"Ranged Attack",
-    "FlyingUnitAttack":"Anti-Air Attack",
     "AreaHeal":"Area Healing",
     "ChargedHandAttack":"Melee Special Attack",
     "ChargedRangedAttack":"Ranged Special Attack",
-    "ChargedSpawn":"Unit Spawning",
+    "ChargedSpawn":"",#"Unit Spawning",
     "BuildingAttack":"Melee Attack",
-    "IdleDamageBonus":"Idle Stacking Damage Bonus",
-    "DeathBoostDamageBonus":"Death Boost Damage Bonus",
-    "PetrificationBonus":"Idle Stacking Armor Bonus",
-    "OracleRevealEnemyUI":"Building Production Spying",
-    "ArgivePatronageMyrmidon":"Passive Myrmidon Production",
-    "ArgivePatronageAmazonArcher":"Passive Amazon Archer Production",
+    "FlyingUnitAttack":"Anti-Air Attack",
+    "RangedAttackFlying":"Anti-Air Attack",
+    "IdleDamageBonus":"",#Idle Stacking Damage Bonus",
+    "DeathBoostDamageBonus":"",#"Death Boost Damage Bonus",
+    "PetrificationBonus":"",#Idle Stacking Armor Bonus",
+    "OracleRevealEnemyUI":"", #"Building Production Spying",
+    "ArgivePatronageMyrmidon":"",#"Passive Myrmidon Production",
+    "ArgivePatronageAmazonArcher":"",#"Passive Amazon Archer Production",
     "RangedAttackMyth":"Anti-Myth Attack",
     "BeamAttack":"Beam Attack",
-    "AOTGKronosUniqueAura":"Slow Aura",
-    "AreaEnhanceWithTechHack":"Hack Protection Aura",
-    "AreaEnhanceWithTechPierce":"Pierce Protection Aura",
-    "PierceArmorInverseAura":"Scaling Pierce Protection",
-    "HackArmorInverseAura":"Scaling Hack Protection",
+    "PierceArmorInverseAura":"",#"Scaling Pierce Protection",
+    "HackArmorInverseAura":"",#"Scaling Hack Protection",
     "SelfDestructAttack":"Death Explosion",
     "Demolition":"Demolition",
     "SpeedBoost":"Speed Boost Aura",
-    "IncreaseDamageWithLikeUnits":"Group Powerup",
+    "IncreaseDamageWithLikeUnits":"",#"Group Powerup",
     "ChopAttack":"Wood Chopping",
-    "ThornedWallsAttack":"Melee Retaliation Attack",
+    "ThornedWallsAttack":"",#"Melee Retaliation Attack",
     "AbductDrop":"Drop",
+    "JumpAttack":"Jump Attack", 
+    "EveningStarSoulGuide":"",
+    "FarmGatherAura":"",
+    "FoodGatherAura":"",
 }
 
 def findFromActionOrTactics(action: ET.Element, tactics: ET.Element, query: str, default: Any=None, conversion: Union[None, Type] = None):
@@ -202,7 +205,7 @@ def actionDamageFull(protoUnit: ET.Element, action: ET.Element, isDPS=False, hid
         damageFlags = actionDamageFlagNames(action)
         # The intention behind this is to specifically flag things that can friendly fire
         if damageFlags != "" and damageFlags != "enemy":
-            components.append(f"Affects {damageFlags} objects.")
+            components.append(f"Affects {damageFlags} objects")
     components = [component for component in components if len(component.strip()) > 0]
     
     dot = actionDamageOverTime(protoUnit, action, isDPS, damageMultiplier=damageMultiplier)
@@ -284,7 +287,7 @@ def rechargeRate(proto: ET.Element, action:ET.Element, chargeType: ActionChargeT
         rechargeType = rechargeType.lower()
     
     if rechargeTime is None:
-        common.warn_data(f"No recharge time found for an action of {proto.attrib['name']}")
+        common.warn_data(f"No recharge time found for {getActionDisplayName(proto, action)} of {proto.attrib['name']}")
         return ""
     
     if rechargeType is not None and rechargeTime is not None:
@@ -304,6 +307,8 @@ def rechargeRate(proto: ET.Element, action:ET.Element, chargeType: ActionChargeT
             excludes += [elem.text for elem in proto.findall('rechargeexcludetypes/unittype')]
             targetString = targetListToString(targets, excludes)
             return f"Occurs every {rechargeTime:0.3g} damage dealt to {targetString}"
+        elif rechargeType.lower() == "resourcedropoff":
+            return f"Occurs every {rechargeTime:0.3g} resources deposited"
         else:
             common.warn_unhandled(f"Unhandled action recharge type {rechargeType} on {proto.attrib['name']}")
             return "Unknown"
@@ -399,7 +404,7 @@ def elementsEqual(e1: ET.Element, e2: ET.Element) -> bool:
     if len(e1) != len(e2): return False
     return all(elementsEqual(c1, c2) for c1, c2 in zip(e1, e2))
 
-def groupUpNearIdenticalElements(elements: List[ET.Element], attribtoignore: str, additionalMatchPreprocessor: Callable[[ET.Element], ET.Element]=lambda elem: elem) -> List[List[ET.Element]]:
+def groupUpNearIdenticalElements(elements: List[ET.Element], attribtoignore: str | List[str], additionalMatchPreprocessor: Callable[[ET.Element], ET.Element]=lambda elem: elem) -> List[List[ET.Element]]:
     """
     Given a list of elements, makes deep copies of each and removes the passed attribtoignore from their attributes and returns lists of then-identical elements.
     If additionalMatchPreprocessor is passed, this is called on all deep copies prior to the identicality test.
@@ -409,8 +414,13 @@ def groupUpNearIdenticalElements(elements: List[ET.Element], attribtoignore: str
     for child in elements:
         stripped = copy.deepcopy(child)
         stripped = additionalMatchPreprocessor(stripped)
-        if attribtoignore in stripped.attrib:
-            del stripped.attrib[attribtoignore]
+        if isinstance(attribtoignore, str):
+            if attribtoignore in stripped.attrib:
+                del stripped.attrib[attribtoignore]
+        else:
+            for attrib in attribtoignore:
+                if attrib in stripped.attrib:
+                    del stripped.attrib[attrib]
         match = next((x for x in removedAttributesForGrouping if elementsEqual(x, stripped)), None)
         if match is None:
             removedAttributesForGrouping.append(stripped)
@@ -440,9 +450,9 @@ def handleModifyStructure(parentElem: ET.Element) -> str:
         "Damage":"Damage",
         "MaxHP":"Max Hitpoints",
         "MaxShieldPoints":"Shield Points",
+        "ShieldRegenRate":"Shield regeneration rate",
         "LifeSteal":"Lifesteal",
         "DamageSpecific":"{damagetype} Damage",
-        
     }
 
     simpleModifyTypeFormatAmounts = {
@@ -623,9 +633,11 @@ def actionOnHitNonDoTEffects(proto: ET.Element, action: ET.Element, ignoreActive
         elif onhitType == "KillReward":
             thisItem = f"{probString}Becomes attackable by any player for {float(onhiteffect.attrib['duration']):0.3g}s, giving {icon.resourceIcon(onhiteffect.attrib['rewardtype'])} {float(onhiteffect.attrib['amount']):0.3g} to the killer."
         elif onhitType == "InstantKillablePercentChance":
-            byUnitType = onhiteffect.attrib.get("byunittype")
-            byUnitText = common.getDisplayNameForProtoOrClass(byUnitType) if byUnitType is not None else "this unit"
-            thisItem = f"{probString}For {float(onhiteffect.attrib['duration']):0.3g}s, {byUnitText} has a {100*float(onhiteffect.attrib['amount']):0.3g}% chance to instantly kill {targetString}."
+            byText = ""
+            byUnitType = onhiteffect.attrib.get("byunittype", None)
+            if byUnitType is not None:
+                byText += f" by a {common.getDisplayNameForProtoOrClass(byUnitType)}"
+            thisItem = f"{probString}Causes {targetString} to have a {float(onhiteffect.attrib['amount'])*100:0.3g}% chance to be instantly killed when hit{byText} for {float(onhiteffect.attrib['duration']):0.3g} seconds."
         else:
             raise ValueError(f"Unknown onhiteffect type: {onhitType}")
         thisItem = thisItem.strip()
@@ -665,7 +677,7 @@ def actionOnHitNonDoTEffects(proto: ET.Element, action: ET.Element, ignoreActive
                 text = f"{probText}Stuns {targetTypeString} for {dur:0.3g} {'second' if dur == 1.0 else 'seconds'}."
             items.append(text)
         elif onhitType == "Pull":
-            onhitGroups = groupUpNearIdenticalElements(nodes, "targetunittype")
+            onhitGroups = groupUpNearIdenticalElements(nodes, ["radius", "targetunittype"])
             for group in onhitGroups:
                 additionalTargets = [elem.attrib['targetunittype'] for elem in group[1:] if 'targetunittype' in elem.attrib]
                 targetTypeString = onhiteffectTargetString(group[0], additionalHitTargets=additionalTargets)
@@ -676,12 +688,15 @@ def actionOnHitNonDoTEffects(proto: ET.Element, action: ET.Element, ignoreActive
             for group in onhitGroups:
                 additionalTargets = [elem.attrib['targetunittype'] for elem in group[1:] if 'targetunittype' in elem.attrib]
                 hitword = "hit"
+                text = ""
+                if group[0].attrib.get("stealthonly", "false") == "true":
+                    text = "If initiated from stealth: "
                 if onhitType == "StatModify":
-                    text = "Affects {targetTypeString}: "
+                    text += "Affects {targetTypeString}: "
                 elif onhitType == "SelfModify":
-                    text = "Affects the user: "
+                    text += "Affects the user: "
                 elif onhitType == "Boost":
-                    text = f"Buffs {{targetTypeString}} within {float(group[0].attrib['radius']):0.3g}m: "
+                    text += f"Buffs {{targetTypeString}} within {float(group[0].attrib['radius']):0.3g}m: "
                     hitword = "your"
                 targetTypeString = onhiteffectTargetString(group[0], default="objects", additionalHitTargets=additionalTargets, hitword=hitword)
                 text = text.format(targetTypeString=targetTypeString)
@@ -988,7 +1003,19 @@ def handleThrowAction(proto: ET.Element, action: ET.Element, tactics: ET.Element
     if proto.find("flag/[.='KillsTargetAfterPickupAction']") is not None:
         return f"{actionName} {rechargeRate(proto, action, chargeType, tech)}: {actionTargetTypeText(proto, action)} Kills the victim. {actionDamageFull(proto, action, hideDamage=True, hideArea=True, ignoreActive=tech is not None)}".replace("  ", " ")
     
-    return f"{actionName} {rechargeRate(proto, action, chargeType, tech)}: {actionTargetTypeText(proto, action)} Grabs a target, and throws it (can be retargeted manually). Damages both the thrown unit and nearby {actionDamageFlagNames(action)} objects. {actionDamageFull(proto, action, ignoreActive=tech is not None)}".replace("  ", " ")
+    throwdistancemax = findFromActionOrTactics(action, tactics, "throwdistancemax", 999.0, float)
+    
+    text = f"{actionName} {rechargeRate(proto, action, chargeType, tech)}: {actionTargetTypeText(proto, action)} Grabs a target, and "
+    if throwdistancemax < 1.0:
+        text += "pulls it to the user"
+    else:
+        text += f"throws it (can be retargeted manually). Damages both the thrown unit and nearby {actionDamageFlagNames(action)} objects"
+
+    if findFromActionOrTactics(action, tactics, "killoninvalidland", 0, int):
+        text += ", killing it instantly if it ends up on terrain it cannot enter naturally"
+    
+    text += f". {actionDamageFull(proto, action, ignoreActive=tech is not None)}".replace("  ", " ")
+    return text
 
 def handleBuckAttackAction(proto: ET.Element, action: ET.Element, tactics: ET.Element, actionName: str, chargeType:ActionChargeType, tech: Union[None, ET.Element]=None):
     maxsizeclass = findAndFetchText(action, "maxsizeclass", None, int)
@@ -1011,14 +1038,56 @@ def handleReflectAttackAction(proto: ET.Element, action: ET.Element, tactics: ET
     items = [x for x in items if len(x) > 0]
     return f"{' '.join(items)}"
 
+def handleConditionalShieldAction(proto: ET.Element, action: ET.Element, tactics: ET.Element, actionName: str, chargeType:ActionChargeType, tech: Union[None, ET.Element]=None):
+    activeEffect = ""
+    targetLimit = findFromActionOrTactics(action, tactics, "modifytargetlimit", 0, int)
+    effectRadius = findFromActionOrTactics(action, tactics, "affectedradius", None, float)
+    isHeal = findFromActionOrTactics(action, tactics, "damage", 0.0, float) <= 0.0
+    if not isHeal:
+        activeEffect = "damages "
+    else:
+        activeEffect = "heals "
+    if targetLimit:
+        activeEffect += f"up to {targetLimit} "
+    activeEffect += f"{actionDamageFlagNames(action)} {actionTargetList(proto, action, tactics)} "
+    if effectRadius is not None:
+        activeEffect += f"within {effectRadius:0.3g}m "
+    if isHeal:
+        rates = list(set([float(elem.text) for elem in findAllFromActionOrTactics(action, tactics, "rate")]))
+        if len(rates) > 1:
+            common.warn_unhandled(f"ConditionalShield on {proto.attrib['name']} has varying heal rates, not supported")
+        # This is very much a guess about how non-1 rates work
+        activeEffect += f"for {float(rates[0])*findFromActionOrTactics(action, tactics, "shielddecayrate", None, float):0.3g} hitpoints/second. Targets that have moved or been involved in combat in the last 3 seconds are healed at {findFromActionOrTactics(action, tactics, "slowhealmultiplier", None, float)*100:0.3g}% speed."
+    else:
+        activeEffect = activeEffect.strip()
+        activeEffect += f": {actionPreDamageInfoText(action)} {actionDamageFull(proto, action, isDPS=False, hideRof=True, hideRange=True, ignoreActive=tech is not None)}"
+    
+    items = [actionName, rechargeRate(proto, action, chargeType, tech), f"The user gains a shield with {findFromActionOrTactics(action, tactics, "shieldpoints", None, float):0.3g} hitpoints which loses {findFromActionOrTactics(action, tactics, "shielddecayrate", None, float):0.3g} hitpoints/second. While the shield is active,", activeEffect]
+    for index in (1, 0):
+        if len(items[index]):
+            items[index] += ":"
+            break
+    items = [x for x in items if len(x) > 0]
+    return f"{' '.join(items)}"
+
 def actionTargetTypeText(proto: ET.Element, action: ET.Element):
     tactics = actionTactics(proto, action)
     stringList = actionTargetList(proto, action, tactics)
     text = ""
+    if findFromActionOrTactics(action, tactics, "ambushonly", 0, int):
+        stealthAction = findActionByName(proto, "Stealth")
+        if stealthAction is not None:
+            stealthTactics = actionTactics(proto, stealthAction)
+            stealthAmbushRange = findFromActionOrTactics(stealthAction, stealthTactics, "ambushrange", None, float)
+            if stealthAmbushRange is not None:
+                text += f"May only be used from stealth on a target within {stealthAmbushRange:0.3g}m. "
+        if text == "":
+            text += "May only be used from stealth. "
     if stringList:
         text += f"Targets {stringList}."
     if findFromActionOrTactics(action, tactics, "restricttowater", 0, int):
         text += " Can only be used while in water, and can only target water."
+    # Crude thing which selects for the Umibozu spec, it's potentially true of more things though
     if findFromActionOrTactics(action, tactics, "maxrange", 0.0, float) > 900.0:
         text += " Requires line of sight to use."
     return text.strip()
@@ -1192,8 +1261,16 @@ def handleBuildAction(proto: ET.Element, action: ET.Element, tactics: Union[None
     #    stem += f" Can build: {common.getDisplayNameForProtoOrClassPlural([node.text for node in buildNodes])}."
     
     targetElems = action.findall("rate")
-    rateItems = [f"{common.getDisplayNameForProtoOrClassPlural(elem.attrib['type'])} at {float(elem.text):0.3g} unit{'s' if float(elem.text) != 1.0 else ''}/s" for elem in targetElems]
-    stem += f"Builds {common.commaSeparatedList(rateItems)}."
+    objectsByRate = {}
+    for elem in targetElems:
+        buildRate = float(elem.text)
+        if buildRate not in objectsByRate:
+            objectsByRate[buildRate] = []
+        objectsByRate[buildRate].append(elem.attrib['type'])
+    rateItems = []
+    for rate, objlist in objectsByRate.items():
+        rateItems.append(f"{common.getDisplayNameForProtoOrClassPlural(objlist)} at {rate:0.3g} unit{'s' if rate != 1.0 else ''}/s")
+    stem += f"Builds {common.commaSeparatedList(rateItems, sep="; ")}."
     
     return stem.strip()
 
@@ -1400,11 +1477,12 @@ def handleMaintainAction(proto: ET.Element, action: ET.Element, tactics: Union[N
     modifytargetlimit = findFromActionOrTactics(action, tactics, "modifytargetlimit", None, int)
     modifybase = findFromActionOrTactics(action, tactics, "modifybase", None, int)
     maxrange = findFromActionOrTactics(action, tactics, "maxrange", None, float)
-    rateNodes = findAllFromActionOrTactics(action, tactics, "rate")
-    if len(rateNodes) == 0:
-        common.warn_data(f"Maintain action {actionName} on {proto.attrib['name']} is missing rate, ignored")
+    rateelems = findAllFromActionOrTactics(action, tactics, "rate")
+    if len(rateelems) == 0:
+        common.warn_data(f"MaintainAction {findFromActionOrTactics(action, tactics, "name")} on {proto.attrib['name']} seems to have no unit type data to spawn, ignoring")
         return ""
-    spawnedObject = protoFromName(rateNodes[0].attrib['type'])
+    # Currently obsidian shards are bugged and will always produce the unit type listed first, this old implementation mimics that correctly
+    spawnedObject = protoFromName(rateelems[0].attrib['type'])
     targettype = common.getDisplayNameForProtoOrClass(spawnedObject)
     targettypePlural = common.getDisplayNameForProtoOrClassPlural(spawnedObject)
     sentences = []
@@ -1488,6 +1566,29 @@ def handleDelayedTransformAction(proto: ET.Element, action: ET.Element, tactics:
         items[0] += ":"
     return " ".join(items)
 
+def handleStealthAction(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
+    stealthrevealselfradius = proto.find("stealthrevealselfradius")
+    stealthshowsilhouetteradius = proto.find("stealthshowsilhouetteradius")
+    stealthanywhere = findFromActionOrTactics(action, tactics, "stealthanywhere", 0, int)
+    stealthinshallows = findFromActionOrTactics(action, tactics, "stealthinshallows", 0, int)
+    
+    if stealthanywhere:
+        stealthlocations = ["anywhere"]
+    else:
+        stealthlocations = ["near trees and berries"]
+    if stealthinshallows:
+        stealthlocations += ["in shallow or near deep water"]
+
+    stealthloctext = f"({', '.join(stealthlocations)})"
+
+    selfradius = float(stealthrevealselfradius.text)
+    if stealthshowsilhouetteradius is not None and selfradius > 0.0:
+        return f"Stealthy {stealthloctext}: Displays silhouette at {float(stealthshowsilhouetteradius.text):0.3g}m and is fully revealed at {selfradius:0.3g}m."
+    elif stealthshowsilhouetteradius is not None:
+        return f"Stealthy {stealthloctext}: Displays silhouette at {float(stealthshowsilhouetteradius.text):0.3g}m."
+    else:
+        return f"Stealthy {stealthloctext}: is fully revealed at {selfradius:0.3g}m."
+
 def handleAutoRangedAttachAction(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
     modifyAbstractType = findAndFetchText(action, "modifyabstracttype", None)
     components = []
@@ -1540,16 +1641,21 @@ def handleIdleStatBonusAction(proto: ET.Element, action: ET.Element, tactics: Un
 def handleSpawnAction(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
     rateNode = action.find("rate")
     spawnCount = int(float(rateNode.text))
-    spawnedProto = common.getObjectDisplayName(protoFromName(rateNode.attrib['type']))
-    unitTypeText = f"{spawnCount} {spawnedProto}"
+    spawnedProto = common.getObjectDisplayName(protoFromName(rateNode.attrib['type']), plural=spawnCount>1)
     if spawnCount == 1:
-        unitTypeText = f"a {spawnedProto}"
+        unitTypeText = f"a {spawnedProto}."
+    else:
+        unitTypeText = f"{spawnCount} {spawnedProto}"
     items = []
     if len(actionName):
         items.append(actionName+":")
-    items.append(rechargeRate(proto, action, chargeType, tech) +":")
+    rechargeText = rechargeRate(proto, action, chargeType, tech)
+    if len(rechargeText):
+        items.append(f"{rechargeText}:")
     items += ["Spawns", unitTypeText]
-    return f"{' '.join(items)}."
+    if findFromActionOrTactics(action, tactics, "singleuse", 0, int):
+        items += ["May only happen once per spawning unit."]
+    return f"{' '.join(items)}"
 
 def handleLinearAreaAttackAction(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
     # Approximately:
@@ -1722,6 +1828,8 @@ MODIFY_TYPE_DISPLAY = {
     "BuildRate":"Build Speed",
     "MilitaryTrainingCost":"Military Unit Cost",
     "ROF":"Attack Interval",
+    "FarmingGatherRate":"gather rate from farms",
+    "LOSFactor":"LOS",
 }
 
 def getAllowForbidTargetTypes(action: ET.Element, tactics: ET.Element) -> Tuple[List[str], List[str]]:
@@ -1796,6 +1904,8 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
     if modifyType == "HealRate":
         damageType = findFromActionOrTactics(action, tactics, "modifydamagetype", "Divine")
         damageAmount = findFromActionOrTactics(action, tactics, "modifyamount", None, float)
+        minworkrateasresourcedrain = findFromActionOrTactics(action, tactics, "minworkrateasresourcedrain", 0, int)
+        minrate = findAllFromActionOrTactics(action, tactics, "minrate")
         if damageAmount is None:
             common.warn_data(f"RangedModify on {proto.attrib['name']} HealRate is missing modifyamount, ignored")
             return ""
@@ -1808,9 +1918,11 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
             slowHealMultiplier = findFromActionOrTactics(action, tactics, "slowhealmultiplier", 1.0, float)
             if modifyTargetLimit is not None:
                 lateComponents.append(f"Heals up to {modifyTargetLimit} target{'s' if modifyTargetLimit > 1 else ''} at once.")
+            if minworkrateasresourcedrain:
+                lateComponents.append(f"Drains {icon.resourceIcon("food")} {float(minrate[0].text):0.3g} from its inventory per second per unit being healed, regardless of whether or not the unit is affected by the nonidle rate penalty.")
             if slowHealMultiplier != 1.0:
                 lateComponents.append(f"Targets that have moved or been involved in combat in the last 3 seconds are healed at {slowHealMultiplier*100:0.3g}% speed.")
-    elif modifyType in ("Damage", "Armor", "MaxHP", "Speed", "BuildRate", "MilitaryTrainingCost", "ROF"):
+    elif modifyType in ("Damage", "Armor", "MaxHP", "Speed", "BuildRate", "MilitaryTrainingCost", "ROF", "LOSFactor") or modifyType in MODIFY_TYPE_DISPLAY:
         multiplier = findFromActionOrTactics(action, tactics, "modifymultiplier", None, float)
         if multiplier is None:
             multiplier = findFromActionOrTactics(action, tactics, "modifyamount", None, float)
@@ -1859,6 +1971,9 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
             components.append(f"(max {targetLimit})")
         components.append(f"within {range:0.3g}m.")
         skipStacking = True
+    elif modifyType == "NaturalFoodGatherRate":
+        multiplier = findFromActionOrTactics(action, tactics, "modifyamount", None, float) - 1.0
+        components.append(f"{"increases" if multiplier > 0.0 else "decreases"} gather rate of natural Food sources by {100*multiplier:0.3g}% for")
     else:
         common.warn_unhandled(f"Unknown AutoRangedModify type {modifyType} for {proto.attrib['name']}")
         return ""
@@ -1874,7 +1989,7 @@ def handleAutoRangedModifyAction(proto: ET.Element, action: ET.Element, tactics:
     elif findFromActionOrTactics(action, tactics, "targetnonally", ""):
         playerRelation = ["non-allied"]
     elif findFromActionOrTactics(action, tactics, "includeally", ""):
-        playerRelation = ["your", "allied'"]
+        playerRelation = ["your", "allied"]
 
     # This is a huge assumption about how infection works
     if isInfection:
@@ -1965,6 +2080,7 @@ GATHER_ICONS: Dict[str, Union[str, None]] = {
     "Huntable":icon.generalIcon(r"resources\nature\animals\land\deer_icon.png"),
     "NonConvertableHerdable":icon.generalIcon(r"resources\nature\animals\land\chicken_icon.png"),
     "BerryBush":icon.generalIcon(r"resources\nature\berry_bush_icon.png"),
+    "WildCrops":icon.generalIcon(r"resources\nature\berry_bush_icon.png"),
     "AbstractFarm":icon.generalIcon(r"resources\shared\static_color\buildings\farm_icon.png"),
     "FishResource":icon.generalIcon(r"resources\nature\animals\naval\fish_icon.png"),
     "Temple":None,
@@ -2026,9 +2142,122 @@ def handleGatherAction(proto: ET.Element, action: ET.Element, tactics: Union[Non
             
     return out
 
+def handleJumpAction(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
+    if findFromActionOrTactics(action, tactics, "ambushonly", 0):
+        text = "Leaps to the target, but cannot bypass obstacles."
+    else:
+        text = "Leaps over obstacles on the way to the target."
+    return simpleActionHandler(text)(proto, action, tactics, actionName, chargeType, tech)
+
+def devoteMinorHandler(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
+    # There are 3 types of this action:
+    # 1) Villager devotion
+    # 2) Quetz warrior priest bloodletting
+    # 3) Quetz tech herdable
+
+    # Eskiss posted this, but it seems correct
+    # B = base reward (15 by default but can go up)
+    # m = minimum scale (0.1 currently)
+    # F = favor so far
+    # E = reductionend (300 currently)
+    # favor = b*(1-(((1-m)*f)/e))
+    # if f >= e, favor = bm
+    # This also holds for boosted rates!
+    if findFromActionOrTactics(action, tactics, "devotionfavorreward", 0.0, float) > 0.0:
+        b = findFromActionOrTactics(action, tactics, "devotionfavorreward", 0.0, float)
+        m = findFromActionOrTactics(action, tactics, "minscale", 0.0, float)
+        e = findFromActionOrTactics(action, tactics, "reductionend", 0.0, float)
+        targets = [b, b*0.75, b*0.5, b*0.25, b*m]
+        targetCounts = []
+        devotioncountsToFavor = {}
+        f = 0.0
+        devoted = 0
+        while 1:
+            thisDevotion = b*(1-(((1-m)*f)/e))
+            if f >= e:
+                thisDevotion = b*m
+            devotioncountsToFavor[devoted] = thisDevotion
+            if thisDevotion <= targets[len(targetCounts)]:
+                targetCounts.append(devoted)
+                if len(targetCounts) == len(targets):
+                    break
+            
+            devoted += 1
+            f += thisDevotion
+
+        # The trickle is derived from this godpower and combat xp tiers
+        tricklepower = common.findGodPowerByName("DevotionFavourTrickle")
+        tricklerates = [float(elem.attrib['amount']) for elem in tricklepower.findall("effects/effect")]
+
+        targetCounts.append(len(tricklerates)-2)
+        targetCounts = sorted(targetCounts)
+
+        lines = [""]
+        for index, count in enumerate(targetCounts):
+            actualCount = count + 1
+            suffix = common.ordinalSuffix(actualCount)
+            text = f"{actualCount}{suffix}: {icon.resourceIcon('favor')} {devotioncountsToFavor[count]:0.3g} instant"
+            if actualCount <= len(tricklerates)-1:
+                text += f", {icon.resourceIcon('favor')} {tricklerates[actualCount]:0.3g}/second"
+            if actualCount == len(tricklerates)-1:
+                text += " (max trickle rate)"
+            if index == len(targetCounts)-1:
+                text += " (min instant reward)"
+            lines.append(text)
+
+        text = "May be sacrified at a Temple for favor, with decreasing returns as more are sacrified (full progression in history):"
+        text += f"\\n   {icon.BULLET_POINT_ALT} ".join(lines)
+
+        historyText = f"Instant favor reward follow the following formula, where:\n\nF = total instant favor generated from instant villager devotion:\nB = base favor for devotion, after modifiers (default is {b})\n\n"
+        historyText += f"favor = B * (1-(((1-{m})*F)/{e}))"
+        historyText += f"\n\nOnce F > {e}, this simply becomes a flat B * {m} every sacrifice.\n\n"
+        historyText += "Favor trickle follows a predefined progression with sacrified villager count as follows:\n\n"
+        for index in range(1, len(tricklerates)):
+            historyText += f"{index}{common.ordinalSuffix(index)}: {tricklerates[index]:0.3g}\\n"
+
+        common.prependTextToHistoryFile(proto.attrib['name'], "units", historyText)
+
+        return text
+    favortrickle = findFromActionOrTactics(action, tactics, "devotionfavortrickle", 0.0, float)
+    if favortrickle > 0.0:
+        minHealthScale = findFromActionOrTactics(action, tactics, "devotionscaleatminimumhealth", 1.0, float)
+        minHealth = findFromActionOrTactics(action, tactics, "devotionhealthdrainlimit", 1.0, float)
+        healthDrain = findFromActionOrTactics(action, tactics, "devotionhealthdraineachsecond", 1.0, float)
+        # Bloodletting, for now at least, seems to use essentially the same curve greek favour does
+        # despite the new terms in game.cfg!
+        prayerEfficiencyZ = globals.dataCollection["game.cfg"]["PrayerEfficiencyModifierZ"]
+        prayerEfficiencyG = globals.dataCollection["game.cfg"]["PrayerEfficiencyLaterGrowthG"]
+        prayerEfficiencyV = globals.dataCollection["game.cfg"]["PrayerEfficiencyEarlyIncomeReductionV"]
+        adjustedZForRate = favortrickle * prayerEfficiencyZ * minHealthScale
+        historyText = f"Total base Favor income per second for N units bloodletting at minimum HP: {'' if adjustedZForRate == 1.0 else '{:0.3g} x '.format(adjustedZForRate)}N x (1/(N+{prayerEfficiencyV}) + {prayerEfficiencyG})"
+        rateMinHP = lambda n: adjustedZForRate * n * (1/(n+prayerEfficiencyV) + prayerEfficiencyG)
+
+        text = [f"Bloodletting: May pray at a Temple, drains {healthDrain:0.3g} hp/second (down to {100*minHealth:0.3g}% maximum health) but produces Favor. The base income rate is {favortrickle:0.3g}/s at full hitpoints, reducing linearly to {favortrickle*minHealthScale:0.3g} at {100*minHealth:0.3g}% maximum health. Favor per second per unit decreases as more are praying - some values at {100*minHealth:0.3g}% hitpoints: (full formula in unit history)"]
+        n = 1
+        targetValues = [rateMinHP(1), rateMinHP(1)*0.75, rateMinHP(1)*0.5, rateMinHP(1)*0.25]
+        while len(targetValues):
+            thisIncome = rateMinHP(n)/n
+            if thisIncome <= targetValues[0]:
+                text.append(f"{n}: {icon.resourceIcon('Favor')} {thisIncome:0.2g}")
+                targetValues.pop(0)
+            n += 1
+
+        common.prependTextToHistoryFile(proto.attrib['name'], "units", historyText)
+        return "\n".join(text)
+    
+    powername = findFromActionOrTactics(action, tactics, "devotionpower", None)
+    if powername is not None:
+        power = common.findGodPowerByName(powername)        
+        return f"Can be sacrificed at a Temple: {godpower.processGodPower(power)}"
+
+    common.warn_unhandled(f"{proto.attrib['name']} has an unknown type of DevoteMinor, ignoring")
+    return ""
+
 
 def doNothingHandler(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
     return ""
+
+
 
 ACTION_TYPE_HANDLERS: Dict[str, Callable[[ET.Element, ET.Element, Union[None, ET.Element], str, ActionChargeType, Union[None, ET.Element]], str]] = {
     # Overrides for proto action names go here
@@ -2081,7 +2310,7 @@ ACTION_TYPE_HANDLERS: Dict[str, Callable[[ET.Element, ET.Element, Union[None, ET
     "Bolster":handleBolsterAction,
     "AreaMutate":handleAreaMutateAction,
     
-    "JumpAttack":simpleActionHandler("Leaps over obstacles on the way to the target."),
+    "JumpAttack":handleJumpAction,
     "Attack":simpleActionHandler(),
     "RangedAttack":simpleActionHandler(),
     "ChainAttack":simpleActionHandler(),
@@ -2092,6 +2321,10 @@ ACTION_TYPE_HANDLERS: Dict[str, Callable[[ET.Element, ET.Element, Union[None, ET
     "Abduct":handleAbductAction,
     "ConditionalTransform":handleConditionalTransformAction,
     "Lure":handleLureAction,
+    "DevoteMajor":doNothingHandler,
+    "DevoteMinor":devoteMinorHandler,
+    "Stealth":handleStealthAction,
+    "ConditionalShield":handleConditionalShieldAction,
 }
 
 def actionDamageFlagNames(action: ET.Element):

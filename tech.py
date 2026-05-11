@@ -7,6 +7,7 @@ import action
 import icon
 import unitdescription
 import copy
+import godpower
 
 VANILLA_FULL_TOOLTIP_EFFECT_COLOUR = lambda s: "<color=0.65,0.65,0.65>" + s + "</color>"
 
@@ -239,14 +240,20 @@ def formatTechAmountWithRelativity(tech: ET.Element, effect: ET.Element, percent
 def dataSubtypeResourceReturnHandler(tech: ET.Element, effect:ET.Element):
     resource = effect.attrib.get("resource", "")
     resourceText = icon.resourceIcon(resource) + f" {float(effect.attrib['amount']):0.3g}"
+    condition = "death"
+    if tech.find(f"effects/effect[@subtype='Flag'][@flag='ReturnResourcesOnConstruction'][target='{effect.find("target").text}']"):
+        condition = "construction"
 
-    return dataSubtypeWithAmountHelper("Resources returned on death {value}: {combinable}", combinableString=resourceText, valueFormat="".format)(tech, effect)
+    return dataSubtypeWithAmountHelper("Resources returned on " + condition + ": {value}: {combinable}", combinableString=resourceText, valueFormat="".format)(tech, effect)
 
 def dataSubtypeResourceReturnRateHandler(tech: ET.Element, effect:ET.Element):
     resource = effect.attrib.get("resource", "")
     resourceText = icon.resourceIcon(resource) + f" {100*float(effect.attrib['amount']):0.3g}%"
+    condition = "death"
+    if tech.find(f"effects/effect[@subtype='Flag'][@flag='ReturnResourcesOnConstruction'][target='{effect.find("target").text}']"):
+        condition = "construction"
 
-    return dataSubtypeWithAmountHelper("Cost refunded on death: {combinable}", combinableString=resourceText, valueFormat="".format)(tech, effect)
+    return dataSubtypeWithAmountHelper("Cost refunded on " + condition + ": {combinable}", combinableString=resourceText, valueFormat="".format)(tech, effect)
 
 
 def dataSubtypeOnHitEffectHandler(tech: ET.Element, effect:ET.Element):
@@ -335,7 +342,17 @@ def dataSubtypeActionEnableHandler(tech: ET.Element, effect:ET.Element):
             continue
         isEnabling = bool(int(float(effect.attrib.get("amount"))))
 
-        components = ["Enables" if isEnabling else "Disables", action.getActionDisplayName(proto, actionNode, nameNonChargeActions=True) + ":", actionDescription]
+        nameResponse = action.getActionDisplayName(proto, actionNode, nameNonChargeActions=True)
+        if isEnabling:
+            if nameResponse != "":
+                components = [f"Enables {nameResponse}:", actionDescription]
+            else:
+                components = [actionDescription]
+        else:
+            if nameResponse == "":
+                nameResponse = action.findFromActionOrTactics(actionNode, tactics, "name", "")
+            components = [f"Disables {nameResponse}:", actionDescription]
+
         text = " ".join(components)
 
         responses.append(EffectHandlerResponse(affects=common.getDisplayNameForProtoOrClass(targetType), text=text))
@@ -428,17 +445,19 @@ def dataSubtypeWorkrateHandler(tech: ET.Element, effect:ET.Element):
         preTargetText = f"Burst Heal strength for"
     elif action == "Autogather":
         preTargetText = "Trickle rate for"
-        additionalPostTargetText = "per second"
     elif action in ("AutoGatherFood", "AutoGatherWood", "AutoGatherGold"):
         preTargetText = "Accumulation rate for"
-        additionalPostTargetText = "per second"
     elif action == "AutoGatherFavor":
         preTargetText = "Base (non-LOS dependent) gather rate for"
     elif action == "JumpAttack":
         # This appears to do nothing?
         return None
+    elif action == "DevoteMinor":
+        preTargetText = "Sacrifice immediate"
     else:
         preTargetText = f"{action} rate for"
+    if effect.attrib['relativity'].lower() == "absolute":
+        additionalPostTargetText = "per second"
     return dataSubtypeWithAmountHelper(preTargetText + " {combinable}: {value} " + additionalPostTargetText, combinableAttribute="unittype", combinableAttributeFormat=common.getDisplayNameForProtoOrClass)(tech, effect)
 
 def dataSubtypeWorkrateSpecificHandler(tech: ET.Element, effect:ET.Element):
@@ -490,6 +509,9 @@ def dataSubtypeBountyResourceEarningRewardHandler(tech: ET.Element, effect:ET.El
         
     elif tech.attrib['name'] == "IvoryNetsuke":
         data = globals.dataCollection['major_gods.xml'].find("civ[name='Susanoo']")
+
+    elif tech.attrib['name'] == "FloweryWars":
+        return dataSubtypeWithAmountHelper("Tonalli {combinable} per kill: {value}", combinableString=effect.attrib['resourcetype'])(tech, effect)
 
     if data is not None:
         goal = float(data.find("bountyresourceearning/bountydamagegoal").text)
@@ -815,7 +837,8 @@ def dataSubtypeBuildingChainEffectHandler(tech: ET.Element, effect:ET.Element):
     
     return EffectHandlerResponse(common.getDisplayNameForProtoOrClass(unitType), connectionText + "{combinable}: " + formatTechAmountWithRelativity(tech, effect), effectText)
 
-
+def dataSubtypeOnHitEffectProbability(tech: ET.Element, effect:ET.Element):
+    return dataSubtypeWithAmountHelper(f"Probability of {effect.attrib['effecttype']} effect triggering {{actionfor}}{{combinable}}: {{value}}%", combinableAttribute="action")(tech, effect)
 
 def dataSubtypeOnHitEffectStatModify(tech: ET.Element, effect:ET.Element):
     modifyType = effect.attrib['modifytype']
@@ -1034,6 +1057,9 @@ DATA_SUBTYPE_HANDLERS: Dict[str, Callable[[ET.Element, ET.Element], Union[Effect
     "modifyduration":dataSubtypeWithAmountHelper("Duration {actionof}{combinable}: {value}", combinableAttribute="action"),
     "targetedspeedmultiplier":dataSubtypeWithAmountHelper("Target speed {actionof}{combinable}: {value}", combinableAttribute="action"),
     "researchrate":dataSubtypeWithAmountHelper("{combinable} speed: {value}", combinableString="Research"),
+    "buildlimit":dataSubtypeWithAmountHelper("Build Limit: {value}", combinableString=""),
+    "stealthdetectionradius":dataSubtypeWithAmountHelper("Stealth Detection Radius: {value}", combinableString=""),
+    "onhiteffectprobability":dataSubtypeOnHitEffectProbability,
 }
 
 
@@ -1090,7 +1116,7 @@ def handlerResponseListToStrings(input: Union[EffectHandlerResponse, List[Effect
     strings = [response.toString(skipAffectedObjects=skipAffectedObjects) for response in input]
     return strings
 
-def processTech(tech: ET.Element, skipAffectedObjects: bool=False, lineJoin: str=f"\\n"):
+def processTech(tech: ET.Element, skipAffectedObjects: bool=False, lineJoin: str=f"\\n", bulletLateLines=False):
     #print(f"Processing tech: {tech.attrib['name']}")
     # Minor god techs show up over the portraits. That makes me very sad, but I don't want to get into changing UI files as well really
     # so let's just leave these strings as vanilla
@@ -1133,7 +1159,17 @@ def processTech(tech: ET.Element, skipAffectedObjects: bool=False, lineJoin: str
     if additions is None or additions.fuzzyMerge:
         strings = common.attemptAllWordwiseTextMerges(strings, tech.attrib['name'])
 
-    output = lineJoin.join(strings)
+    if not bulletLateLines:
+        output = lineJoin.join(strings)
+    else:
+        output = ""
+        for index, string in enumerate(strings):
+            if index != 0:
+                output += f"{icon.BULLET_POINT} "
+            output += string
+            if index != len(strings)-1:
+                output += lineJoin
+        output = output.strip()
     if len(output) == 0: # Need to output something or we get <MISSING> if empty
         if len(effects):
             common.warn(f"tech {tech.attrib['name']} with {len(effects)} effects had no text output, reverting to vanilla text")
@@ -1158,7 +1194,7 @@ def generateTechDescriptions():
             if create is not None:
                 globals.respawnTechs[create.attrib['unit']] = techElement
 
-    # These assocaitions come from aotg data but will show in tooltips if not dealt with
+    # These associations come from aotg data but will show in tooltips if not dealt with
     del globals.respawnTechs["Promethean"]
     del globals.respawnTechs["MountainGiant"]
 
@@ -1416,6 +1452,27 @@ def generateTechDescriptions():
     techManualAdditions["SacredCustodians"]=TechAddition(startEntry="Allows Miko to pick up Relics.")
     techManualAdditions["TenFistSword"]=TechAddition(endEntry=unitdescription.describeUnit("MasterlessSword"))
 
+    techManualAdditions["SerpentSkirt"] = TechAddition(endEntry=unitdescription.describeUnit("AnacondaCoatlicue"))
+    # This tech functions via simdata.simjson, which is not something we pick up!
+    techManualAdditions["TemiminaloyanTrials"] = TechAddition(startEntry="Sentry Tower: Number of Projectiles for Ranged Attack and Anti-Air Attack: +1")
+    # This is done by 1 extra tech per calpulli tech that gives you the gold...
+    tlaloquesGold = common.techFromName("Tlaloques").find("effects/effect[@subtype='Resource']")
+    techManualAdditions["Tlaloques"] = TechAddition(startEntry=f"Player: {tlaloquesGold.attrib['resource']} granted per completed Calpulli research: {tlaloquesGold.attrib['amount']}", lineFilter=lambda line: tlaloquesGold.attrib['resource'] not in line or tlaloquesGold.attrib['amount'] not in line)
+
+    omenProto = common.protoFromName("VFXMictlansDescent")
+    omenAction =  action.findActionByName("VFXMictlansDescent", "BirthAttack")
+    techManualAdditions["OmenOfDeath"] = TechAddition("Teixiptla and Incarnates: On death: " + action.actionTargetTypeText(omenProto, omenAction) + " " + action.actionDamageFull(omenProto, omenAction), lineFilter=lambda line: "VFX" not in line)
+
+    newfire = common.techFromName("GreatTempleNewFireCeremony")
+    newfireDevotion = newfire.find("devotioncost")
+    newfirepower = globals.dataCollection["abilities_combined"].find("power[@name='GreatTempleNewFireCeremony']")
+    techManualAdditions["GreatTempleNewFireCeremony"] = TechAddition(endEntry=f"Garrison {newfireDevotion.text}x {newfireDevotion.attrib['devotiontype']} into the Great Temple and activate. {godpower.processGodPower(newfirepower)}")
+
+    techManualAdditions["GreatTempleCosmicGuard"] = TechAddition(endEntry=globals.dataCollection['string_table.txt']['STR_TECH_COSMIC_GUARD_LR'] + " May only be used once per game.")
+    # These all share a string id
+    techManualAdditions["GreatTempleArrivalOfTheGodsHuitzilopochtli"] = TechAddition(endEntry=globals.dataCollection['string_table.txt']['STR_TECH_ARRIVAL_OF_THE_GODS_LR'] + " May only be used once per game.")
+    
+
     techManualAdditions["SecretsOfTheTitans"]=TechAddition(startEntry="Allows the placement of a Titan Gate. Once fully excavated, releases a Titan.")
 
     WonderAgeTitan = techtree.find("tech[@name='WonderAgeTitan']")
@@ -1478,6 +1535,8 @@ def generateTechDescriptions():
             except Exception as e:
                 raise ValueError(f"Error generating description for {tech.attrib['name']}")
             if value is not None:
+                if int(globals.config["options"].get("retainVanillaTooltipForUnitsAndTechs", 0)):
+                    value = globals.dataCollection["string_table.txt"][strid] + "\n" + value
                 if strid not in stringIdsByOverwriters:
                     stringIdsByOverwriters[strid] = {}
                 if value not in stringIdsByOverwriters[strid].values():
