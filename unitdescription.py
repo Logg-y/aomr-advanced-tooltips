@@ -1229,12 +1229,12 @@ def generateUnitDescriptions():
 
     unitDescriptionOverrides["YariSpearman"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry only good against cavalry."})
     unitDescriptionOverrides["YumiArcher"] = UnitDescription(preActionInfoText={"RangedAttack":"Generalist archer, especially good against infantry."})
-    unitDescriptionOverrides["YariSpearman"] = UnitDescription(preActionInfoText={"RangedAttack":"Hero archer. Primarily good against myth units, but reasonably effective against other targets."})
+    unitDescriptionOverrides["Bushi"] = UnitDescription(preActionInfoText={"RangedAttack":"Hero archer. Primarily good against myth units, but reasonably effective against other targets."})
     unitDescriptionOverrides["Samurai"] = UnitDescription(preActionInfoText={"HandAttack":"Slow generalist infantry, especially good against other infantry."})
     unitDescriptionOverrides["OnnaMusha"] = UnitDescription(preActionInfoText={"HandAttack":"Hero infantry. Primarily good against myth units, but reasonably effective against other targets."})
     unitDescriptionOverrides["NaginataRider"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist cavalry, especially good against ranged soldiers."})
     unitDescriptionOverrides["Shinobi"] = UnitDescription(preActionInfoText={"HandAttack":"Specialist infantry, good against ranged soldiers and buildings."})
-    unitDescriptionOverrides["YumiArcher"] = UnitDescription(preActionInfoText={"RangedAttack":"Generalist mounted archer."})
+    unitDescriptionOverrides["YumiHorseArcher"] = UnitDescription(preActionInfoText={"RangedAttack":"Generalist mounted archer."})
     unitDescriptionOverrides["Daimyo"] = UnitDescription(preActionInfoText={"HandAttack":"Hero cavalry. Primarily good against myth units, but reasonably effective against other targets."})
     unitDescriptionOverrides["Onmyoji"] = UnitDescription(preActionInfoText={"RangedAttack":"Hero. Effective against myth units, buildings, and tight groups of other units."})
 
