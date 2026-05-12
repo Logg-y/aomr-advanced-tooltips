@@ -2250,7 +2250,8 @@ def devoteMinorHandler(proto: ET.Element, action: ET.Element, tactics: Union[Non
         power = common.findGodPowerByName(powername)        
         return f"Can be sacrificed at a Temple: {godpower.processGodPower(power)}"
 
-    common.warn_unhandled(f"{proto.attrib['name']} has an unknown type of DevoteMinor, ignoring")
+    # This should be a warning, but it gets spammed for nearly every military unit in the game.
+    #common.warn_unhandled(f"{proto.attrib['name']} has an unknown type of DevoteMinor, ignoring")
     return ""
 
 
