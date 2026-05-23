@@ -8,6 +8,7 @@ import icon
 import unitdescription
 import copy
 import godpower
+import re
 
 VANILLA_FULL_TOOLTIP_EFFECT_COLOUR = lambda s: "<color=0.65,0.65,0.65>" + s + "</color>"
 
@@ -574,10 +575,13 @@ def dataSubtypeMinWorkRateHandler(tech: ET.Element, effect:ET.Element):
         target = targetElement.text
         proto = common.protoFromName(target)
         actionElem = action.findActionByName(proto, effect.attrib['action'])
-        actionName = action.getActionDisplayName(proto, actionElem, nameNonChargeActions=True)
-        if actionName != "Trade":
-            common.warn_unhandled(f"{tech.attrib['name']} uses MinWorkRate on non-trade action, test how this works")
-            continue
+        if actionElem is None:
+            common.warn_unhandled(f"{tech.attrib['name']} uses MinWorkRate but can't get a specific action, assuming it is a trade action")
+        else:
+            actionName = action.getActionDisplayName(proto, actionElem, nameNonChargeActions=True)
+            if actionName != "Trade":
+                common.warn_unhandled(f"{tech.attrib['name']} uses MinWorkRate on non-trade action, test how this works")
+                continue
         responses.append(dataSubtypeWithAmountHelper("Trade Profit also generated as {combinable}: {value}", combinableAttribute='unittype', valueFormat=lambda val: f"{val*100:0.3g}%")(tech, effect))
     
     if len(responses) == 0:
@@ -1036,6 +1040,8 @@ DATA_SUBTYPE_HANDLERS: Dict[str, Callable[[ET.Element, ET.Element], Union[Effect
     "buildlimit":dataSubtypeWithAmountHelper("Build Limit: {value}", combinableString=""),
     "stealthdetectionradius":dataSubtypeWithAmountHelper("Stealth Detection Radius: {value}", combinableString=""),
     "onhiteffectprobability":dataSubtypeOnHitEffectProbability,
+    "yield":dataSubtypeWithAmountHelper("Resources gathered from {combinable} before depletion: {value}", combinableAttribute="unittype", combinableAttributeFormat=common.getDisplayNameForProtoOrClass),
+    "timeshiftingtimeratio":dataSubtypeWithAmountHelper("Time to Timeshift {combinable}: {value}", combinableAttribute="unittype", combinableAttributeFormat=common.getDisplayNameForProtoOrClass),
 }
 
 
@@ -1225,6 +1231,11 @@ def generateTechDescriptions():
 
     techManualAdditions["HallOfThanes"]=TechAddition(endEntry="As both Infantry and Heroes, Hersir benefit from both effects.")
     techManualAdditions["FuryOfTheFallen"]=TechAddition(endEntry=f"Damage boosters persist for {float(common.protoFromName('BerserkDamageBoost').find('lifespan').text):0.3g} seconds.")
+
+    # The data has to specify all the buildings, it's really not necessary for the tooltip to do so
+    temporalchaos = common.techFromName("TemporalChaos")
+    temporalchaosTime = common.techFromName("TemporalChaos").find("effects/effect[@subtype='TimeShiftingTimeRatio'][@unittype='Building']")
+    techManualAdditions["TemporalChaos"]=TechAddition(lineFilter=lambda l: "Time to Timeshift" not in l, endEntry=handlerResponseListToStrings([processEffect(temporalchaos, temporalchaosTime)]))
 
     techManualAdditions["SonsOfTheSun"]=TechAddition(startEntry="Regular Oracles can no longer be trained: Temples produce Oracle Heroes directly instead.")
     # Hide the hero promotion text.

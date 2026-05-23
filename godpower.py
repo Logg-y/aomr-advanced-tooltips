@@ -48,6 +48,7 @@ IGNORE_POWERS = (
     "AvalancheSPC",
     "ImplodeSPC",
     "ExplosionWeakerSPC",
+    "BlazingPrarieSPC",
     )
 
 @dataclasses.dataclass
@@ -332,10 +333,7 @@ def generateGodPowerDescriptions():
     rain = findGodPowerByName("Rain")
     rainEffect = rain.find("effect")
     rainMyResponse = getTechEffectHandlerResponseForGodPowerEffect(rain, rainEffect)
-    rainOtherEffect = copy.copy(rainEffect)
-    rainOtherEffect.attrib['amount'] = rainOtherEffect.attrib['altamount']
-    rainOtherResponse = getTechEffectHandlerResponseForGodPowerEffect(rain, rainOtherEffect)
-    rainItems = ["Grants {playerrelation} increased farming rate.", f"{rainMyResponse.toString()}", "{duration}"]
+    rainItems = ["Grants {playerrelation} the following effects:", *describeGodPowerEffectsLikeDataTech(rain), "{duration}"]
     godPowerProcessingParams["Rain"] = GodPowerParams(rainItems)
 
     prosperity = findGodPowerByName("Prosperity")
@@ -669,12 +667,14 @@ def generateGodPowerDescriptions():
     droughtlandDamageTarget = droughtland.find("initialdamage").text
     droughtlandAllyRatio = common.findAndFetchText(droughtland, "allydamageratio", 0.0, float)
     droughtlandCreep = globals.dataCollection['terrain_unit_effects.xml'].find("terrainuniteffect[@name='DroughtCreepEffect']")
-    droughtlandHpModification = float(droughtlandCreep.find("effect[@type='maxHP']").attrib['amount'])
+    droughtlandHpModification = float(droughtlandCreep.find("effect[@name='DroughtCreepBuildingHpPenalty']").attrib['amount'])
+    droughtlandUnitHpModification = float(droughtlandCreep.find("effect[@name='DroughtCreepUnitHpPenalty']").attrib['amount'])
+    droughtlandUnitHpTargetType = common.findAndFetchText(droughtlandCreep, "effect[@name='DroughtCreepUnitHpPenalty']/target", None)
 
     if droughtlandAllyRatio != 0.0:
         raise ValueError("DroughtLand friendly fires now")
 
-    droughtlandItems = [f"Enemy {common.getDisplayNameForProtoOrClass(droughtlandDamageTarget, True)} in the targeted area immediately lose {100*droughtlandDamageProportion:0.3g}% of their current hitpoints. For the duration of the power, their maximum hitpoints is lowered by {100*droughtlandHpModification:0.3g}%. Friendly buildlings in the area are completely unaffected."]
+    droughtlandItems = [f"Enemy {common.getDisplayNameForProtoOrClass(droughtlandDamageTarget, True)} in the targeted area immediately lose {100*droughtlandDamageProportion:0.3g}% of their current hitpoints. For the duration of the power, their maximum hitpoints is lowered by {100*(1.0-droughtlandHpModification):0.3g}% and enemy {common.getDisplayNameForProtoOrClassPlural(droughtlandUnitHpTargetType)} have their maximum hitpoints reduced by {100*(1.0-droughtlandUnitHpModification):0.3g}%.", "Additionally, construction and repairing is impossible in the area for the duration.", "Friendly buildlings in the area are completely unaffected."]
     droughtlandItems += ["{radius}", "{duration}"]
     godPowerProcessingParams["DroughtLand"] = GodPowerParams(droughtlandItems)
 
@@ -942,12 +942,13 @@ def generateGodPowerDescriptions():
     starfallLargeSpawn = starfallLargeProto.find("spawn[@type='dead']")
     starfallAccuracy = common.findAndFetchText(starfall, "accuracy", 1.0, float)
     starfallLargeSpawnName = common.getObjectDisplayName(common.protoFromName(starfallLargeSpawn.text))
-    starfallItems = [f"Calls down falling stars on {{playerrelationpos}} {{attacktargets}}. Small strikes have a {100*starfallAccuracy:0.3g}% chance to be aimed at an enemy unit and inflict {protoGodPowerDamage(starfall.find('strikeproto').text, 'HandAttack')}", f"Large strikes occur at {common.commaSeparatedList([f'{time:0.3g}s' for time in starfallLargeTimes])} and avoid buildings, water, and impassable land. Each summons a {starfallLargeSpawnName} and inflicts {protoGodPowerDamage(starfall.find('largestrikeproto').text, 'HandAttack')}", "Expected strike count: about 120.", "{radius}", "{duration}"]
+    starfallItems = [f"Calls down falling stars on {{playerrelationpos}} {{attacktargets}}. Small strikes have a {100*starfallAccuracy:0.3g}% chance to be aimed at an enemy unit and inflict {protoGodPowerDamage(starfall.find('strikeproto').text, 'HandAttack')}", f"Large strikes occur at {common.commaSeparatedList([f'{time:0.3g}s' for time in starfallLargeTimes])} and avoid buildings, water, and impassable land. Each summons a {starfallLargeSpawnName} and inflicts {protoGodPowerDamage(starfall.find('largestrikeproto').text, 'HandAttack')}", "Expected strike count: about 150.", "{radius}", "{duration}"]
     godPowerProcessingParams["Starfall"] = GodPowerParams(starfallItems)
 
     purge = findGodPowerByName("Purge")
     purgeResourceCap = common.findAndFetchText(purge, "resourcevaluecap", 0.0, float)
-    purgeItems = [f"Lifts the targeted enemy into the air. When the power expires, kills the targeted unit and up to {purgeResourceCap:0.4g} more resources of {{playerrelationpos}} units within the affected area that share any of the following unit classifications with the originally selected unit:", "{attacktargets}.", "Favor counts as 1 resource for this power.", "{radius}", "{duration}"]
+    purgeFavorContribution = common.findAndFetchText(purge, "resourcevaluemultiplier[@resourcetype='Favor']", 1.0, float)
+    purgeItems = [f"Lifts the targeted enemy into the air. When the power expires, kills the targeted unit and up to {purgeResourceCap:0.4g} more resources of {{playerrelationpos}} units within the affected area that share any of the following unit classifications with the originally selected unit:", "{attacktargets}.", f"1 Favor counts as {purgeFavorContribution:0.3g} resources for this power.", "{radius}", "{duration}"]
     godPowerProcessingParams["Purge"] = GodPowerParams(purgeItems)
 
     corruptedground = findGodPowerByName("CorruptedGround")
@@ -955,7 +956,8 @@ def generateGodPowerDescriptions():
     corruptedGroundImmediateProto = corruptedground.find("areavfx").text
     corruptedGroundRepeat = common.findAndFetchText(corruptedground, "repeatdelay", 1.0, float)
     corruptedGroundRepeatText = "Every second" if corruptedGroundRepeat == 1.0 else f"Every {corruptedGroundRepeat:0.3g} seconds"
-    corruptedgroundItems = [f"Temporarily corrupts a a {float(corruptedGroundTerrain.attrib['maxradius']):0.3g}m circle of terrain. Immediately deals {protoGodPowerDamage(corruptedGroundImmediateProto, "HandAttack", damageOnly=True)} to all objects in the area (with full friendly fire).", f"{corruptedGroundRepeatText} while active, all uncorrupted enemies in the area are corrupted: {action.actionDamageOverTime("VFXCorruptedGroundBirth", corruptedground)}. {action.actionOnHitNonDoTEffects("VFXCorruptedGroundBirth", corruptedground)}", "{radius}", "{duration}", unitdescription.describeUnit("TlacanexquimilliCG")]
+    corruptedGroundSpawnCount = sum(int(elem.attrib["quantity"]) for elem in corruptedground.findall("createunit"))
+    corruptedgroundItems = [f"Temporarily corrupts a a {float(corruptedGroundTerrain.attrib['maxradius']):0.3g}m circle of terrain. Immediately deals {protoGodPowerDamage(corruptedGroundImmediateProto, "HandAttack", damageOnly=True)} to all objects in the area (with full friendly fire).", f"{corruptedGroundRepeatText} while active, all uncorrupted enemies in the area are corrupted: {action.actionDamageOverTime("VFXCorruptedGroundBirth", corruptedground)}. {action.actionOnHitNonDoTEffects("VFXCorruptedGroundBirth", corruptedground)}", f"Spawns {corruptedGroundSpawnCount} Tlacanexquimilli in the area when cast.", "{radius}", "{duration}", unitdescription.describeUnit("TlacanexquimilliCG")]
     godPowerProcessingParams["CorruptedGround"] = GodPowerParams(corruptedgroundItems)
 
     monolith = findGodPowerByName("MonolithOfTlaloc")
@@ -975,7 +977,7 @@ def generateGodPowerDescriptions():
     volcanoMeteorMinRadius = common.findAndFetchText(volcanoMeteorPower, "minmeteordistance", 0.0, float)
     volcanoMeteorStrikeCount = common.findAndFetchText(volcanoMeteorPower, "numberofstrikes", 0, int)
     volcanoMeteorArea = common.findAndFetchText(volcanoMeteorAction, "damagearea", 0.0, float)
-    volcanoItems = [f"Creates a temporary Volcano on land, destroying overlapped enemy Buildings. When the volcano rises: {protoGodPowerDamage(volcanoUnit, "BirthAttack")}", f"While active, fires {volcanoMeteorStrikeCount} Meteor-style fireballs, picking random locations {volcanoMeteorMinRadius:0.3g}-{volcanoMeteorRadius:0.3g}m from the center: {protoGodPowerDamage(volcanoMeteorProtoElem, "HandAttack")}", "Friendly targets take only 10% damage.", "Prevents other god powers being cast in the affected area while active.", "{duration}"]
+    volcanoItems = [f"Creates a temporary Volcano on land, destroying overlapped enemy Buildings. When the volcano rises: {protoGodPowerDamage(volcanoUnit, "BirthAttack")}", f"While active, fires {volcanoMeteorStrikeCount} Meteor-style fireballs, seeking groups of targets {volcanoMeteorMinRadius:0.3g}-{volcanoMeteorRadius:0.3g}m from the center: {protoGodPowerDamage(volcanoMeteorProtoElem, "HandAttack")}", "Friendly targets take only 10% damage.", "Prevents other god powers being cast in the affected area while active.", "{duration}"]
     godPowerProcessingParams["Volcano"] = GodPowerParams(volcanoItems)
 
     titangate = findGodPowerByName("TitanGate")

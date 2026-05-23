@@ -113,6 +113,7 @@ _UNIT_CLASS_LABELS = {
     "CavalryLineUpgraded": "Cavalry Line Upgraded",
     "InfantryLineUpgraded": "Infantry Line Upgraded",
     "ArcherLineUpgraded": "Ranged Line Upgraded",
+    "SiegeLineUpgraded": "Siege Weapon (except Cheiroballista)",
     "Building":"Building",
     "MythUnit":"Myth Unit",
     "HumanSoldier":"Human Soldier",
@@ -296,6 +297,7 @@ _UNIT_CLASS_LABELS_PLURAL = {
     "CavalryLineUpgraded": "Cavalry Line Upgraded",
     "InfantryLineUpgraded": "Infantry Line Upgraded",
     "ArcherLineUpgraded": "Ranged Line Upgraded",
+    "SiegeLineUpgraded": "Siege Weapons (except Cheiroballista)",
 
 
     # Partial lies for clarity:
@@ -382,7 +384,6 @@ AUTO_UNWRAP_ABSTRACT_TYPE_SIZE = 2
 
 # Always unwrap these
 ABSTRACT_TYPES_TO_UNWRAP = (
-    "SiegeLineUpgraded",    # Engineers target that excludes cheiroballista
     "HeroInfantry",
     # It is very hard to give these types short meaningful labels that clearly tell you what they contain and aren't confusable with the literal "Town Center"
     "AbstractTownCenter",

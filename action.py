@@ -77,6 +77,8 @@ ACTION_TYPE_NAMES = {
     "EveningStarSoulGuide":"",
     "FarmGatherAura":"",
     "FoodGatherAura":"",
+    "ThornedWallsAttack":"Melee Punish",
+    "RockSolidReflectAttack":"Melee Punish",
 }
 
 def findFromActionOrTactics(action: ET.Element, tactics: ET.Element, query: str, default: Any=None, conversion: Union[None, Type] = None):
@@ -1030,7 +1032,7 @@ def handleBuckAttackAction(proto: ET.Element, action: ET.Element, tactics: ET.El
     return f"{actionName} {rechargeRate(proto, action, chargeType, tech)}: {actionTargetTypeText(proto, action)} Knocks nearby {actionDamageFlagNames(action)} targets {sizeclass}away. {stuntext}{actionDamageFull(proto, action, ignoreActive=tech is not None)}".replace("  ", " ")
 
 def handleReflectAttackAction(proto: ET.Element, action: ET.Element, tactics: ET.Element, actionName: str, chargeType:ActionChargeType, tech: Union[None, ET.Element]=None):
-    items = [actionName, rechargeRate(proto, action, chargeType, tech), actionTargetTypeText(proto, action), "Damages when attacked in melee.", actionPreDamageInfoText(action), actionDamageFull(proto, action, isDPS=False, hideRof=True, ignoreActive=tech is not None)]
+    items = [actionName, rechargeRate(proto, action, chargeType, tech), actionTargetTypeText(proto, action), "Damages attackers when hit by Melee.", actionPreDamageInfoText(action), actionDamageFull(proto, action, isDPS=False, hideRof=True, ignoreActive=tech is not None)]
     for index in (1, 0):
         if len(items[index]):
             items[index] += ":"
@@ -1481,18 +1483,27 @@ def handleMaintainAction(proto: ET.Element, action: ET.Element, tactics: Union[N
     if len(rateelems) == 0:
         common.warn_data(f"MaintainAction {findFromActionOrTactics(action, tactics, "name")} on {proto.attrib['name']} seems to have no unit type data to spawn, ignoring")
         return ""
-    # Currently obsidian shards are bugged and will always produce the unit type listed first, this old implementation mimics that correctly
-    spawnedObject = protoFromName(rateelems[0].attrib['type'])
-    targettype = common.getDisplayNameForProtoOrClass(spawnedObject)
-    targettypePlural = common.getDisplayNameForProtoOrClassPlural(spawnedObject)
+    israndomtrainunit = findFromActionOrTactics(action, tactics, "randomtrainunit", 0, int)
+    if not israndomtrainunit:
+        spawnedObject = protoFromName(rateelems[0].attrib['type'])
+        targettype = common.getDisplayNameForProtoOrClass(spawnedObject)
+        targettypePlural = common.getDisplayNameForProtoOrClassPlural(spawnedObject)
+        join = "a"
+    else:
+        yields = set((float(elem.attrib['yield'])) for elem in rateelems)
+        if len(yields) > 1:
+            common.warn_unhandled(f"MaintainAction {findFromActionOrTactics(action, tactics, "name")} on {proto.attrib['name']} has varying yields by type, this has no handling")
+        targets = [elem.text for elem in rateelems]
+        join = "either a"
+        targettype = f"{common.getDisplayNameForProtoOrClass(targets, plural=False)} at equal odds"
     sentences = []
     if modifybase:
-        sentences.append(f"Produces {modifybase} {targettypePlural if modifybase > 1 else targettype} upon creation.")
+        sentences.append(f"Upon creation, produces {modifybase} {targettypePlural if modifybase > 1 else targettype}.")
 
     if killontrain:
-        sentences.append(f"After {trainpoints:0.3g} seconds, dies and is replaced with a {targettype}.")
+        sentences.append(f"After {trainpoints:0.3g} seconds, dies and is replaced with {join} {targettype}.")
     else:
-        sentences.append(f"Produces a {targettype} every {trainpoints:0.3g} seconds.")
+        sentences.append(f"Produces {join} {targettype} every {trainpoints:0.3g} seconds.")
     if modifytargetlimit and maxrange:
         sentences.append(f"Cannot begin production if there {'are' if modifytargetlimit > 1 else 'is'} already {modifytargetlimit} {targettypePlural if modifytargetlimit > 1 else targettype} within {maxrange:0.3g}m.")
     
@@ -2355,7 +2366,11 @@ def selfDestructActionDamage(proto: Union[str, ET.Element]):
         damageOnly = actionDamageOnly(proto, action)
         if damageOnly == "":
             return ""
-        return f"{damageOnly} {actionDamageBonus(action)} to {actionDamageFlagNames(action)} objects within {actionArea(action)}"
+        s = f"{damageOnly} {actionDamageBonus(action)} to {actionDamageFlagNames(action)} objects within {actionArea(action)}."
+        onhits = actionOnHitNonDoTEffects(proto, action)
+        if onhits != "":
+            s += f" {onhits}"
+        return s
     return ""
 
 def getCommonAbilitiesNodeForPowerName(powerName: str) -> Union[None, ET.Element]:

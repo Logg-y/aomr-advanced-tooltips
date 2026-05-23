@@ -59,6 +59,7 @@ def wordwiseBlessingHandler(stringId: str, elemsByRarity: Dict[int, ET.Element])
 
     wordLengths = list(set([len(words) for words in textByRarity.values()]))
     if len(wordLengths) > 1:
+        pprint.pprint(stringsToRarity)
         raise ValueError(f"Aotg wordwise tech merger: different word lengths for {stringId}")
     
     items = []
@@ -205,7 +206,10 @@ def generateBlessingDescriptions():
         #        del stringIdsToTechUsers[stringId][3]
 
         handler = aotgBlessingHandlers.get(stringId, defaultHandler)
-        response = handler.handlerFunction(stringId, stringIdsToTechUsers[stringId])
+        try:
+            response = handler.handlerFunction(stringId, stringIdsToTechUsers[stringId])
+        except:
+            raise ValueError(f"Failed to generate tooltip for {stringId}")
         if response is not None:
             response = handler.postHandlerProcess(response)
             globals.stringMap[stringId] = response

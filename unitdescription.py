@@ -1517,12 +1517,10 @@ def generateUnitDescriptions():
     nonActionPassiveAbilities.append(('PassiveBattleFrenzy', tech.processTech(techtree.find("tech[@name='DevoteesOfAtlas']"), skipAffectedObjects=True, lineJoin="\\n")))
 
     #nonActionPassiveAbilities.append(('PassiveMasterOfWeaponry', tech.processEffect(techtree.find("tech[@name='MasterOfWeaponry']"), techtree.find("tech[@name='MasterOfWeaponry']/effects/effect[@effecttype='Snare']")).toString(skipAffectedObjects=True)))
-    rocksolid = common.techFromName("RockSolid")
-
-    effects = [action.handleIdleStatBonusAction(protoFromName("ChargedModifyContainer"), action.findActionByName("ChargedModifyContainer", f"RockSolid{type}Bonus"), action.actionTactics("ChargedModifyContainer", f"RockSolid{type}Bonus"), "", tech=rocksolid) for type in ("Hack", "Pierce")]
-    rocksolidText = common.attemptAllWordwiseTextMerges(effects, "RockSolid")
-
-    nonActionPassiveAbilities.append(('PassiveRockSolid', "\\n".join(rocksolidText)))
+    #rocksolid = common.techFromName("RockSolid")
+    #effects = [action.handleIdleStatBonusAction(protoFromName("ChargedModifyContainer"), action.findActionByName("ChargedModifyContainer", f"RockSolid{type}Bonus"), action.actionTactics("ChargedModifyContainer", f"RockSolid{type}Bonus"), "", tech=rocksolid) for type in ("Hack", "Pierce")]
+    #rocksolidText = common.attemptAllWordwiseTextMerges(effects, "RockSolid")
+    #nonActionPassiveAbilities.append(('PassiveRockSolid', "\\n".join(rocksolidText)))
 
     nonActionPassiveAbilities.append(('PassiveSearingPoint', action.actionOnHitNonDoTEffects(protoFromName("WhiteHorseCavalry"), action.findActionByName("WhiteHorseCavalry", "RangedAttack"), True)))
     nonActionPassiveAbilities.append(('PassiveLastStand', tech.processTech(techtree.find("tech[@name='LastStand']"), skipAffectedObjects=True)))

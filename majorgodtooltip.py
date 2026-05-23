@@ -80,9 +80,9 @@ def generateMajorGodDescriptions():
     globals.stringMap["STR_CIV_LOKI_LR"] = lokiContent
 
     kronosContent = globals.dataCollection['string_table.txt']["STR_CIV_KRONOS_LR"]
-    kronosContent = re.sub("to new locations [(](.*)[)]", "to new locations. Time shifting takes half the time it would take 1 Citizen to build the building. \\1", kronosContent)
+    kronosContent = re.sub("to new locations [(](.*)[)]", "to new locations. Time shifting takes the same time that 1 Citizen needs to build the building. \\1", kronosContent)
     globals.stringMap["STR_CIV_KRONOS_LR"] = kronosContent
-    globals.stringMap["STR_PUC_UNBUILD"] = "Time shift this building. This takes half the time that 1 Citizen needs to build it." # Default: "Time shift this building."
+    globals.stringMap["STR_PUC_UNBUILD"] = "Time shift this building. This takes the same time that 1 Citizen needs to build it." # Default: "Time shift this building."
 
     gaiaContent = globals.dataCollection['string_table.txt']["STR_CIV_GAIA_LR"]
     terrainCreep = globals.dataCollection['major_gods.xml'].find("civ[name='Gaia']/terraincreeps/terraincreep")
