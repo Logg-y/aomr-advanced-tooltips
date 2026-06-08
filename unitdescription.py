@@ -346,7 +346,7 @@ UNIT_CLASS_PREDICTIONS: Tuple[Tuple[str, str, Callable[[ET.Element], bool], Call
 
     ("Targeted by Meteor", "Not Targeted by Meteor", lambda x: not checkProtoFlag(x, "flag", "FlyingUnit") and not checkProtoFlag(x, "flag", "Invulnerable"), lambda x: checkProtoFlag(x, "unittype", "LogicalTypeValidMeteorTarget")),
     ("Valid Forest Protection/Earth Wall target", "Cannot be targeted for Forest Protection/Earth Wall", lambda x: checkProtoFlag(x, "unittype", "Building"), lambda x: checkProtoFlag(x, "unittype", "LogicalTypeValidForestProtectionPlacement")),
-    ("Raised by Underworld Invasion", "Not raised by Underworld Invasion", lambda x: checkProtoFlag(x, "unittype", "Unit") and not checkProtoFlag(x, "unittype", "EconomicUnit") and not checkProtoFlag(x, "movementtype", "water"), lambda x: checkProtoFlag(x, "unittype", "LogicalTypeValidEidolon")),
+    ("Raised by Underworld Invasion", "Not raised by Underworld Invasion", lambda x: checkProtoFlag(x, "unittype", "Unit") and not checkProtoFlag(x, "unittype", "EconomicUnit") and not checkProtoFlag(x, "unittype", "MythUnit") and not checkProtoFlag(x, "movementtype", "water"), lambda x: checkProtoFlag(x, "unittype", "LogicalTypeValidEidolon")),
 
     #("+LogicalTypeBuildingNotWonderOrTitan bug?", "-LogicalTypeBuildingNotWonderOrTitan bug?", lambda x: x.attrib['name'] not in ('Wonder', 'TitanGate') and checkProtoFlag(x, "unittype", "Building"),  lambda x: checkProtoFlag(x, "unittype", "LogicalTypeBuildingNotWonderOrTitan")),
     #("+cUnitTypeAbstractWarship bug?", "-cUnitTypeAbstractWarship bug?", lambda x: checkProtoFlag(x, "unittype", "Ship") and (checkProtoFlag(x, "unittype", "AbstractArcherShip") or checkProtoFlag(x, "unittype", "AbstractSiegeShip") or checkProtoFlag(x, "unittype", "AbstractCloseCombatShip")), lambda x: checkProtoFlag(x, "unittype", "AbstractWarship")),
@@ -1254,14 +1254,14 @@ def generateUnitDescriptions():
     # Others get the attack speed buff only on the ambush variant
     unitDescriptionOverrides["JaguarRider"] = UnitDescription(preActionInfoText={"HandAttack":"Generalist cavalry, especially good against ranged soldiers."}, ignoreActions=["JumpAttackStealth"], postActionInfoText={"JumpAttack":f"If used as stealth ambush: {action.actionOnHitNonDoTEffects(common.protoFromName("JaguarRider"), action.findActionByName("JaguarRider", "JumpAttackStealth"), filterOnHitTypes=["SelfModify"])}"}, additionalText="Receives a free Medium line upgrade.")
 
-    teixiptlaLifetimeBonus = float(common.techFromName("ClassicalAgeAztec").find("effects/effect[@subtype='Lifespan'][target='AbstractTeixiptla']").attrib['amount']) - 1.0
+    teixiptlaLifetimeBonuses = [f"{float(common.techFromName(f"{age}AgeAztec").find("effects/effect[@subtype='Lifespan'][target='AbstractTeixiptla']").attrib['amount']):0.3g}" for age in ("Classical", "Heroic", "Mythic")]
     for god in ("Tezca", "Quetz", "Huitz"):
         for superness in ("", "Super"):
             additional = {}
             if god == "Tezca" and superness == "":
                 additional['ignoreActions'] = ["JumpAttackStealth"] # This seems to be half an action from shared tactics
             lifetime = float(common.protoFromName(f"{superness}Teixiptla{god}").find("lifespan").text)
-            unitDescriptionOverrides[f"{superness}Teixiptla{god}"] = UnitDescription(additionalText=f"Lifespan is increased by {lifetime*teixiptlaLifetimeBonus:0.3g} after each Age advance.{" Is fully healed upon creation, regardless of the health of the Warrior Priest." if superness == "" else ""}", **additional)
+            unitDescriptionOverrides[f"{superness}Teixiptla{god}"] = UnitDescription(additionalText=f"Lifespan is increased by {'/'.join(teixiptlaLifetimeBonuses)} seconds in the Classical/Heroic/Mythic Ages (stacking).{" Is fully healed upon creation, regardless of the health of the Warrior Priest." if superness == "" else ""}", **additional)
 
     unitDescriptionOverrides["ArrowCanoe"] = UnitDescription(preActionInfoText={"RangedAttack":"Archer ship, good against close combat ships."})
     unitDescriptionOverrides["AtlatlSiegeCanoe"] = UnitDescription(preActionInfoText={"RangedAttack":"Siege ship, good against archer ships."})
@@ -1281,6 +1281,9 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["SmokeTrap"] = UnitDescription(includeVanillaDescription=False, additionalText=[f"When triggered or destroyed by damage, emits smoke that lasts {float(common.protoFromName("SmokeTrapAura").find("lifespan").text):0.3g} seconds:", action.describeAction("SmokeTrapAura", "AreaLOSReduction"), action.describeAction("SmokeTrapAura", "AreaSpeedReduction")])
     unitDescriptionOverrides["AgaveBloom"] = UnitDescription(includeVanillaDescription=False, additionalText=["Villagers gather from this using their base Berry Bush rate.", "Dies when its food inventory reaches zero."])
 
+    obsidianshardMaintainTrainPoints = findAndFetchText(action.findActionByName("ObsidianShard", "MaintainTrainClassical"), "maintaintrainpoints", None, float)
+    unitDescriptionOverrides["ObsidianShard"] = UnitDescription(includeVanillaDescription=False, additionalText=f"After {obsidianshardMaintainTrainPoints:0.3g} seconds, dies and is replaced with a random Aztec Myth Unit of your current Age.")
+
     monolith = common.protoFromName("MonolithOfTlaloc")
     monolithBirth = action.findActionByName("MonolithOfTlaloc", "BirthAttack")
     monolithStrike = action.findActionByName("MonolithOfTlaloc", "MonolithStrike")
@@ -1293,12 +1296,12 @@ def generateUnitDescriptions():
 
     monolithVFXAction = action.findActionByName("VFXPillarOfTlalocanStrike", "HandAttack")
     # at the time of writing, these are identical except the VFX version has the standard snare on it as well
-    if not action.actionDamageFull("VFXPillarOfTlalocanStrike", monolithVFXAction, hideRof=True).startswith(action.actionDamageFull(monolith, monolithStrike, hideRof=True)):
-        print(action.actionDamageFull(monolith, monolithStrike, hideRof=True))
-        print(action.actionDamageFull("VFXPillarOfTlalocanStrike", monolithVFXAction, hideRof=True))
-        raise ValueError("MonolithOfTlaloc area damage is now different to single target, assumption invalidated")
+    if action.actionDamageOnly(monolith, monolithStrike) != action.actionDamageOnly("VFXPillarOfTlalocanStrike", monolithVFXAction):
+        print(action.actionDamageOnly(monolith, monolithStrike))
+        print(action.actionDamageOnly("VFXPillarOfTlalocanStrike", monolithVFXAction))
+        raise ValueError("MonolithOfTlaloc power damage is now different to primary, assumption invalidated")
     
-    monolithstrikeGP = common.findGodPowerByName("AbilityMonolithStrike")
+    monolithstrikeGP = common.findGodPowerByName("AbilityMonolithStrikeBurst")
     monolithVFXTargets = godpower.godpowerAttackTargets(monolithstrikeGP)
     monolithstrikeRadius = common.findAndFetchText(monolithstrikeGP, "radius", 1.0, float)
     monolithstrikeThrowMaxSize = common.findAndFetchText(monolithstrikeGP, "throwsizelimit", 0, int)
@@ -1308,7 +1311,7 @@ def generateUnitDescriptions():
         overrideActionInfoText={"BirthAttack":f"Damaging impact upon creation: {action.actionTargetTypeText(monolith, monolithBirth)} {action.actionDamageFull(monolith, monolithBirth, isDPS=False)}",
                                 "MonolithStrike":f"Cannot hit flying targets. Damage per attack: {action.actionDamageFull(monolith, monolithStrike, isDPS=False, hideRof=True)} Effective {icon.iconRof()} {monolithStrikeEffectiveROF:0.3g}. Additionally, strikes {monolithVFXTargets} within {monolithstrikeRadius:0.3g}m for the same damage, throwing them if their size class is {monolithstrikeThrowMaxSize} or below, and stunning them for {monolithstrikeStunDuration:0.3g} seconds."
                                 },
-        additionalText="Only the primary target damage is affected by Armory weapon upgrades and Crenellations. The area damage also does not towards the tracked damage/kill stats."
+        additionalText="Only the one half of the damage is affected by Armory weapon upgrades and Crenellations. The secondary damage also does not towards the tracked damage/kill stats."
     )
 
     # Common/Similar

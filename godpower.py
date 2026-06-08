@@ -468,7 +468,7 @@ def generateGodPowerDescriptions():
     # The interval is slightly variable, but the average seems to be 50ms longer
     undermineInterval = float(undermine.find("attackintervalseconds").text) + 0.05
     undermineDamageMult = 1.0/undermineInterval
-    undermineItems = [f"Creates a moving wave of instability, damaging {{playerrelationpos}} Buildings while they are within {float(undermine.find('damageradius').text):0.3g}m of the wave: Damage does not depend on distance to the wave. Average DPS: {protoGodPowerDamage('UndermineDamage', 'HandAttack', undermineDamageMult)} Destroys Walls and Towers instantly.", "{duration}"]
+    undermineItems = [f"Creates a moving wave of instability, damaging {{playerrelationpos}} Buildings while they are within {float(undermine.find('damageradius').text):0.3g}m of the wave: Damage does not depend on distance to the wave. Average DPS: {protoGodPowerDamage('UndermineDamage', 'HandAttack', undermineDamageMult)} Destroys Walls, Mirror Towers and Watch Towers instantly, but not other tower-type buildings such as Chinese military buildings with the tower addon.", "{duration}"]
     godPowerProcessingParams["Undermine"] = GodPowerParams(undermineItems)
 
     asgardianbastion = findGodPowerByName("AsgardianBastion")
@@ -549,7 +549,9 @@ def generateGodPowerDescriptions():
     spiderlair = findGodPowerByName("SpiderLair")
     spiderlairHatchTime = float(spiderlair.find("hatchtime").text)
     spiderlairHatchTimeText = f"{spiderlairHatchTime+float(spiderlair.find('hatchintervalmin').text):0.3g}-{spiderlairHatchTime+float(spiderlair.find('hatchintervalmax').text):0.3g}"
-    spiderlairItems = [f"Spawns {int(spiderlair.find('numbertocreate').text)} Spider Eggs in a line, with {float(spiderlair.find('separationdistance').text):0.3g}m between them. Eggs are visible and attackable for {spiderlairHatchTimeText} seconds. After this time they sink into the ground and are invisible to enemies.", f"When {{playerrelationpos}} {{attacktargets}} come within {float(spiderlair.find('spiderattackrange').text):0.3g}m of a spider, the spider becomes barely visible for {float(spiderlair.find('warntime').text):0.3g} seconds, in which time the victim can move away. If they do not, the hatched spider kills them. Each spider can kill one victim this way.", f"Dormant spider eggs provide you with {float(common.protoFromName('Spider').find('los').text):0.3g} LOS until hatched."]
+    spiderlairStealthInfo = f"{common.findAndFetchText(common.protoFromName("SpiderDoor"), "stealthrevealselfradius", 0.0, float):0.3g}m"
+    # f"When {{playerrelationpos}} {{attacktargets}} come within {float(spiderlair.find('spiderattackrange').text):0.3g}m of a spider, the spider becomes barely visible for {float(spiderlair.find('warntime').text):0.3g} seconds, in which time the victim can move away. 
+    spiderlairItems = [f"Spawns {int(spiderlair.find('numbertocreate').text)} Spider Eggs in a line, with {float(spiderlair.find('separationdistance').text):0.3g}m between them. Eggs are visible and attackable for {spiderlairHatchTimeText} seconds. After this time they sink into the ground and are invisible to enemies, until enemies are within {spiderlairStealthInfo}.", f"When {{playerrelationpos}} {{attacktargets}} come within {float(spiderlair.find('spiderattackrange').text):0.3g}m of a spider, they have {float(spiderlair.find('warntime').text):0.3g} seconds to move away, else the hatched spider kills them. Each spider can kill one victim this way.", f"Dormant spider eggs provide you with {float(common.protoFromName('Spider').find('los').text):0.3g} LOS until hatched."]
     godPowerProcessingParams["SpiderLair"] = GodPowerParams(spiderlairItems)
 
     traitor = findGodPowerByName("Traitor")
@@ -843,20 +845,22 @@ def generateGodPowerDescriptions():
     underworldinvasion = findGodPowerByName("UnderworldInvasion")
     underworldinvasionEidolonHealth = 100.0*common.findAndFetchText(underworldinvasion, "eidolonmaxhpmultiplier", 1.0, float)
     underworldinvasionEidolonMax = common.findAndFetchText(underworldinvasion, "maxeidoloncount", 100, int)
+    underworldinvasionEidolonMin = common.findAndFetchText(underworldinvasion, "eidolonmin", 0, int)
     underworldinvasionEidolonStep = common.findAndFetchText(underworldinvasion, "eidolonstep", 100, int)
     underworldinvasionSuddenDeath = 100.0*common.findAndFetchText(underworldinvasion, "suddendeathhpmultiplier", 0.5, float)
-    underworldinvasionItems = [f"Targets one of your Town or Citadel Centers. Destroys all of your Town, Citadel and Village Centers, spawning up to {underworldinvasionEidolonStep} for each one destroyed (to a maximum of {underworldinvasionEidolonMax}) of the most recently slain land military units of all players around the settlement you targeted under your control. Eidolon versions of units use your current upgrades rather than those of their original owner, retain their normal population cost, but have their maximum health reduced to {underworldinvasionEidolonHealth:0.3g}% of normal. Eidolons persist until killed, even through the expiration of this power's duration.", "Any settlements you controlled at the time of invoking this power cannot be rebuilt until its timer ends; this does not include any you manually delete prior to its usage.", f"In Sudden Death mode, this power causes your Citadel to lose {underworldinvasionSuddenDeath:0.3g}% of its maximum hitpoints instead of being destroyed.", "{duration}"]
+    underworldinvasionItems = [f"Targets one of your Town or Citadel Centers. Destroys all of your Town, Citadel and Village Centers, spawning a flat {underworldinvasionEidolonMin}, plus {underworldinvasionEidolonStep} for each one destroyed (to a maximum of {underworldinvasionEidolonMax}) of the most recently slain Human Soldiers of all players around the settlement you targeted under your control. Eidolon versions of units use your current upgrades rather than those of their original owner, retain their normal population cost, but have their maximum health reduced to {underworldinvasionEidolonHealth:0.3g}% of normal. Eidolons persist until killed, even through the expiration of this power's duration.", "Any settlements you controlled at the time of invoking this power cannot be rebuilt by any player until its timer ends; this does not include any you manually delete prior to its usage.", "Additionally, you cannot build any Town Centers for the duration of the power.", f"In Sudden Death mode, this power causes your Citadel to lose {underworldinvasionSuddenDeath:0.3g}% of its maximum hitpoints instead of being destroyed.", "{duration}"]
     godPowerProcessingParams["UnderworldInvasion"] = GodPowerParams(underworldinvasionItems)
 
     bloodpact = findGodPowerByName("BloodPact")
-    ageindex = 0
+    ages = ["ArchaicAge", "ClassicalAge", "HeroicAge", "MythicAge", "WonderAge"]
     modifykeys = {"Speed":"Movement Speed", "MaxHP":"Maximum HP", "BuildRate":"Building Speed", "VisualScale":"Model Size", "FavorDeathReward":"Favor given to you on death", "GatherRate":"Gather Rates"}
     bloodpactItems = ["Grants a single unit greatly increased abilities for a short time, then kills it. Targets your or an ally's {attacktargets}."]
+    bloodpactEffectsByAge = {}
     for effect in bloodpact.findall("unitmodify"):
         label = ""
+        ageindex = None
         if "age" in effect.attrib:
-            label += common.AGE_LABELS[ageindex] + ": "
-            ageindex += 1
+            ageindex = ages.index(effect.attrib["age"])
         apply = effect.attrib['apply']
         labelformat = "{rel} {value} to {target}."
         lateword = "to"
@@ -877,7 +881,15 @@ def generateGodPowerDescriptions():
         else:
             value = f"{float(effect.attrib['amount']):0.3g}"
         label += labelformat.format(rel=rel, target=target, value=value)
-        bloodpactItems.append(label)    
+        if ageindex is not None:
+            if ageindex not in bloodpactEffectsByAge:
+                bloodpactEffectsByAge[ageindex] = []
+            bloodpactEffectsByAge[ageindex].append(label)
+        else:
+            bloodpactItems.append(label)    
+
+    for ageindex, effects in bloodpactEffectsByAge.items():
+        bloodpactItems.append(f"{common.AGE_LABELS[ageindex]}: {' '.join(effects)}")
     
     bloodpactItems.append("{duration}")
     godPowerProcessingParams["BloodPact"] = GodPowerParams(bloodpactItems)

@@ -79,6 +79,9 @@ ACTION_TYPE_NAMES = {
     "FoodGatherAura":"",
     "ThornedWallsAttack":"Melee Punish",
     "RockSolidReflectAttack":"Melee Punish",
+    "AreaHeal":"",
+    "HarvestOfSouls":"",
+    "CallOfLykaionSpawn":"",
 }
 
 def findFromActionOrTactics(action: ET.Element, tactics: ET.Element, query: str, default: Any=None, conversion: Union[None, Type] = None):
@@ -1232,13 +1235,16 @@ def handleAutoGatherAction(proto: ET.Element, action: ET.Element, tactics: Union
             stringForm = format(float(format(rate, "0.3g")), "10f").rstrip("0")
         rates.append(f"{icon.resourceIcon(rateNode.attrib['type'])} {stringForm}")
 
-    if findFromActionOrTactics(action, tactics, "autogatherscalebygatherrate", 0, int):
-        targetTypeElems = findAllFromActionOrTactics(action, tactics, "donotautogatherunlessgatheringtypes/unittype")
+    autogatherscalebygatherrate = findFromActionOrTactics(action, tactics, "autogatherscalebygatherrate", 0, int)
+    targetTypeElems = findAllFromActionOrTactics(action, tactics, "donotautogatherunlessgatheringtypes/unittype")
+    if len(targetTypeElems):
         targetTypes = [elem.text for elem in targetTypeElems]
-        if len(targetTypes) == 0:
-            return f"Generates {' '.join(rates)} per resource gathered."
-        
-        return f"Generates {' '.join(rates)} per resource gathered while gathering from {common.getDisplayNameForProtoOrClassPlural(targetTypes)}."
+        if autogatherscalebygatherrate:
+            return f"Generates {' '.join(rates)} per resource gathered while gathering from {common.getDisplayNameForProtoOrClassPlural(targetTypes)}."
+        else:
+            return f"Generates {' '.join(rates)} per second while gathering from {common.getDisplayNameForProtoOrClassPlural(targetTypes)}."
+    if autogatherscalebygatherrate:
+        return f"Generates {' '.join(rates)} per resource gathered."
     
     text = f"Generates {' '.join(rates)} per second."
     if findFromActionOrTactics(action, tactics, "addresourcestoinventory", 0, int) > 0:

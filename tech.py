@@ -1042,6 +1042,7 @@ DATA_SUBTYPE_HANDLERS: Dict[str, Callable[[ET.Element, ET.Element], Union[Effect
     "onhiteffectprobability":dataSubtypeOnHitEffectProbability,
     "yield":dataSubtypeWithAmountHelper("Resources gathered from {combinable} before depletion: {value}", combinableAttribute="unittype", combinableAttributeFormat=common.getDisplayNameForProtoOrClass),
     "timeshiftingtimeratio":dataSubtypeWithAmountHelper("Time to Timeshift {combinable}: {value}", combinableAttribute="unittype", combinableAttributeFormat=common.getDisplayNameForProtoOrClass),
+    "gathererlimit":dataSubtypeWithAmountHelper("Gatherer limit: {value}", combinableString=""),
 }
 
 
@@ -1201,7 +1202,9 @@ def generateTechDescriptions():
 
     techManualAdditions["WingedMessenger"] = TechAddition(startEntry=f"Grants a Pegasus that respawns for free {float(globals.respawnTechs['PegasusWingedMessenger'].find('delay').text):0.3g} seconds after it is killed. This Pegasus does not have a population cost.")
 
-    techManualAdditions["PredatoryInstinct"] = TechAddition(startEntry="Allows Lykaons to transform at will between Villager and Wolf forms.")
+    techManualAdditions["PredatoryInstinct"] = TechAddition(endEntry="The spawning happens from all currently existing Centres and those built in the future.")
+    # The abstract target getter goes to town on this one and lists every single greek hero and the Quetz teixiptla/incarnate as well
+    techManualAdditions["HymnOfTheWildwood"] = TechAddition(lineFilter=lambda l: False, startEntry="Hero: " + action.describeAction("Jason", "AreaHeal", tech=common.techFromName("HymnOfTheWildwood")))
 
     def bounceHelper(additionalBounces: int, protoName: str, actionName="RangedAttack"):
         actionElem = action.findActionByName(protoName, actionName)
@@ -1429,7 +1432,7 @@ def generateTechDescriptions():
     classicalAgeGeneral = techtree.find("tech[@name='ClassicalAgeGeneral']")
     heroicAgeGeneral = techtree.find("tech[@name='HeroicAgeGeneral']")
     mythicAgeGeneral = techtree.find("tech[@name='MythicAgeGeneral']")
-    ageUpComponents = ["Myth Units of Earlier Ages: Hitpoints, Damage, Healing, and Slow/Stun duration: +20% of base."]
+    ageUpComponents = ["Myth Units of Earlier Ages: Hitpoints, Damage, Healing, and Slow/Stun duration: +25% of base."]
     ageUpTechs = (classicalAgeGeneral, heroicAgeGeneral, mythicAgeGeneral)
     heroHitpoints = ["{:0.3g}".format(100*(-1+float(age.find("effects/effect[@subtype='Hitpoints']/target[.='HeroShadowUpgraded']/..").attrib['amount']))) for age in ageUpTechs]
     heroDamage = ["{:0.3g}".format(100*(-1+float(age.find("effects/effect[@subtype='Damage']/target[.='HeroShadowUpgraded']/..").attrib['amount']))) for age in ageUpTechs]
