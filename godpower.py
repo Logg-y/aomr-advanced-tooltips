@@ -267,7 +267,7 @@ def generateGodPowerDescriptions():
 
     sentinel = findGodPowerByName("Sentinel")
     sentinelCreateUnit = sentinel.find("createunit")
-    sentinelItems = [f"Creates {sentinelCreateUnit.attrib['quantity']} Sentinels in a {sentinelCreateUnit.attrib['minradius']}-{sentinelCreateUnit.attrib['maxradius']}m circle around {{playerrelationpos}} Town Center, Citadel Center, or Fortress-like building. Can be rotated (mouse wheel) before placing.", unitdescription.describeUnit("Sentinel")]
+    sentinelItems = [f"Creates {sentinelCreateUnit.attrib['quantity']} Sentinels in a {sentinelCreateUnit.attrib['minradius']}-{sentinelCreateUnit.attrib['maxradius']}m circle around {{playerrelationpos}} Town Center, Citadel Center, Village Center, or Fortress-like building. Can be rotated (mouse wheel) before placing.", unitdescription.describeUnit("Sentinel")]
     godPowerProcessingParams["Sentinel"] = GodPowerParams(sentinelItems)
 
     lure = findGodPowerByName("Lure")
@@ -601,7 +601,7 @@ def generateGodPowerDescriptions():
     implodeRepeatText = "" if implodeInterval > 30 else f", and again every {implodeInterval:0.3g} seconds until the sphere explodes"
 
     implodeItems = [f"Creates a floating sphere that begins to suck in all players' {{attacktargets}} within {float(implode.find('pullradius').text):0.3g}m. Prevents garrisoning in the area of effect. The sphere soon begins to suck up about {implodeUnitSuckRate:0.3g} units per second.  Units designated to be pulled are connected to the sphere with a blue ray: if the units are able to get {float(implode.find('unitescaperadius').text):0.3g}m from the sphere before being pulled in, they escape unharmed. Preferentially pulls units closest to the southeast edge of the map first."]
-    implodeItems += [f"Units that are sucked up by the sphere take {protoGodPowerDamage('ImplodeSphere', 'HandAttack', damageOnly=True)} when they reach the sphere{implodeRepeatText}."]
+    implodeItems += [f"Units that are sucked up by the sphere take {protoGodPowerDamage('ImplodeSphere', 'HandAttack', damageOnly=True)} when they reach the sphere{implodeRepeatText}. Villagers take half damage."]
     implodeItems += [f"The sphere explosion inflicts {protoGodPowerDamage('ImplodeShockwave', 'HandAttack', damageOnly=False)} This damage strikes all objects within {float(implode.find('exploderadius').text):0.3g}m and has no damage falloff. Units sucked into the sphere are not hit by this. The explosion damage is increased by {100*float(implode.find('poweraccumulationincrement').text):0.3g}% per unit sucked into the sphere, to a maximum damage bonus of {100*float(implode.find('maximumaccumulatedpower').text):0.3g}%."]
     implodeItems += [f"Friendly objects take only 10% damage from both sources.", "{powerblocker}", "{los}"]
     godPowerProcessingParams["Implode"] = GodPowerParams(implodeItems)
@@ -853,7 +853,7 @@ def generateGodPowerDescriptions():
 
     bloodpact = findGodPowerByName("BloodPact")
     ages = ["ArchaicAge", "ClassicalAge", "HeroicAge", "MythicAge", "WonderAge"]
-    modifykeys = {"Speed":"Movement Speed", "MaxHP":"Maximum HP", "BuildRate":"Building Speed", "VisualScale":"Model Size", "FavorDeathReward":"Favor given to you on death", "GatherRate":"Gather Rates"}
+    modifykeys = {"Speed":"Movement Speed", "MaxHP":"Maximum HP", "BuildRate":"Building Speed", "VisualScale":"Model Size", "FavorDeathReward":"Favor given to the target's owner on death", "GatherRate":"Gather Rates"}
     bloodpactItems = ["Grants a single unit greatly increased abilities for a short time, then kills it. Targets your or an ally's {attacktargets}."]
     bloodpactEffectsByAge = {}
     for effect in bloodpact.findall("unitmodify"):
@@ -896,17 +896,13 @@ def generateGodPowerDescriptions():
 
     obsidianmirror = findGodPowerByName("ObsidianMirror")
     obsidianmirrorAltPowers = [common.getObjectDisplayName(findGodPowerByName(elem.text)) for elem in obsidianmirror.findall("duplicatetargetreplacement/target")]
-    obsidianmirrorItems = [f"Target any object in line of sight owned by another player to copy their Archaic age power. This power has an initial cooldown the same as Obsidian Mirror's. Their power remains in your power list until used once, which causes the slot to revert back to Obsidian Mirror, which again must recharge for the same amount of time again.", "Every use of a borrowed power beyond the first will incur a recast cost: the game tracks how many times borrowed powers have been used, and then charges favor equal to the borrowed power's normal recast cost as if it had been cast that many times before, even if different powers have been copied this way.", f"If the targeted player's god power is also Obsidian Mirror, you are given one of {common.commaSeparatedList(obsidianmirrorAltPowers)} at equal weighting."]
+    obsidianmirrorItems = [f"Target any object in line of sight owned by another player to copy their Archaic age power. Their power remains in your power list until used once, which causes the slot to revert back to Obsidian Mirror.", "Every use of a borrowed power beyond the first will incur a recast cost: the game tracks how many times borrowed powers have been used, and then charges favor equal to the borrowed power's normal recast cost as if it had been cast that many times before, even if different powers have been copied this way.", f"If the targeted player's god power is also Obsidian Mirror, you are given one of {common.commaSeparatedList(obsidianmirrorAltPowers)} at equal weighting."]
     godPowerProcessingParams["ObsidianMirror"] = GodPowerParams(obsidianmirrorItems)
 
     tailwind = findGodPowerByName("Tailwind")
     tailwindBoost = f"Multiplies Movement Speed by {tailwind.find("unitmodify").attrib['amount']}."
     tailwindItems = [f"Targets {{playerrelationpos}} {{attacktargets}}.", tailwindBoost, "{radius}", "{duration}"]
     godPowerProcessingParams["Tailwind"] = GodPowerParams(tailwindItems)
-
-    obsidianmirror = findGodPowerByName("ObsidianMirror")
-    obsidianmirrorItems = ["Copies the Archaic Age god power from the targeted unit or building.", "If used on another Tezcatlipoca player's object, copies Blood Pact instead.", "The copied power uses its normal cast cost and recast cost."]
-    godPowerProcessingParams["ObsidianMirror"] = GodPowerParams(obsidianmirrorItems, overrideCost="copied power cost")
 
     lullaby = findGodPowerByName("Lullaby")
     lullabySleep = lullaby.find("onhiteffect[@type='Sleep']")

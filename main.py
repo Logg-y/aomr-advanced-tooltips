@@ -49,15 +49,15 @@ def loadXmls(gameplayDir):
             if xml.endswith(".xml") or xml.endswith(".tactics") or xml.endswith(".abilities") or xml.endswith(".godpowers") or xml.endswith(".techtree"):
                 root = ET.parse(filepath).getroot()
                 if subpath == "":
-                    globals.dataCollection[xml] = root
+                    globals.dataCollection[xml.lower()] = root
                 else:
                     if subpath not in globals.dataCollection:
                         globals.dataCollection[subpath] = {}
-                    globals.dataCollection[subpath][xml] = root
+                    globals.dataCollection[subpath][xml.lower()] = root
             if xml.endswith(".simjson"):
                 with open(filepath, encoding="utf8") as f:
                     doc = json.load(f)
-                    globals.dataCollection[xml] = doc
+                    globals.dataCollection[xml.lower()] = doc
     
     mergeXmls(globals.dataCollection['techtree.xml'], globals.dataCollection['aotg_techtree.techtree'])
     mergeXmls(globals.dataCollection['proto.xml'], globals.dataCollection['aotg_proto.xml'])

@@ -97,6 +97,8 @@ IGNORE_UNITS = (
 "CheatSuperTeixiptlaQuetz",
 "CheatSuperTeixiptlaTezca",
 "TlacanexquimilliSPC",
+"MinionCurseOfRaCheat",
+"MummyCurseOfRaCheat",
 )
 
 
@@ -1047,9 +1049,6 @@ def generateUnitDescriptions():
     unitDescriptionOverrides["Chimera"] = UnitDescription(postActionInfoText={"ChargedRangedAttack":action.actionDamageOverTimeArea('ChimeraFireArea', parentAction=action.findActionByName('Chimera', "ChargedRangedAttack"))})
     unitDescriptionOverrides["Carcinos"] = UnitDescription(linkActionsToAbilities={"SelfDestructAttack":"AbilityCarcinos"})
     unitDescriptionOverrides["Colossus"] = UnitDescription(ignoreActions=["BuildingAttack"])
-    unitDescriptionOverrides["Odysseus"] = HideFlyingAttack
-    unitDescriptionOverrides["Chiron"] = HideFlyingAttack
-    unitDescriptionOverrides["Hippolyta"] = HideFlyingAttack
     unitDescriptionOverrides["Trireme"] = UnitDescription(preActionInfoText={"RangedAttack":"Archer ship, good against close combat ships."})
     unitDescriptionOverrides["Juggernaut"] = UnitDescription(preActionInfoText={"RangedAttack":"Siege ship, good against archer ships."})
     unitDescriptionOverrides["Pentekonter"] = UnitDescription(preActionInfoText={"HandAttack":"Close combat ship, good against siege ships."})

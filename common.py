@@ -309,6 +309,7 @@ _UNIT_CLASS_LABELS_PLURAL = {
     "LogicalTypeSeidrTarget":"Hersir, Godi, and Valkyries",
     "LogicalTypeWitherable":"Witherable objects",
     "EconomicUpgraded":"Villagers",
+    "BuildLimitSharedNorse":"Gatherers and Dwarves",
     
 }
 

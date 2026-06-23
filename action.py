@@ -221,13 +221,19 @@ def actionDamageFull(protoUnit: ET.Element, action: ET.Element, isDPS=False, hid
 
     tactics = actionTactics(protoUnit, action)
 
+    homingballistics = findFromActionOrTactics(action, tactics, "homingballistics", 0.0, float) > 0.0
+
     trackrating = findFromActionOrTactics(action, tactics, "trackrating", None, float)
-    if trackrating is not None and trackrating != 0.0:
+    if trackrating is not None and trackrating != 0.0 and not homingballistics:
         components.append(f"Track rating: {trackrating:0.3g}.")
     accuracy = findFromActionOrTactics(action, tactics, "accuracy", None, float)
     if accuracy is not None:
-        if findFromActionOrTactics(action, tactics, "perfectaccuracy") is None:
+        if findFromActionOrTactics(action, tactics, "perfectaccuracy") is None and not homingballistics:
             components.append(f"Accuracy: {100*accuracy:0.3g}%.")
+    
+    if homingballistics:
+        components.append(f"Cannot miss.")
+
     if findFromActionOrTactics(action, tactics, "autoretarget", 0, int) > 0 and getActionAttackCount(protoUnit, action) > 1:
         components.append(f"Later attacks in the animation retarget if the victim dies partway through.")
 
@@ -794,7 +800,7 @@ def actionTactics(proto: Union[ET.Element, str], action: Union[ET.Element, str, 
     if tacticsNode is None:
         #raise ValueError(f"Failed to get tactics for {proto.attrib.get('name', 'unknown')}")
         return None
-    tacticsFile = globals.dataCollection["tactics"][tacticsNode.text]
+    tacticsFile = globals.dataCollection["tactics"][tacticsNode.text.lower()]
     if action is None:
         return tacticsFile
     if not isinstance(action, str):
@@ -1334,7 +1340,11 @@ def handleConvertAction(proto: ET.Element, action: ET.Element, tactics: Union[No
             exclusive = "A target cannot be affected by this action until previous conversions expire. "
         duration = findFromActionOrTactics(action, tactics, "typedduration", 0.0, float)/1000.0
         stunDuration = findFromActionOrTactics(action, tactics, "typedstunduration", 0.0, float)/1000.0
-        return f"{actionName} {rechargeRate(proto, action, chargeType, tech)}: {actionTargetTypeText(proto, action)} Stuns targets for {stunDuration:0.3g}s, creating a copy under your control next to the user that lasts for the {duration:0.3g}s. This copy inherits any upgrades on the original, and appears at full health with special attacks ready to use. {exclusive}{actionRange(proto, action, True)} {actionRof(action)}"
+        if stunDuration > 0.0:
+            stunText = f"Stuns targets for {stunDuration:0.3g}s, creating"
+        else:
+            stunText = "Creates"
+        return f"{actionName} {rechargeRate(proto, action, chargeType, tech)}: {actionTargetTypeText(proto, action)} {stunText} a copy under your control next to the user that lasts for the {duration:0.3g}s. This copy inherits any upgrades on the original, and appears at full health with special attacks ready to use. {exclusive}{actionRange(proto, action, True)} {actionRof(action)}"
 
     converttargets = {}
     forbiddenTargets = []
@@ -2225,7 +2235,7 @@ def devoteMinorHandler(proto: ET.Element, action: ET.Element, tactics: Union[Non
         text = "May be sacrified at a Temple for favor, with decreasing returns as more are sacrified (full progression in history):"
         text += f"\\n   {icon.BULLET_POINT_ALT} ".join(lines)
 
-        historyText = f"Instant favor reward follow the following formula, where:\n\nF = total instant favor generated from instant villager devotion:\nB = base favor for devotion, after modifiers (default is {b})\n\n"
+        historyText = f"Instant favor rewards follow the following formula, where:\n\nF = total instant favor generated from instant villager devotion:\nB = base favor for devotion, after modifiers (default is {b})\n\n"
         historyText += f"favor = B * (1-(((1-{m})*F)/{e}))"
         historyText += f"\n\nOnce F > {e}, this simply becomes a flat B * {m} every sacrifice.\n\n"
         historyText += "Favor trickle follows a predefined progression with sacrified villager count as follows:\n\n"
