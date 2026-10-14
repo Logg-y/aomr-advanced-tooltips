@@ -49,6 +49,7 @@ IGNORE_POWERS = (
     "ImplodeSPC",
     "ExplosionWeakerSPC",
     "BlazingPrarieSPC",
+    "ShockwaveAbility",
     )
 
 @dataclasses.dataclass

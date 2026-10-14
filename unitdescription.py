@@ -620,13 +620,10 @@ class UnitDescription:
                 active = findAndFetchText(tactics, "active", 1, int)
             # This is run before the active state checking so that ability linking works correctly
             # Must check all actions and generate text for them even if they are not displayed by default
-            description = action.describeAction(protoUnit, actionNode, chargeType, self.actionNameOverrides.get(actionType, None), self.linkActionsToAbilities.get(actionType, None), overrideText=self.overrideActionInfoText.get(actionType, None))
+            description = action.describeAction(protoUnit, actionNode, chargeType, self.actionNameOverrides.get(actionType, None), self.linkActionsToAbilities.get(actionType, None), overrideText=self.overrideActionInfoText.get(actionType, None), preText=self.preActionInfoText.get(actionType, ""), postText=self.postActionInfoText.get(actionType, ""))
             if not active and actionType not in self.showActionsIfDisabled:
                 continue
-            components = [self.preActionInfoText.get(actionType, ""), description, self.postActionInfoText.get(actionType, "")]
-            components = [x.strip() for x in components if len(x.strip())]
-            thisDescription = " ".join(components)
-            descriptionsByActionName[actionType] = thisDescription
+            descriptionsByActionName[actionType] = description
         
         # If any charge actions share cooldowns, this is the time to make a note of it
         # And all the variables are here (actionChargeTypes, descriptionsByActionName) to do that and stick a few words on to say they share
@@ -635,7 +632,6 @@ class UnitDescription:
         descriptions = list(descriptionsByActionName.values())
         if self.generaliseInfectionEffects:
             descriptions.append("Infection: " + action.UNIT_INFECTION_TEXT[protoName])
-       
 
         return descriptions
     
@@ -961,6 +957,8 @@ def oracleHistoryText(protoName):
     return f"Favor income rate per second: {rate} + {quadraticTermString}x(current idle LOS bonus)²\\nFlat LOS boosts (eg Pelt of Argus) do NOT affect this: this is entirely dependent on the amount of idle bonus."
 
 unitDescriptionOverrides: Dict[str, UnitDescription] = {}
+ # Non action tied passives that we still want to write text for!
+nonActionPassiveAbilities: List[Union[str, Tuple[ET.Element, str]]] = []
 
 def describeUnit(unit: Union[str, ET.Element]) -> Union[str, None]:
     unit = protoFromName(unit)
@@ -1433,8 +1431,6 @@ def generateUnitDescriptions():
             override.appendAdditionalText(f"{icon.resourceIcon('CombatXP')} from inflicting damage: {mod}")
             unitDescriptionOverrides[targetType] = override
 
-    # Non action tied passives that we still want to write text for!
-    nonActionPassiveAbilities: List[Union[str, Tuple[ET.Element, str]]] = []
 
     # Greek
     nonActionPassiveAbilities.append(('PassiveSolarFlare', SunRayRevealerText))
@@ -1528,7 +1524,8 @@ def generateUnitDescriptions():
     nonActionPassiveAbilities.append(('PassiveLastStand', tech.processTech(techtree.find("tech[@name='LastStand']"), skipAffectedObjects=True)))
     nonActionPassiveAbilities.append(('PassiveAutumnOfAbundance', tech.processTech(techtree.find("tech[@name='AutumnOfAbundance']"), skipAffectedObjects=True)))
     nonActionPassiveAbilities.append(('PassiveSilkRoad', tech.processEffect(common.techFromName("SilkRoad"), techtree.find("tech[@name='SilkRoad']/effects/effect[@flag='TradeAddAllyResources']")).toString(skipAffectedObjects=True)))
-    nonActionPassiveAbilities.append(('PassiveVibrantLand', tech.techManualAdditions["VibrantLand"].startEntry))
+    if "VibrantLand" in tech.techManualAdditions:
+        nonActionPassiveAbilities.append(('PassiveVibrantLand', tech.techManualAdditions["VibrantLand"].startEntry))
     nonActionPassiveAbilities.append(('PassiveShennongFarmGatherBonus', f"This farm is gathered {100*findAndFetchText(common.protoFromName('FarmShennong'), 'gatherratemultiplier', 1.0, float)-100.0:0.3g}% faster."))
     
     # Other misc unit related strings
@@ -1551,6 +1548,9 @@ def generateUnitDescriptions():
 
 
     for abilityName, tooltip in nonActionPassiveAbilities:
+        if tooltip is None:
+            common.warn_unhandled(f"Passive {abilityName} returned no tooltip text")
+            continue
         sourceObject = None
         if not isinstance(tooltip, str):
             sourceObject, tooltip = tooltip

@@ -210,8 +210,8 @@ _UNIT_CLASS_LABELS = {
     "LogicalTypeWitherable":"Witherable",
     "AbstractTeixiptla":"Teixiptla and Incarnates",
     "AbstractCalpulli":"Calpulli",
-    "EconomicUpgraded":"Villagers",
-    "BuildLimitSharedNorse":"Gatherers and Dwarves", # For campaign reasons this includes Aztec villagers
+    "EconomicUpgraded":"Villager",
+    "BuildLimitSharedNorse":"Gatherer and Dwarf", # For campaign reasons this includes Aztec villagers
 }
 
 

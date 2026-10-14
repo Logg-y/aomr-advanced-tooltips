@@ -185,7 +185,7 @@ def actionDamageMultiplier(proto: ET.Element, action: ET.Element, isDPS=True, si
     return 1.0/rof
     
 
-def actionDamageFull(protoUnit: ET.Element, action: ET.Element, isDPS=False, hideArea=False, damageMultiplier=1.0, hideRof=False, hideRange=False, ignoreActive=False, hideDamageBonuses=False, hideDamage=False):
+def actionDamageFull(protoUnit: ET.Element, action: ET.Element, isDPS=False, hideArea=False, damageMultiplier=1.0, hideRof=False, hideRange=False, ignoreActive=False, hideDamageBonuses=False, hideDamage=False, hideOnHitNonDoT=False):
     # Scorpion man special attack has displayed num projectiles but no actual projectiles
     # I think it makes 3 little attacks and this is how the developers opted to represent that
     # but it'd be much less confusing to multiply these out for the tooltip
@@ -249,8 +249,9 @@ def actionDamageFull(protoUnit: ET.Element, action: ET.Element, isDPS=False, hid
             for rate in scale:
                 components.append(f"Each garrisoned {common.getDisplayNameForProtoOrClass(rate.attrib['type'])} increases damage by {float(rate.text)*100:0.3g}%.")
             break
-        
-    components.append(actionOnHitNonDoTEffects(protoUnit, action, ignoreActive=ignoreActive))
+
+    if not hideOnHitNonDoT:
+        components.append(actionOnHitNonDoTEffects(protoUnit, action, ignoreActive=ignoreActive))
 
     if findFromActionOrTactics(action, tactics, "selfdestruct", 0, int) > 0:
         components.append("Kills the user.")
@@ -320,6 +321,8 @@ def rechargeRate(proto: ET.Element, action:ET.Element, chargeType: ActionChargeT
             return f"Occurs every {rechargeTime:0.3g} damage dealt to {targetString}"
         elif rechargeType.lower() == "resourcedropoff":
             return f"Occurs every {rechargeTime:0.3g} resources deposited"
+        elif rechargeType.lower() == "kills":
+            return f": Usable every {rechargeTime:0.3g} {'kill' if rechargeTime == 1 else 'kills'}"
         else:
             common.warn_unhandled(f"Unhandled action recharge type {rechargeType} on {proto.attrib['name']}")
             return "Unknown"
@@ -624,6 +627,8 @@ def actionOnHitNonDoTEffects(proto: ET.Element, action: ET.Element, ignoreActive
             thisItem = f"{probString}Roots {targetString} for {float(onhiteffect.attrib['duration']):0.3g}s."
         elif onhitType == "Flee":
             thisItem = f"{probString}Causes {targetString} to run in fear for {float(onhiteffect.attrib['duration']):0.3g}s."
+        elif onhitType == "Sleep":
+            thisItem = f"{probString}Causes {targetString} to fall asleep for {float(onhiteffect.attrib['duration']):0.3g}s or until damaged."
         elif onhitType == "SelfStealth":
             thisItem = f"{probString}Becomes invisible for {float(onhiteffect.attrib['duration']):0.3g}s."
         elif onhitType == "Exile":
@@ -1103,10 +1108,10 @@ def actionTargetTypeText(proto: ET.Element, action: ET.Element):
         text += " Requires line of sight to use."
     return text.strip()
 
-def simpleActionHandler(additionalText=""):
+def simpleActionHandler(additionalText="", **actionDamageFullKwargs):
     def inner(proto: ET.Element, action: ET.Element, tactics: Union[None, ET.Element], actionName: str, chargeType:ActionChargeType=ActionChargeType.NONE, tech: Union[None, ET.Element]=None):
         useDPS = chargeType == ActionChargeType.NONE and findFromActionOrTactics(action, tactics, "selfdestruct", 0, int) == 0
-        items = [actionName, rechargeRate(proto, action, chargeType, tech), actionTargetTypeText(proto, action), additionalText, actionPreDamageInfoText(action), "DPS: " if useDPS else "", actionDamageFull(proto, action, isDPS=useDPS, ignoreActive=tech is not None)]
+        items = [actionName, rechargeRate(proto, action, chargeType, tech), actionTargetTypeText(proto, action), additionalText, actionPreDamageInfoText(action), "DPS: " if useDPS else "", actionDamageFull(proto, action, isDPS=useDPS, ignoreActive=tech is not None, **actionDamageFullKwargs)]
         for index in (1, 0):
             if len(items[index]):
                 items[index] += ":"
@@ -2410,26 +2415,29 @@ def getCivAbilitiesNode(proto: Union[ET.Element, str], action: Union[ET.Element,
     tactics = actionTactics(proto, action)
     actionInternalName = findFromActionOrTactics(action, tactics, "name", None)
     actionAnimName = findFromActionOrTactics(action, tactics, "anim", None, str)
-    abilityInfo = None
 
     if forceAbilityLink is not None:
-        abilityInfo = globals.dataCollection["abilities_combined"].find(f"power[@name='{forceAbilityLink}']")
+        return globals.dataCollection["abilities_combined"].find(f"power[@name='{forceAbilityLink}']")
     else:
         unitAbilitiesEntry = globals.dataCollection["abilities"]["abilities.xml"].find(proto.attrib["name"].lower())
         if unitAbilitiesEntry is None:
             pass
         else:
+            animMatch = None
             for abilityNode in unitAbilitiesEntry:
-                abilityInfo = globals.dataCollection["abilities_combined"].find(f"power[@name='{abilityNode.text}']")
+                #abilityInfo = globals.dataCollection["abilities_combined"].find(f"power[@name='{abilityNode.text}']")
                 abilityInfo = getCommonAbilitiesNodeForPowerName(abilityNode.text)
                 if abilityInfo is None:
                     common.warn_data(f"{proto.attrib['name']}'s {common.findAndFetchText(action, "name", "???", str)} has an abilities.xml entry but couldn't find a corresponding civ.abilities")
                     continue
                 unitAction = findAndFetchText(abilityInfo, "unitaction", None)
-                if unitAction == actionInternalName or (actionAnimName is not None and unitAction == actionAnimName):
-                    break
-                abilityInfo = None
-    return abilityInfo
+                if unitAction is not None and unitAction == actionInternalName:
+                    return abilityInfo
+                elif actionAnimName is not None and unitAction == actionAnimName:
+                    animMatch = copy.copy(abilityInfo)
+            if animMatch is not None:
+                return animMatch
+    return None
 
 def getActionDisplayName(proto: Union[ET.Element, str], action: Union[ET.Element, str], forceAbilityLink: Union[str, None]=None, nameNonChargeActions=False):
     if isinstance(proto, str):
@@ -2457,7 +2465,7 @@ def getActionDisplayName(proto: Union[ET.Element, str], action: Union[ET.Element
     return actionName
 
 
-def describeAction(proto: Union[str, ET.Element], action: Union[str, ET.Element], chargeType: ActionChargeType=ActionChargeType.NONE, nameOverride: Union[str, None] = None, forceAbilityLink: Union[str, None] = None, overrideText: Union[str, None]=None, tech: Union[ET.Element, None]=None):
+def describeAction(proto: Union[str, ET.Element], action: Union[str, ET.Element], chargeType: ActionChargeType=ActionChargeType.NONE, nameOverride: Union[str, None] = None, forceAbilityLink: Union[str, None] = None, overrideText: Union[str, None]=None, tech: Union[ET.Element, None]=None, preText:str="", postText:str=""):
     if isinstance(proto, str):
         proto = common.protoFromName(proto)
     if isinstance(action, str):
@@ -2497,12 +2505,25 @@ def describeAction(proto: Union[str, ET.Element], action: Union[str, ET.Element]
         common.warn_unhandled(f"No handler for action: internal type={actionInternalType}; action name={actionInternalName}; display name={actionName}; on {proto.get('name')}")
         #result = f"Unknown: {actionName} - {actionInternalName} - {actionInternalType}"
     else:
-        result = handler(proto, action, actionTactics(proto, action), actionName, chargeType, tech)
-        result = common.collapseSpaces(result)
-        result = result.replace("..", ".")
-        result = result.replace(" :", ":")
-        if overrideText is not None:
+        try:
+            result = handler(proto, action, actionTactics(proto, action), actionName, chargeType, tech)
+            result = common.collapseSpaces(result)
+            result = result.replace("..", ".")
+            result = result.replace(" :", ":")
+            if overrideText is not None:
+                result = overrideText
+        except Exception as e:
+            if overrideText is None:
+                raise e
+            print(f"{proto.attrib['name']}'s {actionInternalName} raised an error, continued using defined override instead")
             result = overrideText
+
+        if len(preText) > 0:
+            result = preText + " " + result
+        if len(postText) > 0:
+            result = result + " " + postText
+
+
         if abilityInfo is not None and proto.attrib["name"] not in common.PROTOS_TO_IGNORE_FOR_ABILITY_TOOLTIPS:
             resultForAbility = result[:]
             # If the description starts with the ability name, don't repeat it in the ability version of the tooltip
